@@ -3,44 +3,192 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>NinjaTrader Xen</title>
-    <meta name="description" content="AI-assisted NinjaScript development for NinjaTrader strategies and indicators.">
+    <title>Build NinjaTrader Strategies and Indicators with AI | Xen</title>
+    <meta name="description"
+        content="Use Xen AI to create and improve NinjaTrader strategies and indicators in NinjaScript. Work iteratively, save projects and choose the AI model for each task.">
     <link rel="stylesheet" href="/css/site.css">
 </head>
-<body>
-    <header class="site-header">
-        <a class="brand" href="/"><span class="brand-product">XEN</span> <span>NinjaTrader</span></a>
-        <nav class="nav-actions" aria-label="Account">
+<body class="landing-body">
+    <header class="site-header landing-header">
+        <a class="brand landing-brand" href="/" aria-label="NinjaTrader Xen home">
+            <span class="brand-mark">X</span>
+            <strong>XEN</strong>
+            <span>NINJATRADER</span>
+        </a>
+        <nav class="landing-nav" aria-label="Primary navigation">
+            <a href="#features">Features</a>
+            <a href="#workflow">How it works</a>
+            <a href="#faq">FAQ</a>
+        </nav>
+        <div class="nav-actions">
             <a class="button" href="/login.html">Sign in</a>
             <a class="button primary" href="/register.html">Create account</a>
-        </nav>
+        </div>
     </header>
 
-    <main class="hero">
-        <section>
-            <p class="eyebrow">AI development for NinjaTrader</p>
-            <h1>Build NinjaScript with Xen.</h1>
-            <p class="lead">
-                Create NinjaTrader strategies and indicators, improve existing source
-                code and work with platform-specific examples—all in a dedicated,
-                isolated Xen application.
-            </p>
-            <div class="nav-actions">
-                <a class="button primary" href="/register.html">Get started</a>
-                <a class="button" href="/login.html">Sign in</a>
+    <main>
+        <section class="landing-hero">
+            <div class="landing-hero-copy">
+                <p class="eyebrow">AI development for NinjaTrader</p>
+                <h1>Turn trading ideas into NinjaScript.</h1>
+                <p class="lead">
+                    Xen is a focused AI workspace for creating NinjaTrader strategies
+                    and indicators. Describe what you need in plain English, receive
+                    structured C# source code, then refine it through an ongoing project.
+                </p>
+                <div class="landing-hero-actions">
+                    <a class="button primary landing-primary-action" href="/register.html">Start building</a>
+                    <a class="button" href="/login.html">Open your workspace</a>
+                </div>
+                <ul class="landing-highlights" aria-label="Product highlights">
+                    <li>Strategies</li>
+                    <li>Indicators</li>
+                    <li>Existing code</li>
+                    <li>Saved projects</li>
+                </ul>
+            </div>
+
+            <div class="product-preview" aria-label="Example Xen workspace">
+                <div class="preview-topbar">
+                    <div class="preview-brand">
+                        <span class="brand-mark">X</span>
+                        <strong>XEN</strong>
+                        <small>NINJATRADER</small>
+                    </div>
+                    <span class="preview-credit">Credit: £9.84</span>
+                </div>
+                <div class="preview-layout">
+                    <div class="preview-tasks">
+                        <span class="preview-label">PROJECT TYPE</span>
+                        <strong>NinjaScript workflow</strong>
+                        <div class="preview-task active">Build Strategy</div>
+                        <div class="preview-task">Build Indicator</div>
+                        <div class="preview-task">Existing Strategy</div>
+                        <div class="preview-task">Existing Indicator</div>
+                    </div>
+                    <div class="preview-workspace">
+                        <span class="preview-label">ACTIVE WORKSPACE</span>
+                        <h2>Build Strategy</h2>
+                        <div class="preview-message">
+                            <span>YOU</span>
+                            Build an EMA crossover strategy with an ATR stop and
+                            configurable position size.
+                        </div>
+                        <div class="preview-code">
+                            <div><span>protected override void</span> OnBarUpdate()</div>
+                            <div>{</div>
+                            <div>&nbsp;&nbsp;if (CrossAbove(FastEma, SlowEma, 1))</div>
+                            <div>&nbsp;&nbsp;&nbsp;&nbsp;EnterLong(DefaultQuantity);</div>
+                            <div>}</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
-        <aside class="feature-card">
-            <p class="eyebrow">Initial platform</p>
-            <h2>Designed for NinjaTrader</h2>
-            <ul class="feature-list">
-                <li>NinjaScript strategies</li>
-                <li>NinjaScript indicators</li>
-                <li>Existing-code improvements</li>
-                <li>Platform-specific AI context</li>
-            </ul>
-        </aside>
+        <section class="landing-section" id="features">
+            <div class="section-heading">
+                <p class="eyebrow">Available now</p>
+                <h2>A purpose-built workspace for NinjaScript</h2>
+                <p>
+                    The current Xen beta focuses on the core development loop:
+                    describe, generate, review and improve.
+                </p>
+            </div>
+            <div class="landing-card-grid">
+                <article class="landing-card">
+                    <span class="card-number">01</span>
+                    <h3>Build strategies</h3>
+                    <p>Define entries, exits, risk controls and configurable parameters. Xen turns the specification into structured NinjaScript strategy code.</p>
+                </article>
+                <article class="landing-card">
+                    <span class="card-number">02</span>
+                    <h3>Create indicators</h3>
+                    <p>Explain the calculations, plots and signals you need and generate a NinjaTrader indicator as readable C# source.</p>
+                </article>
+                <article class="landing-card">
+                    <span class="card-number">03</span>
+                    <h3>Improve existing code</h3>
+                    <p>Paste an existing strategy or indicator and ask Xen to explain, modify or repair the source while retaining the project context.</p>
+                </article>
+                <article class="landing-card">
+                    <span class="card-number">04</span>
+                    <h3>Work iteratively</h3>
+                    <p>Continue the conversation, request precise revisions and save the resulting project so you can return to it later.</p>
+                </article>
+                <article class="landing-card">
+                    <span class="card-number">05</span>
+                    <h3>Choose your AI model</h3>
+                    <p>Select from supported coding and reasoning models for each project, balancing capability, response time and usage cost.</p>
+                </article>
+                <article class="landing-card">
+                    <span class="card-number">06</span>
+                    <h3>Pay for what you use</h3>
+                    <p>See your credit balance in the workspace, receive low-credit warnings and top up securely from £1 with no subscription.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="landing-section workflow-section" id="workflow">
+            <div class="section-heading">
+                <p class="eyebrow">A simple workflow</p>
+                <h2>From specification to source code</h2>
+            </div>
+            <ol class="workflow-steps">
+                <li><span>1</span><div><h3>Select a task</h3><p>Start a new strategy or indicator, or bring existing source code.</p></div></li>
+                <li><span>2</span><div><h3>Describe the behaviour</h3><p>Give Xen the trading rules, parameters and changes you require.</p></div></li>
+                <li><span>3</span><div><h3>Review and refine</h3><p>Inspect the formatted response and request further modifications.</p></div></li>
+                <li><span>4</span><div><h3>Test in NinjaTrader</h3><p>Copy the source into NinjaTrader, compile it and validate its behaviour.</p></div></li>
+            </ol>
+        </section>
+
+        <section class="landing-section model-section">
+            <div>
+                <p class="eyebrow">Model choice</p>
+                <h2>Use the right model for the work.</h2>
+            </div>
+            <p>
+                Move between supported OpenAI, Anthropic and DeepSeek models from the
+                workspace. Your selection is remembered when you return.
+            </p>
+        </section>
+
+        <section class="landing-section faq-section" id="faq">
+            <div class="section-heading">
+                <p class="eyebrow">Questions</p>
+                <h2>What to expect from the beta</h2>
+            </div>
+            <div class="faq-grid">
+                <article>
+                    <h3>Do I need to know C#?</h3>
+                    <p>You can describe a project in plain English, but some NinjaTrader and trading-system knowledge is important when reviewing and testing it.</p>
+                </article>
+                <article>
+                    <h3>Does Xen compile the code?</h3>
+                    <p>Not in the current NinjaTrader beta. Xen generates and revises the source; you compile and test it inside NinjaTrader.</p>
+                </article>
+                <article>
+                    <h3>Can I continue an existing project?</h3>
+                    <p>Yes. Xen saves project conversations and generated responses so you can reopen them and request further changes.</p>
+                </article>
+                <article>
+                    <h3>Does Xen provide trading advice?</h3>
+                    <p>No. Xen assists with software development. Generated code and trading logic must be independently reviewed and tested before use.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="landing-cta">
+            <p class="eyebrow">NinjaTrader Xen beta</p>
+            <h2>Start your first NinjaScript project.</h2>
+            <p>Create an account, select a task and describe what you want to build.</p>
+            <a class="button primary landing-primary-action" href="/register.html">Create account</a>
+        </section>
     </main>
+
+    <footer class="landing-footer">
+        <div><strong>XEN</strong><span>NinjaTrader</span></div>
+        <p>AI-assisted source-code generation for NinjaTrader. Always review, compile and test generated code before use.</p>
+    </footer>
 </body>
 </html>

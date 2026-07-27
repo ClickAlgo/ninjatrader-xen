@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Top up | NinjaTrader Xen</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="payment-body">
+    <header class="site-header">
+        <a class="brand" href="/workspace.html">
+            <span class="brand-product">XEN</span>
+            <span>NinjaTrader</span>
+        </a>
+        <a class="button primary" href="/workspace.html">Return to Xen</a>
+    </header>
+
+    <main class="payment-shell">
+        <section class="payment-card">
+            <p class="eyebrow">AI CREDIT</p>
+            <h1>Top up</h1>
+            <p class="payment-intro">
+                Choose an amount to add to your NinjaTrader Xen balance.
+                VAT may be added by Stripe where applicable.
+            </p>
+
+            <div class="amount-grid" role="group" aria-label="Top-up amount">
+                <button class="amount-button" type="button" data-amount="1">£1</button>
+                <button class="amount-button selected" type="button" data-amount="5">£5</button>
+                <button class="amount-button" type="button" data-amount="10">£10</button>
+                <button class="amount-button" type="button" data-amount="15">£15</button>
+                <button class="amount-button" type="button" data-amount="25">£25</button>
+            </div>
+
+            <div id="topupSummary" class="topup-summary">
+                £5 will be added to your AI credit.
+            </div>
+            <div id="topupMessage" class="form-message" role="status"></div>
+
+            <button id="checkoutButton" class="button topup-button full-width"
+                type="button">Continue to secure checkout</button>
+
+            <p class="payment-note">
+                Payment is completed securely on Stripe. Credit is added only
+                after Stripe confirms that the payment succeeded.
+            </p>
+        </section>
+    </main>
+
+    <script src="/js/topup.js"></script>
+</body>
+</html>

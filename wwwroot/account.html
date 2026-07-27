@@ -9,7 +9,10 @@
 <body>
     <header class="site-header">
         <a class="brand" href="/"><span class="brand-product">XEN</span> <span>NinjaTrader</span></a>
-        <button id="logoutButton" class="button" type="button">Sign out</button>
+        <nav class="nav-actions" aria-label="Account navigation">
+            <a class="button primary" href="/workspace.html">Return to Xen</a>
+            <button id="logoutButton" class="button" type="button">Sign out</button>
+        </nav>
     </header>
 
     <main class="account-shell">
@@ -20,7 +23,6 @@
             <div id="accountData" class="account-data" hidden>
                 <div><strong>Email:</strong> <span id="accountEmail"></span></div>
                 <div><strong>Subscriber:</strong> <span id="subscriberId"></span></div>
-                <div><strong>Platform:</strong> NinjaTrader</div>
             </div>
 
             <div id="creditData" class="dashboard-grid" hidden>
@@ -52,9 +54,10 @@
                 <p id="noTransactions" class="form-message" hidden>No credit transactions yet.</p>
             </section>
 
-            <a class="button primary full-width account-workspace-link" href="/workspace.html">
-                Open NinjaTrader workspace
-            </a>
+            <div class="account-actions">
+                <a class="button topup-button" href="/topup.html">Top up credit</a>
+                <a class="button primary" href="/workspace.html">Launch Xen</a>
+            </div>
         </section>
     </main>
 

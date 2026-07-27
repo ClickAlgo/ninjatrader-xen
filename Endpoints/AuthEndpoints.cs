@@ -27,12 +27,23 @@ public static class AuthEndpoints
         HttpContext context,
         IConfiguration configuration,
         IWebHostEnvironment environment,
-        AccountEmailSender emailSender)
+        AccountEmailSender emailSender,
+        DisposableEmailGuard disposableEmailGuard)
     {
         var email = request.Email?.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(email) ||
             !Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
             return Results.BadRequest(new { message = "Invalid email address." });
+
+        if (!await disposableEmailGuard.IsAllowedAsync(
+                email,
+                context.RequestAborted))
+        {
+            return Results.BadRequest(new
+            {
+                message = "Disposable email addresses are not allowed."
+            });
+        }
 
         if (string.IsNullOrWhiteSpace(request.Password) ||
             request.Password.Length is < 10 or > 128)
@@ -220,7 +231,11 @@ public static class AuthEndpoints
         }
     }
 
-    private static async Task<IResult> Login(LoginRequest request, IConfiguration configuration)
+    private static async Task<IResult> Login(
+        LoginRequest request,
+        HttpContext context,
+        IConfiguration configuration,
+        FreeTrialService freeTrials)
     {
         var email = request.Email?.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(request.Password))
@@ -251,10 +266,21 @@ public static class AuthEndpoints
         if (status != 1 || !PasswordHasher.Verify(request.Password, passwordHash))
             return Results.BadRequest(new { message = "Invalid email or password." });
 
+        await reader.CloseAsync();
+
+        var trial = await freeTrials.GrantIfEligibleAsync(
+            subscriberId,
+            storedEmail,
+            request.DeviceFingerprint,
+            context.Connection.RemoteIpAddress?.ToString(),
+            context.RequestAborted);
+
         return Results.Ok(new
         {
             token = JwtTokenService.Create(subscriberId, storedEmail, configuration),
-            platformId = PlatformIds.NinjaTrader
+            platformId = PlatformIds.NinjaTrader,
+            freeTrialGranted = trial.Granted,
+            freeTrialExpiresUtc = trial.ExpiresUtc
         });
     }
 

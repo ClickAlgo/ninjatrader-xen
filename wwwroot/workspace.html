@@ -19,6 +19,7 @@
             <button id="newProjectButton" class="button workspace-action" type="button">New</button>
             <button id="projectsButton" class="button workspace-action" type="button">Projects</button>
             <span id="workspaceBalance" class="balance-pill">Credit: —</span>
+            <a class="button topup-button" href="/topup.html">Top up</a>
             <a class="button" href="/account.html">Account</a>
         </div>
     </header>
@@ -84,10 +85,14 @@
                     placeholder="Describe your NinjaTrader strategy…" required></textarea>
                 <div class="composer-footer">
                     <span id="chatStatus" class="chat-status" role="status">Ready</span>
-                    <button id="sendButton" class="button primary send-button" type="submit">
-                        <span class="send-label">Send</span>
-                        <span class="send-spinner" aria-hidden="true"></span>
-                    </button>
+                    <div class="composer-actions">
+                        <button id="cancelButton" class="button cancel-button"
+                            type="button" disabled>Cancel</button>
+                        <button id="sendButton" class="button primary send-button" type="submit">
+                            <span class="send-label">Send</span>
+                            <span class="send-spinner" aria-hidden="true"></span>
+                        </button>
+                    </div>
                 </div>
             </form>
         </section>

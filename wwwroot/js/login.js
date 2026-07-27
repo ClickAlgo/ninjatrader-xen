@@ -2,6 +2,15 @@ const form = document.getElementById("loginForm");
 const message = document.getElementById("formMessage");
 const verified = new URLSearchParams(location.search).get("verified");
 
+function getDeviceFingerprint() {
+    let fingerprint = localStorage.getItem("nx_device_fp");
+    if (!fingerprint) {
+        fingerprint = crypto.randomUUID().replaceAll("-", "");
+        localStorage.setItem("nx_device_fp", fingerprint);
+    }
+    return fingerprint;
+}
+
 if (verified === "1") {
     const notice = document.getElementById("verificationNotice");
     notice.hidden = false;
@@ -22,7 +31,8 @@ form.addEventListener("submit", async event => {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 email: form.email.value.trim(),
-                password: form.password.value
+                password: form.password.value,
+                deviceFingerprint: getDeviceFingerprint()
             })
         });
 
@@ -31,7 +41,7 @@ form.addEventListener("submit", async event => {
             throw new Error(result.message || "Unable to sign in.");
 
         sessionStorage.setItem("nx_access_token", result.token);
-        location.href = "/account.html";
+        location.replace("/workspace.html");
     } catch (error) {
         message.textContent = error.message;
         message.classList.add("error");

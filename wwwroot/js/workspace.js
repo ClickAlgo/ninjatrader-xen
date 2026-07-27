@@ -21,11 +21,16 @@ let history = [];
 let generating = false;
 let currentProjectId = null;
 let currentProjectTitle = "";
+let currentController = null;
+let currentBalanceGbp = null;
+
+const lowCreditThresholdGbp = 1;
 
 const messages = document.getElementById("messages");
 const form = document.getElementById("chatForm");
 const promptInput = document.getElementById("promptInput");
 const sendButton = document.getElementById("sendButton");
+const cancelButton = document.getElementById("cancelButton");
 const status = document.getElementById("chatStatus");
 const modelSelect = document.getElementById("modelSelect");
 const projectsModal = document.getElementById("projectsModal");
@@ -33,6 +38,14 @@ const projectsList = document.getElementById("projectsList");
 
 restoreSelectedModel();
 modelSelect.addEventListener("change", rememberSelectedModel);
+cancelButton.addEventListener("click", () => {
+    if (!currentController)
+        return;
+
+    cancelButton.disabled = true;
+    status.textContent = "Cancelling…";
+    currentController.abort();
+});
 loadBalance();
 
 document.getElementById("projectsButton").addEventListener("click", openProjects);
@@ -59,6 +72,7 @@ document.getElementById("taskButtons").addEventListener("click", event => {
     document.getElementById("taskTitle").textContent = taskNames[activeTask];
     promptInput.placeholder = taskPlaceholders[activeTask];
     startNewProject(false);
+    applyCreditAvailability();
 });
 
 form.addEventListener("submit", async event => {
@@ -66,18 +80,25 @@ form.addEventListener("submit", async event => {
     if (generating)
         return;
 
+    if (currentBalanceGbp !== null && currentBalanceGbp <= 0) {
+        applyCreditAvailability();
+        status.textContent = "Credit exhausted · top up to continue";
+        return;
+    }
+
     const prompt = promptInput.value.trim();
     if (!prompt)
         return;
 
-    if (!currentProjectId) {
+    const createdProjectForRequest = !currentProjectId;
+    if (createdProjectForRequest) {
         currentProjectId = crypto.randomUUID();
         currentProjectTitle = createProjectTitle(prompt);
         updateProjectTitle();
     }
 
     const previousHistory = [...history];
-    addMessage("user", prompt);
+    const userMessage = addMessage("user", prompt);
     history.push({ role: "user", content: prompt });
     promptInput.value = "";
 
@@ -96,10 +117,12 @@ form.addEventListener("submit", async event => {
     generating = true;
     sendButton.disabled = true;
     sendButton.classList.add("loading");
+    cancelButton.disabled = false;
     modelSelect.disabled = true;
     promptInput.disabled = true;
     status.textContent = "Working…";
     scrollMessagesToBottom();
+    currentController = new AbortController();
 
     try {
         const response = await fetch("/api/chat/stream", {
@@ -113,7 +136,8 @@ form.addEventListener("submit", async event => {
                 task: activeTask,
                 model: modelSelect.value,
                 history: previousHistory
-            })
+            }),
+            signal: currentController.signal
         });
 
         if (response.status === 401) {
@@ -154,10 +178,17 @@ form.addEventListener("submit", async event => {
                 } else if (eventData.type === "usage") {
                     updateBalance(eventData.balanceGbp);
                 } else if (eventData.type === "blocked" || eventData.type === "error") {
+                    if (eventData.type === "blocked" &&
+                        eventData.balanceGbp !== undefined) {
+                        updateBalance(eventData.balanceGbp);
+                    }
                     throw new Error(eventData.message);
                 }
             }
         }
+
+        cancelButton.disabled = true;
+        currentController = null;
 
         if (!assistantText)
             throw new Error("The AI returned an empty response.");
@@ -170,17 +201,35 @@ form.addEventListener("submit", async event => {
         const saved = await saveCurrentProject();
         status.textContent = saved ? "Saved" : "Response ready · project not saved";
     } catch (error) {
+        if (error.name === "AbortError") {
+            history = previousHistory;
+            userMessage.remove();
+            assistantMessage.remove();
+            promptInput.value = prompt;
+
+            if (createdProjectForRequest) {
+                currentProjectId = null;
+                currentProjectTitle = "";
+                updateProjectTitle();
+            }
+
+            status.textContent = "Cancelled";
+            return;
+        }
+
         assistantMessage.classList.remove("generating");
         content.textContent = error.message;
         assistantMessage.classList.add("error");
         status.textContent = "Request failed";
     } finally {
         generating = false;
-        sendButton.disabled = false;
         sendButton.classList.remove("loading");
+        cancelButton.disabled = true;
         modelSelect.disabled = false;
-        promptInput.disabled = false;
-        promptInput.focus();
+        currentController = null;
+        applyCreditAvailability();
+        if (!promptInput.disabled)
+            promptInput.focus();
     }
 });
 
@@ -505,6 +554,17 @@ function renderProjects(projects) {
         const actions = document.createElement("div");
         actions.className = "project-actions";
 
+        const open = document.createElement("button");
+        open.type = "button";
+        open.textContent = "Open";
+        open.className = "open";
+        open.setAttribute(
+            "aria-label",
+            `Open project ${project.title}`);
+        open.addEventListener(
+            "click",
+            () => loadProject(project.projectId));
+
         const rename = document.createElement("button");
         rename.type = "button";
         rename.textContent = "Rename";
@@ -516,7 +576,7 @@ function renderProjects(projects) {
         remove.className = "danger";
         remove.addEventListener("click", () => deleteProject(project));
 
-        actions.append(rename, remove);
+        actions.append(open, rename, remove);
         row.append(main, actions);
         projectsList.appendChild(row);
     }
@@ -625,13 +685,50 @@ async function loadBalance() {
 }
 
 function updateBalance(value) {
-    document.getElementById("workspaceBalance").textContent =
+    const balance = Math.max(0, Number(value) || 0);
+    const balanceElement = document.getElementById("workspaceBalance");
+    currentBalanceGbp = balance;
+    balanceElement.textContent =
         `Credit: ${new Intl.NumberFormat("en-GB", {
             style: "currency",
             currency: "GBP",
             minimumFractionDigits: 2,
             maximumFractionDigits: 4
-        }).format(value ?? 0)}`;
+        }).format(balance)}`;
+
+    balanceElement.classList.remove("low", "empty");
+    if (balance <= 0) {
+        balanceElement.classList.add("empty");
+        balanceElement.title = "Credit exhausted — top up to continue";
+    } else if (balance <= lowCreditThresholdGbp) {
+        balanceElement.classList.add("low");
+        balanceElement.title = "Low credit — top up soon";
+    } else {
+        balanceElement.title = "";
+    }
+
+    applyCreditAvailability();
+}
+
+function applyCreditAvailability() {
+    const exhausted = currentBalanceGbp !== null &&
+        currentBalanceGbp <= 0;
+
+    if (exhausted) {
+        sendButton.disabled = true;
+        promptInput.disabled = true;
+        promptInput.placeholder =
+            "Your Xen credit has run out. Please top up to continue.";
+        if (!generating)
+            status.textContent = "Credit exhausted · top up to continue";
+        return;
+    }
+
+    if (!generating) {
+        sendButton.disabled = false;
+        promptInput.disabled = false;
+        promptInput.placeholder = taskPlaceholders[activeTask];
+    }
 }
 
 function restoreSelectedModel() {

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Payment complete | NinjaTrader Xen</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="payment-body">
+    <header class="site-header">
+        <a class="brand" href="/workspace.html">
+            <span class="brand-product">XEN</span>
+            <span>NinjaTrader</span>
+        </a>
+    </header>
+
+    <main class="payment-shell">
+        <section class="payment-card payment-result">
+            <div class="payment-success-mark" aria-hidden="true">✓</div>
+            <p class="eyebrow">PAYMENT RETURN</p>
+            <h1>Payment received</h1>
+            <p id="paymentStatus" class="payment-intro">
+                Waiting for Stripe to confirm your credit…
+            </p>
+            <strong id="paymentBalance" class="payment-balance"></strong>
+            <div class="payment-result-actions">
+                <a class="button topup-button" href="/workspace.html">Return to workspace</a>
+                <a class="button" href="/account.html">View account</a>
+            </div>
+        </section>
+    </main>
+
+    <script src="/js/payment-complete.js"></script>
+</body>
+</html>

@@ -71,6 +71,20 @@ builder.Services
 
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<AccountEmailSender>();
+builder.Services.AddScoped<FreeTrialService>();
+builder.Services.AddScoped<DisposableEmailGuard>();
+builder.Services.AddHttpClient("mail-check", client =>
+{
+    client.BaseAddress = new Uri("https://mailcheck.p.rapidapi.com/");
+    client.Timeout = TimeSpan.FromSeconds(6);
+});
+builder.Services.AddHttpClient("proxy-check", client =>
+{
+    client.BaseAddress = new Uri("https://proxycheck.io/v2/");
+    client.Timeout = TimeSpan.FromSeconds(6);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd(
+        "ClickAlgo-NinjaTrader-Xen/1.0");
+});
 builder.Services.AddHttpClient("openai", client =>
 {
     client.BaseAddress = new Uri("https://api.openai.com/");
@@ -125,6 +139,7 @@ app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapChatEndpoints();
 app.MapProjectEndpoints();
+app.MapStripeEndpoints();
 
 app.Run();
 
