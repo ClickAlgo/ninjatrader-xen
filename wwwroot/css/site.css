@@ -1337,6 +1337,8 @@ tbody tr:last-child td {
 }
 
 .task-panel {
+    display: flex;
+    flex-direction: column;
     padding: 0;
     background: #161616;
 }
@@ -1358,6 +1360,16 @@ tbody tr:last-child td {
 
 .task-buttons {
     gap: 0;
+}
+
+.workspace-build-version {
+    margin-top: auto;
+    padding: 14px 18px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: .02em;
 }
 
 .task-button {
@@ -2115,5 +2127,134 @@ tbody tr:last-child td {
 
     .composer {
         margin: 0 20px 20px;
+    }
+}
+/* Integrated prompt review and clarification */
+.prompt-builder-dialog {
+    width: min(720px, calc(100vw - 32px));
+    max-height: min(820px, calc(100vh - 32px));
+    overflow: auto;
+    border: 1px solid #3a3a3a;
+    border-radius: 12px;
+    background: #181818;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, .55);
+}
+
+.prompt-builder-reason {
+    margin: 0;
+    padding: 20px 24px 0;
+    color: #c7c7c7;
+    line-height: 1.55;
+}
+
+.prompt-builder-body {
+    display: grid;
+    gap: 14px;
+    padding: 20px 24px;
+}
+
+.prompt-review-summary,
+.prompt-builder-field {
+    border: 1px solid #343434;
+    border-radius: 8px;
+    background: #202020;
+}
+
+.prompt-review-summary {
+    padding: 18px;
+}
+
+.prompt-review-summary p {
+    margin: 8px 0 0;
+    color: #aaa;
+    line-height: 1.5;
+}
+
+.prompt-builder-field {
+    display: grid;
+    gap: 7px;
+    padding: 14px;
+}
+
+.prompt-builder-field > span {
+    font-weight: 600;
+    color: #f2f2f2;
+}
+
+.prompt-builder-field small {
+    color: #aaa;
+    line-height: 1.45;
+}
+
+.prompt-builder-field textarea,
+.prompt-builder-review {
+    width: 100%;
+    resize: vertical;
+    border: 1px solid #444;
+    border-radius: 6px;
+    padding: 11px 12px;
+    background: #111;
+    color: #f4f4f4;
+    font: inherit;
+    line-height: 1.5;
+}
+
+.prompt-builder-field textarea:focus,
+.prompt-builder-review:focus {
+    border-color: #ff4b2b;
+    outline: 1px solid #ff4b2b;
+}
+
+.prompt-builder-status {
+    min-height: 20px;
+    margin: 0;
+    padding: 0 24px 10px;
+    color: #aaa;
+}
+
+.prompt-builder-loading {
+    min-height: 24px;
+}
+
+.prompt-builder-loading .working-dot {
+    width: 7px;
+    height: 7px;
+}
+
+.prompt-builder-loading strong {
+    font-weight: 500;
+    color: #c7c7c7;
+}
+
+.composer-review-loading {
+    min-height: 22px;
+}
+
+.composer-review-loading .working-dot {
+    width: 7px;
+    height: 7px;
+}
+
+.composer-review-loading strong {
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.prompt-builder-status.error {
+    color: #ff7a68;
+}
+
+.prompt-builder-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 16px 24px 22px;
+    border-top: 1px solid #303030;
+}
+
+@media (max-width: 560px) {
+    .prompt-builder-actions .button {
+        flex: 1 1 100%;
     }
 }

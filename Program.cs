@@ -118,6 +118,7 @@ builder.Services.AddSingleton<IAiStreamingProvider, DeepSeekStreamingClient>();
 builder.Services.AddSingleton<AiStreamingClient>();
 builder.Services.AddSingleton<SystemPromptService>();
 builder.Services.AddSingleton<NinjaTraderKnowledgeRetriever>();
+builder.Services.AddSingleton<PromptBuilderService>();
 
 var app = builder.Build();
 
@@ -141,6 +142,7 @@ app.MapAccountEndpoints();
 app.MapChatEndpoints();
 app.MapProjectEndpoints();
 app.MapStripeEndpoints();
+app.MapPromptBuilderEndpoints();
 
 app.Run();
 

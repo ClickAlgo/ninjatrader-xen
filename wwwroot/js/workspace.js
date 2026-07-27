@@ -23,6 +23,7 @@ let currentProjectId = null;
 let currentProjectTitle = "";
 let currentController = null;
 let currentBalanceGbp = null;
+let promptQualityChecked = false;
 
 const lowCreditThresholdGbp = 1;
 
@@ -35,6 +36,11 @@ const status = document.getElementById("chatStatus");
 const modelSelect = document.getElementById("modelSelect");
 const projectsModal = document.getElementById("projectsModal");
 const projectsList = document.getElementById("projectsList");
+const promptBuilderModal = document.getElementById("promptBuilderModal");
+const promptBuilderBody = document.getElementById("promptBuilderBody");
+const promptBuilderActions = document.getElementById("promptBuilderActions");
+const promptBuilderStatus = document.getElementById("promptBuilderStatus");
+const promptBuilderReason = document.getElementById("promptBuilderReason");
 
 restoreSelectedModel();
 modelSelect.addEventListener("change", rememberSelectedModel);
@@ -62,6 +68,14 @@ projectsModal.addEventListener("click", event => {
         closeProjects();
 });
 
+promptBuilderModal.addEventListener("click", event => {
+    if (event.target === promptBuilderModal)
+        closePromptBuilder("edit");
+});
+document.getElementById("closePromptBuilderButton").addEventListener(
+    "click",
+    () => closePromptBuilder("edit"));
+
 document.getElementById("taskButtons").addEventListener("click", event => {
     const button = event.target.closest("[data-task]");
     if (!button || generating)
@@ -87,9 +101,14 @@ form.addEventListener("submit", async event => {
         return;
     }
 
-    const prompt = promptInput.value.trim();
+    let prompt = promptInput.value.trim();
     if (!prompt)
         return;
+
+    const reviewedPrompt = await reviewInitialBuildPrompt(prompt);
+    if (!reviewedPrompt)
+        return;
+    prompt = reviewedPrompt;
 
     const createdProjectForRequest = !currentProjectId;
     if (createdProjectForRequest) {
@@ -505,6 +524,7 @@ function startNewProject(resetTask = true) {
     currentProjectId = null;
     currentProjectTitle = "";
     history = [];
+    promptQualityChecked = false;
 
     if (resetTask) {
         activeTask = "build-strategy";
@@ -519,6 +539,281 @@ function startNewProject(resetTask = true) {
     updateProjectTitle();
     status.textContent = "Ready";
     promptInput.focus();
+}
+
+let resolvePromptBuilder = null;
+
+async function reviewInitialBuildPrompt(prompt) {
+    if (promptQualityChecked ||
+        currentProjectId ||
+        history.length > 0 ||
+        !["build-strategy", "build-indicator"].includes(activeTask)) {
+        return prompt;
+    }
+
+    setComposerReviewState(true, "Reviewing your request...");
+    try {
+        const response = await promptBuilderFetch("/api/prompt-builder/check", {
+            task: activeTask,
+            prompt
+        });
+
+        if (!response.recommendPromptBuilder) {
+            promptQualityChecked = true;
+            return prompt;
+        }
+
+        const decision = await showPromptReview(response.reason);
+        if (decision === "build") {
+            promptQualityChecked = true;
+            return prompt;
+        }
+        if (decision !== "clarify")
+            return null;
+
+        const improvedPrompt = await runPromptBuilder(prompt);
+        if (!improvedPrompt)
+            return null;
+
+        promptInput.value = improvedPrompt;
+        promptQualityChecked = true;
+        return improvedPrompt;
+    } catch {
+        promptQualityChecked = true;
+        return prompt;
+    } finally {
+        setComposerReviewState(false, "Ready");
+    }
+}
+
+function showPromptReview(reason) {
+    promptBuilderReason.textContent = reason ||
+        "A few details could materially improve the generated NinjaScript.";
+    promptBuilderBody.replaceChildren(createReviewSummary());
+    promptBuilderStatus.textContent = "";
+    setPromptBuilderActions([
+        ["Clarify with Xen", "clarify", "button primary"],
+        ["Build anyway", "build", "button"],
+        ["Edit request", "edit", "button"]
+    ]);
+    openPromptBuilder();
+    return waitForPromptBuilderDecision();
+}
+
+async function runPromptBuilder(prompt) {
+    promptBuilderReason.textContent =
+        "Answer the relevant questions. Leave an answer blank when you want Xen to use a sensible configurable default.";
+    promptBuilderBody.replaceChildren();
+    setPromptBuilderActions([]);
+    setPromptBuilderLoading("Preparing clarification questions...");
+    openPromptBuilder();
+
+    try {
+        const result = await promptBuilderFetch("/api/prompt-builder/questions", {
+            task: activeTask,
+            prompt
+        });
+        renderPromptQuestions(result.questions);
+        promptBuilderStatus.textContent = "";
+        setPromptBuilderActions([
+            ["Create specification", "compose", "button primary"],
+            ["Build original", "build", "button"],
+            ["Edit request", "edit", "button"]
+        ]);
+
+        const decision = await waitForPromptBuilderDecision();
+        if (decision === "build") {
+            promptQualityChecked = true;
+            return prompt;
+        }
+        if (decision !== "compose")
+            return null;
+
+        const answers = [...promptBuilderBody.querySelectorAll("[data-question]")]
+            .map(field => ({
+                question: field.dataset.question,
+                answer: field.value.trim()
+            }));
+
+        setPromptBuilderBusy(true, "Creating your build specification...");
+        const composed = await promptBuilderFetch("/api/prompt-builder/compose", {
+            task: activeTask,
+            prompt,
+            answers
+        });
+        return await showComposedPrompt(composed.improvedPrompt);
+    } catch (error) {
+        openPromptBuilder();
+        promptBuilderStatus.textContent =
+            error.message || "Prompt Builder is temporarily unavailable.";
+        promptBuilderStatus.classList.add("error");
+        setPromptBuilderActions([
+            ["Build original", "build", "button primary"],
+            ["Edit request", "edit", "button"]
+        ]);
+        const fallback = await waitForPromptBuilderDecision();
+        return fallback === "build" ? prompt : null;
+    } finally {
+        setPromptBuilderBusy(false);
+    }
+}
+
+async function showComposedPrompt(improvedPrompt) {
+    openPromptBuilder();
+    promptBuilderReason.textContent =
+        "Review the structured request before Xen generates any code.";
+    const textarea = document.createElement("textarea");
+    textarea.className = "prompt-builder-review";
+    textarea.value = improvedPrompt;
+    textarea.maxLength = 60000;
+    textarea.rows = 14;
+    promptBuilderBody.replaceChildren(textarea);
+    promptBuilderStatus.textContent = "";
+    promptBuilderStatus.classList.remove("error");
+    setPromptBuilderActions([
+        ["Use this request", "use", "button primary"],
+        ["Edit original", "edit", "button"]
+    ]);
+
+    const decision = await waitForPromptBuilderDecision();
+    return decision === "use" ? textarea.value.trim() : null;
+}
+
+function renderPromptQuestions(questions) {
+    promptBuilderBody.replaceChildren();
+    (questions || []).forEach((item, index) => {
+        const field = document.createElement("label");
+        field.className = "prompt-builder-field";
+
+        const label = document.createElement("span");
+        label.textContent = `${index + 1}. ${item.label}`;
+
+        const question = document.createElement("small");
+        question.textContent = item.question;
+
+        const input = document.createElement("textarea");
+        input.rows = 2;
+        input.maxLength = 2000;
+        input.placeholder = item.placeholder || "Enter your preference";
+        input.dataset.question = item.question;
+
+        field.append(label, question, input);
+        promptBuilderBody.appendChild(field);
+    });
+}
+
+function createReviewSummary() {
+    const summary = document.createElement("div");
+    summary.className = "prompt-review-summary";
+    const title = document.createElement("strong");
+    title.textContent = "Would you like Xen to clarify it first?";
+    const detail = document.createElement("p");
+    detail.textContent =
+        "The built-in builder will ask only the missing trading requirements, then prepare a structured request for your approval.";
+    summary.append(title, detail);
+    return summary;
+}
+
+function setPromptBuilderActions(actions) {
+    promptBuilderActions.replaceChildren();
+    actions.forEach(([label, decision, className]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = className;
+        button.textContent = label;
+        button.addEventListener("click", () => closePromptBuilder(decision));
+        promptBuilderActions.appendChild(button);
+    });
+}
+
+function openPromptBuilder() {
+    promptBuilderModal.hidden = false;
+    document.body.classList.add("modal-open");
+}
+
+function closePromptBuilder(decision) {
+    if (promptBuilderModal.hidden)
+        return;
+    promptBuilderModal.hidden = true;
+    document.body.classList.remove("modal-open");
+    const resolve = resolvePromptBuilder;
+    resolvePromptBuilder = null;
+    resolve?.(decision);
+}
+
+function waitForPromptBuilderDecision() {
+    return new Promise(resolve => {
+        resolvePromptBuilder = resolve;
+    });
+}
+
+function setPromptBuilderBusy(busy, message = "") {
+    promptBuilderBody.querySelectorAll("textarea, button").forEach(
+        element => element.disabled = busy);
+    promptBuilderActions.querySelectorAll("button").forEach(
+        element => element.disabled = busy);
+    if (message)
+        setPromptBuilderLoading(message);
+}
+
+function setPromptBuilderLoading(message) {
+    promptBuilderStatus.classList.remove("error");
+    promptBuilderStatus.replaceChildren(
+        createWorkingIndicator(message, "prompt-builder-loading"));
+}
+
+function setComposerReviewState(reviewing, message) {
+    sendButton.disabled = reviewing;
+    modelSelect.disabled = reviewing;
+    promptInput.disabled = reviewing;
+    if (reviewing) {
+        status.replaceChildren(
+            createWorkingIndicator(message, "composer-review-loading"));
+    } else {
+        status.textContent = message;
+    }
+    if (!reviewing)
+        applyCreditAvailability();
+}
+
+function createWorkingIndicator(message, extraClass) {
+    const indicator = document.createElement("span");
+    indicator.className = `working-indicator ${extraClass}`;
+
+    for (let index = 0; index < 3; index += 1) {
+        const dot = document.createElement("span");
+        dot.className = "working-dot";
+        dot.setAttribute("aria-hidden", "true");
+        indicator.appendChild(dot);
+    }
+
+    const label = document.createElement("strong");
+    label.textContent = message;
+    indicator.appendChild(label);
+    return indicator;
+}
+
+async function promptBuilderFetch(url, body) {
+    const response = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(body)
+    });
+
+    if (response.status === 401) {
+        sessionStorage.removeItem("nx_access_token");
+        location.replace("/login.html");
+        throw new Error("Your session has expired.");
+    }
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok)
+        throw new Error(payload.detail || payload.message ||
+            "Prompt Builder is temporarily unavailable.");
+    return payload;
 }
 
 function createProjectTitle(prompt) {
