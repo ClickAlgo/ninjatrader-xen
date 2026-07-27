@@ -41,6 +41,16 @@ form.addEventListener("submit", async event => {
             throw new Error(result.message || "Unable to sign in.");
 
         sessionStorage.setItem("nx_access_token", result.token);
+        if (result.freeTrialGranted === true &&
+            result.freeTrialExpiresUtc) {
+            sessionStorage.setItem(
+                "nx_trial_welcome",
+                JSON.stringify({
+                    expiresUtc: result.freeTrialExpiresUtc
+                }));
+        } else {
+            sessionStorage.removeItem("nx_trial_welcome");
+        }
         location.replace("/workspace.html");
     } catch (error) {
         message.textContent = error.message;

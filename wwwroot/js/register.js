@@ -30,7 +30,7 @@ form.addEventListener("submit", async event => {
             throw new Error(result.message || "Unable to create the account.");
 
         form.reset();
-        message.textContent = "Account created. Check your email to verify it before signing in.";
+        message.textContent = "Account created. Check your email to verify it.";
         message.classList.add("success");
     } catch (error) {
         message.textContent = error.message;

@@ -41,7 +41,8 @@ public static class ChatEndpoints
         HttpContext context,
         IConfiguration configuration,
         AiStreamingClient aiClient,
-        SystemPromptService systemPrompts)
+        SystemPromptService systemPrompts,
+        NinjaTraderKnowledgeRetriever knowledgeRetriever)
     {
         context.Response.ContentType = "text/event-stream";
         context.Response.Headers.CacheControl = "no-cache";
@@ -102,11 +103,37 @@ public static class ChatEndpoints
             return;
         }
 
+        var ragCategory = request.Task is
+            "build-strategy" or "existing-strategy"
+                ? "Strategy"
+                : "Indicator";
+        var rag = await knowledgeRetriever.RetrieveAsync(
+            request.Prompt,
+            ragCategory,
+            context.RequestAborted);
+        var systemPrompt = systemPrompts.Build(request.Task);
+        if (rag is not null && rag.Confident)
+            systemPrompt += knowledgeRetriever.BuildSystemContext(rag);
+
+        if (knowledgeRetriever.Options.ShowDebug &&
+            rag?.Best is not null)
+        {
+            await WriteEvent(context, new
+            {
+                type = "rag.debug",
+                title = rag.Best.Title,
+                similarity = rag.Best.Similarity,
+                used = rag.Confident,
+                category = rag.Category
+            });
+        }
+
         var maximumOutputTokens = CalculateAffordableOutputTokens(
             configuration,
             request.Model,
             request.Prompt,
             request.History,
+            systemPrompt,
             balanceGbp);
 
         if (maximumOutputTokens < 800)
@@ -136,8 +163,6 @@ public static class ChatEndpoints
         var inputTokens = 0;
         var outputTokens = 0;
         var generatedCharacters = 0;
-        var systemPrompt = systemPrompts.Build(request.Task);
-
         try
         {
             await foreach (var streamEvent in aiClient.StreamAsync(
@@ -311,6 +336,7 @@ public static class ChatEndpoints
         string model,
         string prompt,
         IReadOnlyList<ChatTurn>? history,
+        string systemPrompt,
         decimal balanceGbp)
     {
         var pricing = configuration
@@ -321,7 +347,7 @@ public static class ChatEndpoints
 
         var inputCharacters = prompt.Length +
             (history ?? []).TakeLast(12).Sum(turn => Math.Min(turn.Content?.Length ?? 0, 40_000)) +
-            2_500;
+            systemPrompt.Length;
         var estimatedInputTokens = Math.Max(1_000, inputCharacters / 4);
         var estimatedInputUsd = estimatedInputTokens / 1_000_000m * pricing.InputPer1M;
 

@@ -940,6 +940,47 @@ tbody tr:last-child td {
     scrollbar-width: thin;
 }
 
+.trial-welcome {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 22px;
+    max-width: 920px;
+    margin: 0 auto 22px;
+    padding: 18px 20px;
+    border: 1px solid rgba(37, 150, 90, .62);
+    border-radius: 7px;
+    background: rgba(23, 137, 77, .11);
+}
+
+.trial-welcome strong {
+    display: block;
+    margin-bottom: 6px;
+    color: #fff;
+    font-size: 14px;
+}
+
+.trial-welcome p {
+    margin: 0;
+    color: #b8c8bd;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.trial-welcome-close {
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    color: #9cb1a1;
+    background: transparent;
+    font: 20px/1 "Manrope", sans-serif;
+    cursor: pointer;
+}
+
+.trial-welcome-close:hover {
+    color: #fff;
+}
+
 .messages::-webkit-scrollbar,
 .code-block pre::-webkit-scrollbar {
     width: 10px;
@@ -1148,6 +1189,19 @@ tbody tr:last-child td {
 .message.error .message-content {
     border-color: var(--danger);
     color: var(--danger);
+}
+
+.rag-debug {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px dashed #3f3f3f;
+    color: #9db7d5;
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.rag-debug.rejected {
+    color: #b08d66;
 }
 
 .composer {
@@ -1500,11 +1554,11 @@ tbody tr:last-child td {
 
 .balance-pill {
     padding: 8px 12px;
-    border-color: #464646;
+    border-color: rgba(37, 150, 90, .58);
     border-radius: 6px;
     color: #e8e8e8;
     background: #202020;
-    font-weight: 600;
+    font-weight: 400;
 }
 
 .workspace {

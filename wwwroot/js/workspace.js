@@ -47,6 +47,7 @@ cancelButton.addEventListener("click", () => {
     currentController.abort();
 });
 loadBalance();
+showTrialWelcome();
 
 document.getElementById("projectsButton").addEventListener("click", openProjects);
 document.getElementById("closeProjectsButton").addEventListener("click", closeProjects);
@@ -153,6 +154,7 @@ form.addEventListener("submit", async event => {
         const decoder = new TextDecoder();
         let buffer = "";
         let assistantText = "";
+        let ragDebug = null;
 
         while (true) {
             const { value, done } = await reader.read();
@@ -175,6 +177,8 @@ form.addEventListener("submit", async event => {
                 const eventData = JSON.parse(payload);
                 if (eventData.type === "response.output_text.delta") {
                     assistantText += eventData.delta;
+                } else if (eventData.type === "rag.debug") {
+                    ragDebug = eventData;
                 } else if (eventData.type === "usage") {
                     updateBalance(eventData.balanceGbp);
                 } else if (eventData.type === "blocked" || eventData.type === "error") {
@@ -196,6 +200,8 @@ form.addEventListener("submit", async event => {
         history.push({ role: "assistant", content: assistantText });
         assistantMessage.classList.remove("generating");
         renderStructuredResponse(content, assistantText);
+        if (ragDebug)
+            appendRagDebug(assistantMessage, ragDebug);
         scrollMessagesToBottom();
         status.textContent = "Saving project…";
         const saved = await saveCurrentProject();
@@ -251,6 +257,63 @@ function addMessage(role, text) {
     messages.appendChild(article);
     scrollMessagesToBottom();
     return article;
+}
+
+function showTrialWelcome() {
+    const stored = sessionStorage.getItem("nx_trial_welcome");
+    if (!stored)
+        return;
+
+    sessionStorage.removeItem("nx_trial_welcome");
+
+    try {
+        const trial = JSON.parse(stored);
+        const expires = new Date(trial.expiresUtc);
+        if (Number.isNaN(expires.getTime()))
+            return;
+
+        const banner = document.createElement("aside");
+        banner.className = "trial-welcome";
+
+        const copy = document.createElement("div");
+        const heading = document.createElement("strong");
+        heading.textContent = "Welcome to Xen";
+        const detail = document.createElement("p");
+        detail.textContent =
+            `We’ve added £5 free credit to your account. ` +
+            `Your introductory credit is valid for 48 hours, until ${
+                new Intl.DateTimeFormat("en-GB", {
+                    dateStyle: "medium",
+                    timeStyle: "short"
+                }).format(expires)
+            }.`;
+        copy.append(heading, detail);
+
+        const dismiss = document.createElement("button");
+        dismiss.type = "button";
+        dismiss.className = "trial-welcome-close";
+        dismiss.setAttribute("aria-label", "Dismiss welcome message");
+        dismiss.textContent = "×";
+        dismiss.addEventListener("click", () => banner.remove());
+
+        banner.append(copy, dismiss);
+        messages.prepend(banner);
+    } catch {
+        // Ignore an invalid one-time welcome payload.
+    }
+}
+
+function appendRagDebug(message, debug) {
+    const element = document.createElement("div");
+    element.className = debug.used
+        ? "rag-debug"
+        : "rag-debug rejected";
+    const confidence = Math.round(
+        Math.max(0, Math.min(1, Number(debug.similarity) || 0)) * 100);
+    element.textContent = debug.used
+        ? `Knowledge match: ${debug.title} · Confidence ${confidence}%`
+        : `Knowledge match not used: ${debug.title} · Confidence ${confidence}%`;
+    message.appendChild(element);
 }
 
 function scrollMessagesToBottom() {

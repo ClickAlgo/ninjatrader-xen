@@ -117,6 +117,7 @@ builder.Services.AddSingleton<IAiStreamingProvider, ClaudeStreamingClient>();
 builder.Services.AddSingleton<IAiStreamingProvider, DeepSeekStreamingClient>();
 builder.Services.AddSingleton<AiStreamingClient>();
 builder.Services.AddSingleton<SystemPromptService>();
+builder.Services.AddSingleton<NinjaTraderKnowledgeRetriever>();
 
 var app = builder.Build();
 
