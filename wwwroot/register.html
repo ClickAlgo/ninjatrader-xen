@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Create account | NinjaTrader Xen</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+    <header class="site-header">
+        <a class="brand" href="/"><span class="brand-product">XEN</span> <span>NinjaTrader</span></a>
+        <a class="button" href="/login.html">Sign in</a>
+    </header>
+
+    <main class="auth-shell">
+        <section class="auth-card">
+            <p class="eyebrow">Create account</p>
+            <h1>Start building for NinjaTrader.</h1>
+            <p>Your account will be registered specifically for the NinjaTrader platform.</p>
+
+            <form id="registerForm">
+                <div class="field">
+                    <label for="email">Email address</label>
+                    <input id="email" name="email" type="email" autocomplete="email" required maxlength="254">
+                </div>
+                <div class="field">
+                    <label for="password">Password</label>
+                    <input id="password" name="password" type="password" autocomplete="new-password" required minlength="10" maxlength="128">
+                </div>
+                <div class="field">
+                    <label for="confirmPassword">Confirm password</label>
+                    <input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" required minlength="10" maxlength="128">
+                </div>
+                <div id="formMessage" class="form-message" role="status"></div>
+                <button class="button primary full-width" type="submit">Create account</button>
+            </form>
+        </section>
+    </main>
+
+    <script src="/js/register.js"></script>
+</body>
+</html>

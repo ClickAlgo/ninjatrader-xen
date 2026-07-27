@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Account | NinjaTrader Xen</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body>
+    <header class="site-header">
+        <a class="brand" href="/"><span class="brand-product">XEN</span> <span>NinjaTrader</span></a>
+        <button id="logoutButton" class="button" type="button">Sign out</button>
+    </header>
+
+    <main class="account-shell">
+        <section class="account-card account-card-wide">
+            <p class="eyebrow">Your account</p>
+            <h1>NinjaTrader Xen</h1>
+            <div id="accountMessage" class="form-message">Loading account…</div>
+            <div id="accountData" class="account-data" hidden>
+                <div><strong>Email:</strong> <span id="accountEmail"></span></div>
+                <div><strong>Subscriber:</strong> <span id="subscriberId"></span></div>
+                <div><strong>Platform:</strong> NinjaTrader</div>
+            </div>
+
+            <div id="creditData" class="dashboard-grid" hidden>
+                <article class="metric-card">
+                    <span>Available credit</span>
+                    <strong id="creditBalance">£0.00</strong>
+                </article>
+                <article class="metric-card">
+                    <span>Account access</span>
+                    <strong id="entitlementStatus">Pay as you go</strong>
+                    <small id="entitlementExpiry"></small>
+                </article>
+            </div>
+
+            <section id="transactionsSection" hidden>
+                <h2>Recent transactions</h2>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionsBody"></tbody>
+                    </table>
+                </div>
+                <p id="noTransactions" class="form-message" hidden>No credit transactions yet.</p>
+            </section>
+
+            <a class="button primary full-width account-workspace-link" href="/workspace.html">
+                Open NinjaTrader workspace
+            </a>
+        </section>
+    </main>
+
+    <script src="/js/account.js"></script>
+</body>
+</html>

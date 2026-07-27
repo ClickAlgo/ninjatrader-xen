@@ -1,0 +1,34 @@
+{
+  "Pricing": {
+    "RetailMargin": 0.80,
+    "Models": {
+      "gpt-5.3-codex": {
+        "InputPer1M": 1.75,
+        "OutputPer1M": 14.00
+      },
+      "gpt-5.6-sol": {
+        "InputPer1M": 5.00,
+        "OutputPer1M": 30.00
+      },
+      "claude-sonnet-4-6": {
+        "InputPer1M": 3.00,
+        "OutputPer1M": 15.00
+      },
+      "claude-opus-5": {
+        "InputPer1M": 5.00,
+        "OutputPer1M": 25.00
+      },
+      "claude-fable-5": {
+        "InputPer1M": 10.00,
+        "OutputPer1M": 50.00
+      },
+      "deepseek-v4-pro": {
+        "InputPer1M": 0.435,
+        "OutputPer1M": 0.87
+      }
+    }
+  },
+  "Currency": {
+    "UsdToGbp": 0.80
+  }
+}

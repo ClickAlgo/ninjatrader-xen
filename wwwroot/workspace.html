@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Workspace | NinjaTrader Xen</title>
+    <link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="workspace-body">
+    <header class="workspace-header">
+        <div class="workspace-brand-area">
+            <a class="brand workspace-brand" href="/">
+                <span class="brand-mark">X</span>
+                <span class="brand-product">XEN</span>
+                <span class="brand-platform">NINJATRADER</span>
+            </a>
+        </div>
+        <div class="workspace-header-actions">
+            <button id="newProjectButton" class="button workspace-action" type="button">New</button>
+            <button id="projectsButton" class="button workspace-action" type="button">Projects</button>
+            <span id="workspaceBalance" class="balance-pill">Credit: —</span>
+            <a class="button" href="/account.html">Account</a>
+        </div>
+    </header>
+
+    <main class="workspace">
+        <aside class="task-panel">
+            <div class="panel-heading">
+                <p class="eyebrow">PROJECT TYPE</p>
+                <h2>NinjaScript workflow</h2>
+            </div>
+            <div id="taskButtons" class="task-buttons">
+                <button class="task-button active" type="button" data-task="build-strategy">
+                    <strong>Build Strategy</strong>
+                    <span>Create a new automated NinjaScript strategy.</span>
+                </button>
+                <button class="task-button" type="button" data-task="build-indicator">
+                    <strong>Build Indicator</strong>
+                    <span>Create a new chart or analysis indicator.</span>
+                </button>
+                <button class="task-button" type="button" data-task="existing-strategy">
+                    <strong>Existing Strategy</strong>
+                    <span>Improve or repair existing strategy source.</span>
+                </button>
+                <button class="task-button" type="button" data-task="existing-indicator">
+                    <strong>Existing Indicator</strong>
+                    <span>Modify an existing NinjaScript indicator.</span>
+                </button>
+            </div>
+        </aside>
+
+        <section class="chat-panel">
+            <div class="chat-toolbar">
+                <div>
+                    <p class="eyebrow">ACTIVE WORKSPACE</p>
+                    <h1 id="taskTitle">Build Strategy</h1>
+                    <span id="projectTitle" class="project-title">Unsaved project</span>
+                </div>
+                <label class="model-field">
+                    <span>Model</span>
+                    <select id="modelSelect">
+                        <option value="gpt-5.6-sol">ChatGPT Sol 5.6</option>
+                        <option value="gpt-5.3-codex" selected>ChatGPT Codex 5.3</option>
+                        <option value="claude-opus-5">Claude Opus 5</option>
+                        <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                        <option value="deepseek-v4-pro">DeepSeek Pro V4</option>
+                        <option value="claude-fable-5">Claude Fable 5</option>
+                    </select>
+                </label>
+            </div>
+
+            <div id="messages" class="messages" aria-live="polite">
+                <article class="message assistant">
+                    <div class="message-label">Xen</div>
+                    <div class="message-content">
+                        Describe the NinjaTrader strategy you want to build. Include entry,
+                        exit, stop-loss and position-sizing rules where possible.
+                    </div>
+                </article>
+            </div>
+
+            <form id="chatForm" class="composer">
+                <textarea id="promptInput" rows="3" maxlength="60000"
+                    placeholder="Describe your NinjaTrader strategy…" required></textarea>
+                <div class="composer-footer">
+                    <span id="chatStatus" class="chat-status" role="status">Ready</span>
+                    <button id="sendButton" class="button primary send-button" type="submit">
+                        <span class="send-label">Send</span>
+                        <span class="send-spinner" aria-hidden="true"></span>
+                    </button>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <div id="projectsModal" class="projects-modal" hidden>
+        <section class="projects-dialog" role="dialog" aria-modal="true" aria-labelledby="projectsTitle">
+            <header class="projects-dialog-header">
+                <div>
+                    <p class="eyebrow">SAVED WORK</p>
+                    <h2 id="projectsTitle">Projects</h2>
+                </div>
+                <button id="closeProjectsButton" class="dialog-close" type="button" aria-label="Close">×</button>
+            </header>
+            <div id="projectsMessage" class="projects-message">Loading projects…</div>
+            <div id="projectsList" class="projects-list"></div>
+        </section>
+    </div>
+
+    <script src="/js/workspace.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+BUILD INDICATOR TASK
+
+Build a new, complete NinjaTrader 8 Indicator.
+
+A recognised indicator name with standard behaviour is sufficient for a
+baseline implementation. Otherwise, calculation logic and intended output must
+be clear. Ask one focused clarification only when the missing detail would
+change calculation results or plotted output.
+
+Configure plots and visual defaults in State.SetDefaults. Perform calculations
+in OnBarUpdate, guard required bars before historical indexing, and assign every
+declared plot through Values or its generated plot property.
+
+Do not add alerts, drawing objects, secondary series or unrelated plots unless
+the user requests them.
+
+Return the complete Indicator source file, not a fragment or diff.

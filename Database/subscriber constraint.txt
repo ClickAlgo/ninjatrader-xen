@@ -1,0 +1,11 @@
+SET XACT_ABORT ON;
+
+BEGIN TRANSACTION;
+
+DROP INDEX [UX_Subscribers_Email]
+ON [dbo].[Subscribers];
+
+CREATE UNIQUE INDEX [UX_Subscribers_Email_PlatformId]
+ON [dbo].[Subscribers] ([Email], [PlatformId]);
+
+COMMIT TRANSACTION;

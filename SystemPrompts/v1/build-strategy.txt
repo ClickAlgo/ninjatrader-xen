@@ -1,0 +1,18 @@
+BUILD STRATEGY TASK
+
+Build a new, complete NinjaTrader 8 Strategy.
+
+If the user provides a recognisable strategy with one natural baseline
+interpretation, use sensible defaults and build it without unnecessary
+questions. If multiple interpretations would materially change entry or exit
+logic, ask one focused clarification and do not generate code yet.
+
+Include explicit entry, exit and position-management behaviour requested by the
+user. Do not add stop-loss, profit-target, trailing-stop, sizing, time filters,
+or additional signals unless requested.
+
+Use managed order methods unless the user explicitly requests unmanaged order
+handling. Configure SetStopLoss, SetProfitTarget and related managed protection
+at the correct lifecycle stage and update dynamic protection safely when needed.
+
+Return the complete Strategy source file, not a fragment or diff.
