@@ -313,6 +313,63 @@
     gap: 80px;
 }
 
+.prompt-builder-feature {
+    display: grid;
+    grid-template-columns: .9fr 1.1fr;
+    gap: 80px;
+    align-items: start;
+    border: 1px solid #503024;
+    border-right: 0;
+    border-left: 0;
+    background: linear-gradient(90deg, rgba(240, 68, 22, .08), transparent);
+}
+
+.prompt-builder-feature h2 {
+    margin: 0;
+    font-size: clamp(2rem, 4vw, 3.45rem);
+    line-height: 1.08;
+    letter-spacing: -.045em;
+}
+
+.prompt-builder-feature-copy > p:last-child {
+    margin-top: 20px;
+    color: var(--muted);
+    line-height: 1.7;
+}
+
+.prompt-builder-feature-steps {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.prompt-builder-feature-steps li {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 18px;
+    padding: 21px 0;
+    border-top: 1px solid var(--border);
+}
+
+.prompt-builder-feature-steps li > span {
+    color: var(--primary-bright);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .1em;
+}
+
+.prompt-builder-feature-steps h3 {
+    margin: 0 0 7px;
+    font-size: 16px;
+}
+
+.prompt-builder-feature-steps p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.65;
+}
+
 .workflow-steps {
     margin: 0;
     padding: 0;
@@ -452,6 +509,7 @@
     }
 
     .landing-card-grid,
+    .prompt-builder-feature,
     .workflow-section,
     .model-section,
     .faq-grid {
@@ -459,6 +517,7 @@
     }
 
     .workflow-section,
+    .prompt-builder-feature,
     .model-section {
         gap: 28px;
     }
@@ -2402,4 +2461,142 @@ tbody tr:last-child td {
     .active-build-plan-controls .button {
         flex: 1;
     }
+}
+
+/* Workspace feedback and problem reporting */
+.workspace-support {
+    margin-top: auto;
+    padding: 16px 18px 14px;
+    border-top: 1px solid var(--border);
+}
+
+.workspace-support .eyebrow {
+    margin: 0 0 10px;
+    font-size: 9px;
+}
+
+.workspace-support-link {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    padding: 7px 0;
+    border: 0;
+    color: #c7c7c7;
+    background: transparent;
+    font: 400 11px/1.4 "Manrope", sans-serif;
+    text-align: left;
+    cursor: pointer;
+}
+
+.workspace-support-link:hover {
+    color: #fff;
+}
+
+.workspace-support-icon {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border: 1px solid #666;
+    border-radius: 50%;
+    color: var(--primary-bright);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.workspace-build-version {
+    margin-top: 0;
+}
+
+.feedback-dialog {
+    width: min(620px, calc(100vw - 32px));
+    overflow: hidden;
+    border: 1px solid #3a3a3a;
+    border-radius: 12px;
+    background: #181818;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, .55);
+}
+
+.feedback-form {
+    display: grid;
+    gap: 17px;
+    padding: 22px 24px 24px;
+}
+
+.feedback-form > p:first-child {
+    margin: 0;
+    color: #aaa;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.feedback-field {
+    display: grid;
+    gap: 7px;
+}
+
+.feedback-field > span {
+    color: #e8e8e8;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.feedback-field select,
+.feedback-field textarea {
+    width: 100%;
+    border: 1px solid #444;
+    border-radius: 7px;
+    padding: 10px 12px;
+    color: #eee;
+    background: #111;
+    font: 400 13px/1.55 "Manrope", sans-serif;
+}
+
+.feedback-field textarea {
+    resize: vertical;
+}
+
+.feedback-field select:focus,
+.feedback-field textarea:focus {
+    border-color: var(--primary);
+    outline: 1px solid var(--primary);
+}
+
+.feedback-diagnostics {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    color: #aaa;
+    font-size: 11px;
+    line-height: 1.55;
+    cursor: pointer;
+}
+
+.feedback-diagnostics input {
+    margin-top: 3px;
+    accent-color: var(--primary);
+}
+
+.feedback-status {
+    min-height: 19px;
+    margin: 0;
+    color: #aaa;
+    font-size: 11px;
+}
+
+.feedback-status.error {
+    color: #ff7a68;
+}
+
+.feedback-status.success {
+    color: #69d58b;
+}
+
+.feedback-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 9px;
+    padding-top: 3px;
 }

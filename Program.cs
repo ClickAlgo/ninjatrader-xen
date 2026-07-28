@@ -143,6 +143,7 @@ app.MapChatEndpoints();
 app.MapProjectEndpoints();
 app.MapStripeEndpoints();
 app.MapPromptBuilderEndpoints();
+app.MapFeedbackEndpoints();
 
 app.Run();
 

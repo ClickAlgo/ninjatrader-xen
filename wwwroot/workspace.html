@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Workspace | NinjaTrader Xen</title>
-    <link rel="stylesheet" href="/css/site.css?v=0.3.4">
+    <link rel="stylesheet" href="/css/site.css?v=0.4.1">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -46,6 +46,13 @@
                 <button class="task-button" type="button" data-task="existing-indicator">
                     <strong>Existing Indicator</strong>
                     <span>Modify an existing NinjaScript indicator.</span>
+                </button>
+            </div>
+            <div class="workspace-support">
+                <p class="eyebrow">SUPPORT</p>
+                <button id="feedbackButton" class="workspace-support-link" type="button">
+                    <span class="workspace-support-icon" aria-hidden="true">?</span>
+                    <span>Feedback &amp; report a problem</span>
                 </button>
             </div>
             <div class="workspace-build-version">Build v0.4-beta</div>
@@ -133,6 +140,53 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=0.3.5"></script>
+    <div id="feedbackModal" class="projects-modal" hidden>
+        <section class="feedback-dialog" role="dialog" aria-modal="true"
+            aria-labelledby="feedbackTitle">
+            <header class="projects-dialog-header">
+                <div>
+                    <p class="eyebrow">SUPPORT</p>
+                    <h2 id="feedbackTitle">Feedback &amp; report a problem</h2>
+                </div>
+                <button id="closeFeedbackButton" class="dialog-close"
+                    type="button" aria-label="Close">&times;</button>
+            </header>
+            <form id="feedbackForm" class="feedback-form">
+                <p>
+                    Send a suggestion or tell us about incorrect code, ignored
+                    requirements, or another problem.
+                </p>
+                <label class="feedback-field">
+                    <span>Report type</span>
+                    <select id="feedbackType">
+                        <option value="feedback">Feedback or suggestion</option>
+                        <option value="bug">Bug or code problem</option>
+                    </select>
+                </label>
+                <label class="feedback-field">
+                    <span>What would you like us to know?</span>
+                    <textarea id="feedbackComment" rows="6" maxlength="2000"
+                        placeholder="Describe your feedback or what went wrong..."
+                        required></textarea>
+                </label>
+                <label class="feedback-diagnostics">
+                    <input id="feedbackIncludeDiagnostics" type="checkbox" checked>
+                    <span>
+                        Include the current task, model, latest prompt, Xen response
+                        and generated code to help diagnose the report.
+                    </span>
+                </label>
+                <p id="feedbackStatus" class="feedback-status" role="status"></p>
+                <div class="feedback-actions">
+                    <button id="cancelFeedbackButton" class="button"
+                        type="button">Cancel</button>
+                    <button id="submitFeedbackButton" class="button primary"
+                        type="submit">Send report</button>
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <script src="/js/workspace.js?v=0.4.1"></script>
 </body>
 </html>

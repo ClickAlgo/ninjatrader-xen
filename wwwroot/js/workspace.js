@@ -43,6 +43,11 @@ const promptBuilderActions = document.getElementById("promptBuilderActions");
 const promptBuilderStatus = document.getElementById("promptBuilderStatus");
 const promptBuilderReason = document.getElementById("promptBuilderReason");
 const activeBuildPlanPanel = document.getElementById("activeBuildPlanPanel");
+const feedbackModal = document.getElementById("feedbackModal");
+const feedbackForm = document.getElementById("feedbackForm");
+const feedbackComment = document.getElementById("feedbackComment");
+const feedbackStatus = document.getElementById("feedbackStatus");
+const submitFeedbackButton = document.getElementById("submitFeedbackButton");
 
 restoreSelectedModel();
 modelSelect.addEventListener("change", rememberSelectedModel);
@@ -66,6 +71,20 @@ document.getElementById("newProjectButton").addEventListener("click", () => {
     clearBuildPlan();
     startNewProject();
 });
+document.getElementById("feedbackButton").addEventListener(
+    "click",
+    openFeedback);
+document.getElementById("closeFeedbackButton").addEventListener(
+    "click",
+    closeFeedback);
+document.getElementById("cancelFeedbackButton").addEventListener(
+    "click",
+    closeFeedback);
+feedbackModal.addEventListener("click", event => {
+    if (event.target === feedbackModal)
+        closeFeedback();
+});
+feedbackForm.addEventListener("submit", submitFeedback);
 
 projectsModal.addEventListener("click", event => {
     if (event.target === projectsModal)
@@ -856,6 +875,108 @@ function getLatestGeneratedCode() {
             return blocks.at(-1)[1].trim();
     }
     return "";
+}
+
+function openFeedback() {
+    feedbackStatus.textContent = "";
+    feedbackStatus.classList.remove("error", "success");
+    feedbackModal.hidden = false;
+    document.body.classList.add("modal-open");
+    window.setTimeout(() => feedbackComment.focus(), 0);
+}
+
+function closeFeedback() {
+    feedbackModal.hidden = true;
+    document.body.classList.remove("modal-open");
+    feedbackForm.reset();
+    document.getElementById("feedbackIncludeDiagnostics").checked = true;
+    submitFeedbackButton.disabled = false;
+    submitFeedbackButton.textContent = "Send report";
+    feedbackStatus.textContent = "";
+    feedbackStatus.classList.remove("error", "success");
+}
+
+async function submitFeedback(event) {
+    event.preventDefault();
+    const comment = feedbackComment.value.trim();
+    if (comment.length < 5) {
+        feedbackStatus.textContent =
+            "Please provide a little more detail before sending.";
+        feedbackStatus.classList.add("error");
+        return;
+    }
+
+    const includeDiagnostics =
+        document.getElementById("feedbackIncludeDiagnostics").checked;
+    const latestUserPrompt = getLatestHistoryContent("user");
+    const latestAssistantOutput = getLatestHistoryContent("assistant");
+
+    submitFeedbackButton.disabled = true;
+    submitFeedbackButton.textContent = "Sending...";
+    feedbackStatus.textContent = "";
+    feedbackStatus.classList.remove("error", "success");
+
+    try {
+        const response = await fetch("/api/feedback", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                type: document.getElementById("feedbackType").value,
+                comment,
+                includeDiagnostics,
+                projectId: includeDiagnostics ? currentProjectId : null,
+                model: includeDiagnostics ? modelSelect.value : null,
+                task: includeDiagnostics ? activeTask : null,
+                appVersion: includeDiagnostics
+                    ? document.querySelector(".workspace-build-version")
+                        ?.textContent.replace(/^Build\s+/i, "").trim()
+                    : null,
+                userPrompt: includeDiagnostics ? latestUserPrompt : null,
+                assistantOutput: includeDiagnostics
+                    ? latestAssistantOutput
+                    : null,
+                latestCode: includeDiagnostics
+                    ? getLatestGeneratedCode()
+                    : null
+            })
+        });
+
+        if (response.status === 401) {
+            sessionStorage.removeItem("nx_access_token");
+            location.replace("/login.html");
+            return;
+        }
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok)
+            throw new Error(payload.detail || payload.message ||
+                "Your report could not be sent.");
+
+        feedbackStatus.textContent =
+            "Thank you. Your report has been sent to ClickAlgo support.";
+        feedbackStatus.classList.add("success");
+        submitFeedbackButton.textContent = "Sent";
+        window.setTimeout(closeFeedback, 1800);
+    } catch (error) {
+        submitFeedbackButton.disabled = false;
+        submitFeedbackButton.textContent = "Send report";
+        feedbackStatus.textContent =
+            error.message || "Your report could not be sent.";
+        feedbackStatus.classList.add("error");
+    }
+}
+
+function getLatestHistoryContent(role) {
+    for (let index = history.length - 1; index >= 0; index -= 1) {
+        if (history[index].role === role &&
+            history[index].content?.trim()) {
+            return history[index].content.trim();
+        }
+    }
+    return null;
 }
 
 function loadBuildPlanPrompt(index) {
