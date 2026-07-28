@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Workspace | NinjaTrader Xen</title>
-    <link rel="stylesheet" href="/css/site.css">
+    <link rel="stylesheet" href="/css/site.css?v=0.3.4">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -16,7 +16,7 @@
             </a>
         </div>
         <div class="workspace-header-actions">
-            <button id="newProjectButton" class="button workspace-action" type="button">New</button>
+            <button id="newProjectButton" class="button workspace-action" type="button">Clear Task</button>
             <button id="projectsButton" class="button workspace-action" type="button">Projects</button>
             <span id="workspaceBalance" class="balance-pill">Credit: —</span>
             <a class="button topup-button" href="/topup.html">Top up</a>
@@ -48,7 +48,7 @@
                     <span>Modify an existing NinjaScript indicator.</span>
                 </button>
             </div>
-            <div class="workspace-build-version">Build v0.3-beta</div>
+            <div class="workspace-build-version">Build v0.4-beta</div>
         </aside>
 
         <section class="chat-panel">
@@ -80,6 +80,8 @@
                     </div>
                 </article>
             </div>
+
+            <section id="activeBuildPlanPanel" class="active-build-plan" hidden></section>
 
             <form id="chatForm" class="composer">
                 <textarea id="promptInput" rows="3" maxlength="60000"
@@ -131,6 +133,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js"></script>
+    <script src="/js/workspace.js?v=0.3.5"></script>
 </body>
 </html>

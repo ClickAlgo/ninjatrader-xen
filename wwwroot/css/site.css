@@ -891,7 +891,7 @@ tbody tr:last-child td {
 
 .chat-panel {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
     min-width: 0;
     min-height: 0;
     height: calc(100vh - 76px);
@@ -1659,6 +1659,7 @@ tbody tr:last-child td {
 }
 
 .message.user .message-content {
+    color: #c2cad6;
     white-space: pre-line;
     line-height: 1.62;
 }
@@ -1676,7 +1677,9 @@ tbody tr:last-child td {
 }
 
 .composer {
-    margin: 0 22px 18px;
+    width: calc(100% - 44px);
+    max-width: 1140px;
+    margin: 0 auto 18px;
     padding: 12px;
     border: 1px solid #3c3c3c;
     border-radius: 10px;
@@ -2126,6 +2129,7 @@ tbody tr:last-child td {
     }
 
     .composer {
+        width: calc(100% - 40px);
         margin: 0 20px 20px;
     }
 }
@@ -2151,6 +2155,15 @@ tbody tr:last-child td {
     display: grid;
     gap: 14px;
     padding: 20px 24px;
+}
+
+.prompt-builder-body.waiting {
+    min-height: 150px;
+    place-items: center;
+}
+
+.prompt-builder-body.waiting .prompt-builder-loading {
+    justify-content: center;
 }
 
 .prompt-review-summary,
@@ -2253,8 +2266,140 @@ tbody tr:last-child td {
     border-top: 1px solid #303030;
 }
 
+.active-build-plan {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    max-width: 1140px;
+    width: calc(100% - 44px);
+    margin: 0 auto 10px;
+    padding: 12px 14px;
+    border: 1px solid #4a3a35;
+    border-radius: 9px;
+    background: linear-gradient(90deg, rgba(240, 68, 22, .09), #202020 48%);
+}
+
+.active-build-plan[hidden] {
+    display: none;
+}
+
+.active-build-plan-copy {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.active-build-plan-copy .eyebrow {
+    margin: 0;
+    font-size: 9px;
+}
+
+.active-build-plan-copy strong {
+    overflow: hidden;
+    color: #f1f1f1;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.active-build-plan-copy small {
+    color: #aaa;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.active-build-plan-controls {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 8px;
+}
+
+.prompt-builder-plan-dialog {
+    width: min(940px, calc(100vw - 32px));
+}
+
+.build-plan-instruction,
+.build-plan-assumptions,
+.build-plan-step {
+    margin: 0;
+    border: 1px solid #383838;
+    border-radius: 8px;
+    background: #202020;
+}
+
+.build-plan-instruction {
+    padding: 14px 16px;
+    color: #ddd;
+    line-height: 1.55;
+}
+
+.build-plan-assumptions {
+    padding: 15px 18px;
+}
+
+.build-plan-assumptions h3,
+.build-plan-step h3 {
+    margin: 0;
+    font-size: 13px;
+}
+
+.build-plan-assumptions ul {
+    margin: 10px 0 0;
+    padding-left: 20px;
+    color: #bbb;
+    line-height: 1.55;
+}
+
+.build-plan-step {
+    overflow: hidden;
+}
+
+.build-plan-step.current {
+    border-color: rgba(240, 68, 22, .65);
+}
+
+.build-plan-step-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 14px;
+    border-bottom: 1px solid #383838;
+}
+
+.build-plan-copy {
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    font-size: 11px;
+}
+
+.build-plan-step pre {
+    max-height: 260px;
+    overflow: auto;
+    margin: 0;
+    padding: 15px;
+    color: #cfcfcf;
+    background: #171717;
+    font: 400 12px/1.6 "Manrope", sans-serif;
+    white-space: pre-wrap;
+}
+
 @media (max-width: 560px) {
     .prompt-builder-actions .button {
         flex: 1 1 100%;
+    }
+
+    .active-build-plan {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .active-build-plan-controls {
+        width: 100%;
+    }
+
+    .active-build-plan-controls .button {
+        flex: 1;
     }
 }

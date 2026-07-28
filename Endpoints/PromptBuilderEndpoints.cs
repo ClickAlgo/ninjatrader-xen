@@ -73,20 +73,20 @@ public static class PromptBuilderEndpoints
         var validation = ValidatePrompt(new PromptRequest(request.Task, request.Prompt));
         if (validation is not null)
             return validation;
-        if (request.Answers is null || request.Answers.Count is < 1 or > 6)
-            return Results.BadRequest(new { message = "Provide between 1 and 6 answers." });
+        if (request.Answers is null || request.Answers.Count is < 1 or > 3)
+            return Results.BadRequest(new { message = "Provide between 1 and 3 answers." });
         if (request.Answers.Any(item =>
                 item.Question?.Length > 500 || item.Answer?.Length > 2000))
             return Results.BadRequest(new { message = "A clarification answer is too long." });
 
         try
         {
-            var improvedPrompt = await service.ComposeAsync(
+            var plan = await service.ComposeAsync(
                 request.Task,
                 request.Prompt,
                 request.Answers,
                 cancellationToken);
-            return Results.Ok(new { improvedPrompt });
+            return Results.Ok(plan);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

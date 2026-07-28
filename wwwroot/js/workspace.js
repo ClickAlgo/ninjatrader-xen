@@ -26,6 +26,7 @@ let currentBalanceGbp = null;
 let promptQualityChecked = false;
 
 const lowCreditThresholdGbp = 1;
+const buildPlanStorageKey = "nx_active_build_plan_v1";
 
 const messages = document.getElementById("messages");
 const form = document.getElementById("chatForm");
@@ -41,6 +42,7 @@ const promptBuilderBody = document.getElementById("promptBuilderBody");
 const promptBuilderActions = document.getElementById("promptBuilderActions");
 const promptBuilderStatus = document.getElementById("promptBuilderStatus");
 const promptBuilderReason = document.getElementById("promptBuilderReason");
+const activeBuildPlanPanel = document.getElementById("activeBuildPlanPanel");
 
 restoreSelectedModel();
 modelSelect.addEventListener("change", rememberSelectedModel);
@@ -54,12 +56,14 @@ cancelButton.addEventListener("click", () => {
 });
 loadBalance();
 showTrialWelcome();
+renderActiveBuildPlan();
 
 document.getElementById("projectsButton").addEventListener("click", openProjects);
 document.getElementById("closeProjectsButton").addEventListener("click", closeProjects);
 document.getElementById("newProjectButton").addEventListener("click", () => {
     if (generating)
         return;
+    clearBuildPlan();
     startNewProject();
 });
 
@@ -120,6 +124,7 @@ form.addEventListener("submit", async event => {
     const previousHistory = [...history];
     const userMessage = addMessage("user", prompt);
     history.push({ role: "user", content: prompt });
+    markBuildPlanPromptSent(prompt);
     promptInput.value = "";
 
     const assistantMessage = addMessage("assistant", "");
@@ -217,6 +222,7 @@ form.addEventListener("submit", async event => {
             throw new Error("The AI returned an empty response.");
 
         history.push({ role: "assistant", content: assistantText });
+        markBuildPlanResponseReady(prompt);
         assistantMessage.classList.remove("generating");
         renderStructuredResponse(content, assistantText);
         if (ragDebug)
@@ -231,6 +237,7 @@ form.addEventListener("submit", async event => {
             userMessage.remove();
             assistantMessage.remove();
             promptInput.value = prompt;
+            restoreBuildPlanPromptLoaded(prompt);
 
             if (createdProjectForRequest) {
                 currentProjectId = null;
@@ -242,6 +249,7 @@ form.addEventListener("submit", async event => {
             return;
         }
 
+        restoreBuildPlanPromptLoaded(prompt);
         assistantMessage.classList.remove("generating");
         content.textContent = error.message;
         assistantMessage.classList.add("error");
@@ -544,6 +552,11 @@ function startNewProject(resetTask = true) {
 let resolvePromptBuilder = null;
 
 async function reviewInitialBuildPrompt(prompt) {
+    if (isSavedBuildPlanPrompt(prompt)) {
+        promptQualityChecked = true;
+        return prompt;
+    }
+
     if (promptQualityChecked ||
         currentProjectId ||
         history.length > 0 ||
@@ -587,26 +600,29 @@ async function reviewInitialBuildPrompt(prompt) {
 }
 
 function showPromptReview(reason) {
+    document.querySelector(".prompt-builder-dialog")
+        ?.classList.remove("prompt-builder-plan-dialog");
+    document.getElementById("promptBuilderTitle").textContent =
+        "Plan this build first?";
     promptBuilderReason.textContent = reason ||
         "A few details could materially improve the generated NinjaScript.";
     promptBuilderBody.replaceChildren(createReviewSummary());
     promptBuilderStatus.textContent = "";
     setPromptBuilderActions([
-        ["Clarify with Xen", "clarify", "button primary"],
-        ["Build anyway", "build", "button"],
-        ["Edit request", "edit", "button"]
+        ["Plan with Prompt Builder", "clarify", "button primary"],
+        ["Build in Xen anyway", "build", "button"],
+        ["Edit original request", "edit", "button"]
     ]);
     openPromptBuilder();
     return waitForPromptBuilderDecision();
 }
 
 async function runPromptBuilder(prompt) {
+    document.getElementById("promptBuilderTitle").textContent =
+        "Clarify your build request";
     promptBuilderReason.textContent =
         "Answer the relevant questions. Leave an answer blank when you want Xen to use a sensible configurable default.";
-    promptBuilderBody.replaceChildren();
-    setPromptBuilderActions([]);
-    setPromptBuilderLoading("Preparing clarification questions...");
-    openPromptBuilder();
+    showPromptBuilderWait("Preparing clarification questions...");
 
     try {
         const result = await promptBuilderFetch("/api/prompt-builder/questions", {
@@ -616,8 +632,8 @@ async function runPromptBuilder(prompt) {
         renderPromptQuestions(result.questions);
         promptBuilderStatus.textContent = "";
         setPromptBuilderActions([
-            ["Create specification", "compose", "button primary"],
-            ["Build original", "build", "button"],
+            ["Create Build Plan", "compose", "button primary"],
+            ["Build original request", "build", "button"],
             ["Edit request", "edit", "button"]
         ]);
 
@@ -635,20 +651,29 @@ async function runPromptBuilder(prompt) {
                 answer: field.value.trim()
             }));
 
-        setPromptBuilderBusy(true, "Creating your build specification...");
-        const composed = await promptBuilderFetch("/api/prompt-builder/compose", {
+        showPromptBuilderWait("Creating your Build Plan. This can take up to a minute...");
+        const planResult = await promptBuilderFetch("/api/prompt-builder/compose", {
             task: activeTask,
             prompt,
             answers
         });
-        return await showComposedPrompt(composed.improvedPrompt);
+        const plan = saveBuildPlan(planResult, activeTask);
+        renderActiveBuildPlan();
+        const action = await showBuildPlan(plan);
+        if (action === "start")
+            loadBuildPlanPrompt(plan.currentIndex);
+        return null;
     } catch (error) {
         openPromptBuilder();
+        promptBuilderBody.classList.remove("waiting");
+        promptBuilderBody.replaceChildren();
+        promptBuilderReason.textContent =
+            "The Build Plan was not created. You can retry by editing the request, or continue with the original request you entered before the questions.";
         promptBuilderStatus.textContent =
             error.message || "Prompt Builder is temporarily unavailable.";
         promptBuilderStatus.classList.add("error");
         setPromptBuilderActions([
-            ["Build original", "build", "button primary"],
+            ["Build original request", "build", "button primary"],
             ["Edit request", "edit", "button"]
         ]);
         const fallback = await waitForPromptBuilderDecision();
@@ -658,28 +683,381 @@ async function runPromptBuilder(prompt) {
     }
 }
 
-async function showComposedPrompt(improvedPrompt) {
+function saveBuildPlan(result, task) {
+    const plan = {
+        version: 2,
+        task,
+        explanation: result.explanation || "",
+        assumptions: Array.isArray(result.assumptions) ? result.assumptions : [],
+        prompts: Array.isArray(result.prompts) ? result.prompts : [],
+        currentIndex: 0,
+        stepStatus: "ready",
+        completed: false,
+        createdAt: new Date().toISOString()
+    };
+    localStorage.setItem(buildPlanStorageKey, JSON.stringify(plan));
+    return plan;
+}
+
+function getBuildPlan() {
+    try {
+        const plan = JSON.parse(localStorage.getItem(buildPlanStorageKey));
+        if (plan?.version === 1 && plan.stepStatus === "sent") {
+            plan.version = 2;
+            plan.stepStatus = "response-ready";
+            localStorage.setItem(buildPlanStorageKey, JSON.stringify(plan));
+        }
+        return plan && Array.isArray(plan.prompts) && plan.prompts.length
+            ? plan
+            : null;
+    } catch {
+        return null;
+    }
+}
+
+function updateBuildPlan(plan) {
+    localStorage.setItem(buildPlanStorageKey, JSON.stringify(plan));
+    renderActiveBuildPlan();
+}
+
+function clearBuildPlan() {
+    localStorage.removeItem(buildPlanStorageKey);
+    renderActiveBuildPlan();
+}
+
+function renderActiveBuildPlan() {
+    const plan = getBuildPlan();
+    activeBuildPlanPanel.replaceChildren();
+    activeBuildPlanPanel.hidden = !plan;
+    if (!plan)
+        return;
+
+    const index = Math.min(plan.currentIndex || 0, plan.prompts.length - 1);
+    const step = plan.prompts[index];
+    const copy = document.createElement("div");
+    copy.className = "active-build-plan-copy";
+    const label = document.createElement("span");
+    label.className = "eyebrow";
+    label.textContent = "ACTIVE BUILD PLAN";
+    const title = document.createElement("strong");
+    title.textContent = plan.completed
+        ? "Plan complete"
+        : `Prompt ${index + 1} of ${plan.prompts.length} - ${step.title}`;
+    const detail = document.createElement("small");
+    copy.append(label, title, detail);
+
+    const controls = document.createElement("div");
+    controls.className = "active-build-plan-controls";
+    const primary = document.createElement("button");
+    primary.type = "button";
+    primary.className = "button primary";
+    const view = document.createElement("button");
+    view.type = "button";
+    view.className = "button";
+    view.textContent = "View plan";
+    view.addEventListener("click", async () => {
+        const action = await showBuildPlan();
+        if (action === "start")
+            loadBuildPlanPrompt(getBuildPlan()?.currentIndex || 0);
+    });
+
+    const state = plan.stepStatus || "ready";
+    if (plan.completed) {
+        detail.textContent = "All planned stages have been completed.";
+        primary.textContent = "Plan complete";
+        primary.disabled = true;
+    } else if (state === "loaded") {
+        detail.textContent =
+            `Prompt ${index + 1} is in the composer. Review it, then press Send.`;
+        primary.textContent = `Prompt ${index + 1} loaded - press Send`;
+        primary.disabled = true;
+    } else if (state === "sent") {
+        detail.textContent =
+            `Xen is generating the code for Prompt ${index + 1}.`;
+        primary.textContent = "Generating current prompt";
+        primary.disabled = true;
+    } else if (state === "response-ready") {
+        const finalStep = index === plan.prompts.length - 1;
+        const toolName = plan.task === "build-indicator"
+            ? "Indicator"
+            : "Strategy";
+        detail.textContent =
+            `Import the ${toolName} into NinjaTrader, confirm it compiles, and test the current features before continuing.`;
+        primary.textContent = finalStep
+            ? "Finish plan"
+            : `Load Prompt ${index + 2}`;
+        primary.addEventListener("click", () => {
+            if (finalStep) {
+                plan.completed = true;
+                updateBuildPlan(plan);
+                return;
+            }
+            plan.currentIndex = index + 1;
+            plan.stepStatus = "ready";
+            updateBuildPlan(plan);
+            loadBuildPlanPrompt(plan.currentIndex);
+        });
+    } else if (state === "compiled") {
+        const finalStep = index === plan.prompts.length - 1;
+        detail.textContent = finalStep
+            ? "The final stage compiled successfully."
+            : `Prompt ${index + 1} compiled successfully.`;
+        primary.textContent = finalStep
+            ? "Testing complete - finish plan"
+            : `Testing complete - load Prompt ${index + 2}`;
+        primary.addEventListener("click", () => {
+            if (finalStep) {
+                plan.completed = true;
+                updateBuildPlan(plan);
+                return;
+            }
+            plan.currentIndex = index + 1;
+            plan.stepStatus = "ready";
+            updateBuildPlan(plan);
+            loadBuildPlanPrompt(plan.currentIndex);
+        });
+    } else {
+        detail.textContent =
+            `Load Prompt ${index + 1} into the composer when you are ready.`;
+        primary.textContent = `Load Prompt ${index + 1}`;
+        primary.addEventListener("click", () => loadBuildPlanPrompt(index));
+    }
+
+    controls.appendChild(primary);
+    if (state === "response-ready" || plan.completed) {
+        const latestCode = getLatestGeneratedCode();
+        if (latestCode) {
+            const copyCode = document.createElement("button");
+            copyCode.type = "button";
+            copyCode.className = "button";
+            copyCode.textContent = "Copy code";
+            copyCode.addEventListener("click", async () => {
+                const copied = await copyText(latestCode);
+                copyCode.textContent = copied ? "Code copied" : "Copy failed";
+                window.setTimeout(
+                    () => copyCode.textContent = "Copy code",
+                    1600);
+            });
+            controls.appendChild(copyCode);
+        }
+    }
+    controls.appendChild(view);
+    activeBuildPlanPanel.append(copy, controls);
+}
+
+function getLatestGeneratedCode() {
+    for (let index = history.length - 1; index >= 0; index -= 1) {
+        const turn = history[index];
+        if (turn.role !== "assistant")
+            continue;
+        const blocks = [...turn.content.matchAll(
+            /```(?:csharp|cs)?\s*([\s\S]*?)```/gi)];
+        if (blocks.length)
+            return blocks.at(-1)[1].trim();
+    }
+    return "";
+}
+
+function loadBuildPlanPrompt(index) {
+    const plan = getBuildPlan();
+    const step = plan?.prompts?.[index];
+    if (!step)
+        return;
+
+    activeTask = plan.task;
+    document.querySelectorAll(".task-button").forEach(item =>
+        item.classList.toggle("active", item.dataset.task === activeTask));
+    document.getElementById("taskTitle").textContent = taskNames[activeTask];
+    promptInput.placeholder = taskPlaceholders[activeTask];
+
+    plan.currentIndex = index;
+    plan.stepStatus = "loaded";
+    plan.completed = false;
+    updateBuildPlan(plan);
+    promptInput.value = step.prompt;
+    promptQualityChecked = true;
+    promptInput.focus();
+    promptInput.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function markBuildPlanPromptSent(prompt) {
+    const plan = getBuildPlan();
+    if (!plan || plan.completed)
+        return;
+    const index = Math.min(plan.currentIndex || 0, plan.prompts.length - 1);
+    if (plan.prompts[index]?.prompt?.trim() !== prompt?.trim())
+        return;
+    plan.stepStatus = "sent";
+    updateBuildPlan(plan);
+}
+
+function markBuildPlanResponseReady(prompt) {
+    const plan = getBuildPlan();
+    if (!plan || plan.completed || plan.stepStatus !== "sent")
+        return;
+    const index = Math.min(plan.currentIndex || 0, plan.prompts.length - 1);
+    if (plan.prompts[index]?.prompt?.trim() !== prompt?.trim())
+        return;
+    plan.stepStatus = "response-ready";
+    updateBuildPlan(plan);
+}
+
+function restoreBuildPlanPromptLoaded(prompt) {
+    const plan = getBuildPlan();
+    if (!plan || plan.stepStatus !== "sent")
+        return;
+    const index = Math.min(plan.currentIndex || 0, plan.prompts.length - 1);
+    if (plan.prompts[index]?.prompt?.trim() !== prompt?.trim())
+        return;
+    plan.stepStatus = "loaded";
+    updateBuildPlan(plan);
+}
+
+function markBuildPlanCompileSucceeded() {
+    const plan = getBuildPlan();
+    if (!plan || plan.completed || plan.stepStatus !== "sent")
+        return;
+    plan.stepStatus = "compiled";
+    updateBuildPlan(plan);
+}
+
+function isSavedBuildPlanPrompt(prompt) {
+    return Boolean(getBuildPlan()?.prompts?.some(
+        step => step.prompt?.trim() === prompt?.trim()));
+}
+
+async function showBuildPlan(plan = getBuildPlan()) {
+    if (!plan)
+        return "close";
+
     openPromptBuilder();
-    promptBuilderReason.textContent =
-        "Review the structured request before Xen generates any code.";
-    const textarea = document.createElement("textarea");
-    textarea.className = "prompt-builder-review";
-    textarea.value = improvedPrompt;
-    textarea.maxLength = 60000;
-    textarea.rows = 14;
-    promptBuilderBody.replaceChildren(textarea);
+    document.getElementById("promptBuilderTitle").textContent =
+        "Your NinjaTrader Build Plan";
+    promptBuilderBody.classList.remove("waiting");
+    document.querySelector(".prompt-builder-dialog")
+        ?.classList.add("prompt-builder-plan-dialog");
+    promptBuilderReason.textContent = plan.explanation ||
+        "Build and test this project in small, ordered iterations.";
+    promptBuilderBody.replaceChildren();
+
+    const instruction = document.createElement("p");
+    instruction.className = "build-plan-instruction";
+    instruction.textContent =
+        "Submit prompts in order. Compile and test every stage in NinjaTrader before continuing.";
+    promptBuilderBody.appendChild(instruction);
+
+    if (plan.assumptions?.length) {
+        const assumptions = document.createElement("section");
+        assumptions.className = "build-plan-assumptions";
+        const title = document.createElement("h3");
+        title.textContent = "Material assumptions";
+        const list = document.createElement("ul");
+        plan.assumptions.forEach(text => {
+            const item = document.createElement("li");
+            item.textContent = text;
+            list.appendChild(item);
+        });
+        assumptions.append(title, list);
+        promptBuilderBody.appendChild(assumptions);
+    }
+
+    plan.prompts.forEach((step, index) => {
+        const card = document.createElement("section");
+        card.className = "build-plan-step";
+        if (index === plan.currentIndex)
+            card.classList.add("current");
+
+        const heading = document.createElement("div");
+        heading.className = "build-plan-step-heading";
+        const title = document.createElement("h3");
+        title.textContent = `Prompt ${index + 1} - ${step.title}`;
+        const copy = document.createElement("button");
+        copy.type = "button";
+        copy.className = "button build-plan-copy";
+        copy.textContent = "Copy prompt";
+        copy.addEventListener("click", async () => {
+            const copied = await copyText(step.prompt);
+            copy.textContent = copied ? "Copied" : "Copy failed";
+            window.setTimeout(() => copy.textContent = "Copy prompt", 1600);
+        });
+        const text = document.createElement("pre");
+        text.textContent = step.prompt;
+        heading.append(title, copy);
+        card.append(heading, text);
+        promptBuilderBody.appendChild(card);
+    });
+
     promptBuilderStatus.textContent = "";
     promptBuilderStatus.classList.remove("error");
-    setPromptBuilderActions([
-        ["Use this request", "use", "button primary"],
-        ["Edit original", "edit", "button"]
-    ]);
+    promptBuilderActions.replaceChildren();
+    addPlanAction(
+        plan.currentIndex === 0 ? "Start with Prompt 1" :
+            `Reload Prompt ${plan.currentIndex + 1}`,
+        "start",
+        "button primary");
+    addPlanUtilityAction("Copy All", async button => {
+        const copied = await copyText(formatBuildPlan(plan));
+        button.textContent = copied ? "Copied All" : "Copy failed";
+    });
+    addPlanUtilityAction("Download Plan", () => downloadBuildPlan(plan));
+    addPlanAction("Close", "close", "button");
+    return waitForPromptBuilderDecision();
+}
 
-    const decision = await waitForPromptBuilderDecision();
-    return decision === "use" ? textarea.value.trim() : null;
+function addPlanAction(label, decision, className) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = className;
+    button.textContent = label;
+    button.addEventListener("click", () => closePromptBuilder(decision));
+    promptBuilderActions.appendChild(button);
+}
+
+function addPlanUtilityAction(label, action) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button";
+    button.textContent = label;
+    button.addEventListener("click", () => action(button));
+    promptBuilderActions.appendChild(button);
+}
+
+function formatBuildPlan(plan) {
+    const assumptions = plan.assumptions?.length
+        ? `\nMaterial assumptions\n${plan.assumptions.map(item => `- ${item}`).join("\n")}\n`
+        : "";
+    const prompts = plan.prompts.map((step, index) =>
+        `Prompt ${index + 1} - ${step.title}\n\n${step.prompt}`)
+        .join("\n\n---\n\n");
+    return `NinjaTrader Xen Build Plan\n\n${plan.explanation}${assumptions}\n${prompts}\n\n` +
+        "Submit prompts in order and compile/test every stage before continuing.";
+}
+
+function downloadBuildPlan(plan) {
+    const blob = new Blob([formatBuildPlan(plan)], {
+        type: "text/plain;charset=utf-8"
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `ninjatrader-xen-build-plan-${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+}
+
+async function copyText(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        return false;
+    }
 }
 
 function renderPromptQuestions(questions) {
+    promptBuilderBody.classList.remove("waiting");
     promptBuilderBody.replaceChildren();
     (questions || []).forEach((item, index) => {
         const field = document.createElement("label");
@@ -706,10 +1084,10 @@ function createReviewSummary() {
     const summary = document.createElement("div");
     summary.className = "prompt-review-summary";
     const title = document.createElement("strong");
-    title.textContent = "Would you like Xen to clarify it first?";
+    title.textContent = "Would you like Prompt Builder to plan it first?";
     const detail = document.createElement("p");
     detail.textContent =
-        "The built-in builder will ask only the missing trading requirements, then prepare a structured request for your approval.";
+        "It will ask only the important missing requirements, then create an ordered sequence of small, testable prompts.";
     summary.append(title, detail);
     return summary;
 }
@@ -760,6 +1138,17 @@ function setPromptBuilderLoading(message) {
     promptBuilderStatus.classList.remove("error");
     promptBuilderStatus.replaceChildren(
         createWorkingIndicator(message, "prompt-builder-loading"));
+}
+
+function showPromptBuilderWait(message) {
+    openPromptBuilder();
+    promptBuilderReason.textContent = "";
+    promptBuilderBody.classList.add("waiting");
+    promptBuilderBody.replaceChildren(
+        createWorkingIndicator(message, "prompt-builder-loading"));
+    promptBuilderStatus.textContent = "";
+    promptBuilderStatus.classList.remove("error");
+    promptBuilderActions.replaceChildren();
 }
 
 function setComposerReviewState(reviewing, message) {
@@ -1100,3 +1489,9 @@ function restoreSelectedModel() {
 function rememberSelectedModel() {
     localStorage.setItem("nx_selected_model", modelSelect.value);
 }
+
+// Reserved integration point for NinjaTrader Xen's future real compile/build
+// validation workflow. Nothing in the chat response path dispatches this event.
+window.addEventListener(
+    "ninjatrader:build-validation-succeeded",
+    markBuildPlanCompileSucceeded);
