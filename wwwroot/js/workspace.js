@@ -48,6 +48,11 @@ const feedbackForm = document.getElementById("feedbackForm");
 const feedbackComment = document.getElementById("feedbackComment");
 const feedbackStatus = document.getElementById("feedbackStatus");
 const submitFeedbackButton = document.getElementById("submitFeedbackButton");
+const codeWorkspaceModal = document.getElementById("codeWorkspaceModal");
+const codeWorkspacePreview = document.getElementById("codeWorkspacePreview");
+const revisionList = document.getElementById("revisionList");
+const revisionMessage = document.getElementById("revisionMessage");
+let codeWorkspaceCode = "";
 
 restoreSelectedModel();
 modelSelect.addEventListener("change", rememberSelectedModel);
@@ -64,7 +69,26 @@ showTrialWelcome();
 renderActiveBuildPlan();
 
 document.getElementById("projectsButton").addEventListener("click", openProjects);
+document.getElementById("codeViewButton").addEventListener(
+    "click",
+    openCodeWorkspace);
 document.getElementById("closeProjectsButton").addEventListener("click", closeProjects);
+document.getElementById("closeCodeWorkspaceButton").addEventListener(
+    "click",
+    closeCodeWorkspace);
+document.getElementById("copyWorkspaceCodeButton").addEventListener(
+    "click",
+    copyWorkspaceCode);
+document.getElementById("downloadWorkspaceCodeButton").addEventListener(
+    "click",
+    () => {
+        if (codeWorkspaceCode)
+            downloadCode(codeWorkspaceCode);
+    });
+codeWorkspaceModal.addEventListener("click", event => {
+    if (event.target === codeWorkspaceModal)
+        closeCodeWorkspace();
+});
 document.getElementById("newProjectButton").addEventListener("click", () => {
     if (generating)
         return;
@@ -1368,6 +1392,215 @@ async function saveCurrentProject() {
     }
 }
 
+async function openCodeWorkspace() {
+    codeWorkspaceModal.hidden = false;
+    document.body.classList.add("modal-open");
+    revisionList.replaceChildren();
+    revisionMessage.textContent = "";
+
+    if (!currentProjectId) {
+        setCodeWorkspaceCode("", "No saved source");
+        revisionMessage.textContent =
+            "Generate code or open a saved project to view its source history.";
+        document.getElementById("revisionCount").textContent = "0 versions";
+        return;
+    }
+
+    const currentCode = getLatestGeneratedCode();
+    if (currentCode)
+        setCodeWorkspaceCode(currentCode, "Current generated source");
+    else
+        setCodeWorkspaceCode("", "Loading source...");
+
+    revisionMessage.textContent = "Loading snapshots...";
+    try {
+        const response = await fetch(
+            `/api/projects/${currentProjectId}/revisions`,
+            { headers: { "Authorization": `Bearer ${token}` } });
+        if (response.status === 401) {
+            sessionStorage.removeItem("nx_access_token");
+            location.replace("/login.html");
+            return;
+        }
+        if (!response.ok)
+            throw new Error("Unable to load source snapshots.");
+
+        const result = await response.json();
+        const revisions = Array.isArray(result.revisions)
+            ? result.revisions
+            : [];
+        renderCodeRevisions(revisions);
+        if (!currentCode && revisions.length)
+            await previewCodeRevision(revisions[0]);
+    } catch (error) {
+        revisionMessage.textContent = error.message;
+        revisionMessage.classList.add("error");
+    }
+}
+
+function closeCodeWorkspace() {
+    codeWorkspaceModal.hidden = true;
+    document.body.classList.remove("modal-open");
+    revisionMessage.classList.remove("error", "success");
+}
+
+function renderCodeRevisions(revisions) {
+    revisionList.replaceChildren();
+    revisionMessage.textContent = revisions.length
+        ? ""
+        : "No source snapshots have been saved for this project yet.";
+    revisionMessage.classList.remove("error", "success");
+    document.getElementById("revisionCount").textContent =
+        `${revisions.length} ${revisions.length === 1 ? "version" : "versions"}`;
+
+    revisions.forEach(revision => {
+        const row = document.createElement("article");
+        row.className = "revision-item";
+        if (revision.isCurrent)
+            row.classList.add("current");
+
+        const details = document.createElement("button");
+        details.type = "button";
+        details.className = "revision-details";
+        const title = document.createElement("strong");
+        title.textContent = `v${revision.versionNumber}`;
+        const badge = document.createElement("span");
+        badge.textContent = revision.isCurrent ? "Current" : revision.model;
+        const date = document.createElement("small");
+        date.textContent = new Intl.DateTimeFormat("en-GB", {
+            dateStyle: "medium",
+            timeStyle: "short"
+        }).format(new Date(revision.createdUtc));
+        title.appendChild(badge);
+        details.append(title, date);
+        details.addEventListener(
+            "click",
+            () => previewCodeRevision(revision));
+
+        const restore = document.createElement("button");
+        restore.type = "button";
+        restore.className = "revision-restore";
+        restore.textContent = revision.isCurrent ? "Current" : "Restore";
+        restore.disabled = revision.isCurrent;
+        if (!revision.isCurrent) {
+            restore.addEventListener(
+                "click",
+                () => restoreCodeRevision(revision));
+        }
+
+        row.append(details, restore);
+        revisionList.appendChild(row);
+    });
+}
+
+async function previewCodeRevision(revision) {
+    revisionMessage.textContent = "Loading source...";
+    try {
+        const response = await fetch(
+            `/api/projects/${currentProjectId}/revisions/${revision.revisionId}`,
+            { headers: { "Authorization": `Bearer ${token}` } });
+        if (!response.ok)
+            throw new Error("Unable to load this source snapshot.");
+        const result = await response.json();
+        setCodeWorkspaceCode(
+            result.code,
+            `v${revision.versionNumber} - ${formatRevisionDate(result.createdUtc)}`);
+        revisionMessage.textContent = "";
+        revisionList.querySelectorAll(".revision-item").forEach(item =>
+            item.classList.remove("selected"));
+        const selected = [...revisionList.children]
+            .find(item => item.querySelector(".revision-details strong")
+                ?.firstChild?.textContent === `v${revision.versionNumber}`);
+        selected?.classList.add("selected");
+    } catch (error) {
+        revisionMessage.textContent = error.message;
+        revisionMessage.classList.add("error");
+    }
+}
+
+async function restoreCodeRevision(revision) {
+    if (!window.confirm(
+        `Restore v${revision.versionNumber} as the current project source? ` +
+        "Your existing snapshots will remain available.")) {
+        return;
+    }
+
+    revisionMessage.textContent = `Restoring v${revision.versionNumber}...`;
+    try {
+        const response = await fetch(
+            `/api/projects/${currentProjectId}/revisions/${revision.revisionId}/restore`,
+            {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok)
+            throw new Error(result.detail || "Unable to restore this snapshot.");
+
+        applyProjectToWorkspace(result);
+        setCodeWorkspaceCode(result.latestCode, "Restored current source");
+        revisionMessage.textContent =
+            `v${revision.versionNumber} was restored as a new current snapshot.`;
+        revisionMessage.classList.add("success");
+
+        const listResponse = await fetch(
+            `/api/projects/${currentProjectId}/revisions`,
+            { headers: { "Authorization": `Bearer ${token}` } });
+        if (listResponse.ok) {
+            const listResult = await listResponse.json();
+            renderCodeRevisions(listResult.revisions || []);
+            revisionMessage.textContent =
+                `v${revision.versionNumber} was restored as a new current snapshot.`;
+            revisionMessage.classList.add("success");
+        }
+    } catch (error) {
+        revisionMessage.textContent = error.message;
+        revisionMessage.classList.add("error");
+    }
+}
+
+function setCodeWorkspaceCode(code, meta) {
+    codeWorkspaceCode = code?.trim() || "";
+    const codeElement = document.createElement("code");
+    if (codeWorkspaceCode) {
+        codeElement.className = "language-csharp";
+        codeElement.innerHTML = highlightCSharp(codeWorkspaceCode);
+    } else {
+        codeElement.textContent =
+            "Select a saved project with generated code.";
+    }
+    codeWorkspacePreview.replaceChildren(codeElement);
+
+    const classMatch = codeWorkspaceCode.match(
+        /\bclass\s+([A-Za-z_][A-Za-z0-9_]*)/);
+    document.getElementById("codeWorkspaceFileName").textContent =
+        `${classMatch ? classMatch[1] : "NinjaScript"}.cs`;
+    document.getElementById("codeWorkspaceMeta").textContent = meta;
+    document.getElementById("copyWorkspaceCodeButton").disabled =
+        !codeWorkspaceCode;
+    document.getElementById("downloadWorkspaceCodeButton").disabled =
+        !codeWorkspaceCode;
+}
+
+async function copyWorkspaceCode() {
+    if (!codeWorkspaceCode)
+        return;
+    const button = document.getElementById("copyWorkspaceCodeButton");
+    const copied = await copyText(codeWorkspaceCode);
+    button.textContent = copied ? "Code copied" : "Copy failed";
+    window.setTimeout(() => button.textContent = "Copy code", 1500);
+}
+
+function formatRevisionDate(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+        ? "Saved snapshot"
+        : new Intl.DateTimeFormat("en-GB", {
+            dateStyle: "medium",
+            timeStyle: "short"
+        }).format(date);
+}
+
 async function openProjects() {
     projectsModal.hidden = false;
     document.body.classList.add("modal-open");
@@ -1462,40 +1695,44 @@ async function loadProject(projectId) {
             throw new Error("Unable to open the project.");
 
         const project = await response.json();
-        currentProjectId = project.projectId;
-        currentProjectTitle = project.title;
-        activeTask = taskNames[project.task] ? project.task : "build-strategy";
-        history = Array.isArray(project.messages) ? project.messages : [];
-
-        document.querySelectorAll(".task-button").forEach(item =>
-            item.classList.toggle("active", item.dataset.task === activeTask));
-        document.getElementById("taskTitle").textContent = taskNames[activeTask];
-        promptInput.placeholder = taskPlaceholders[activeTask];
-
-        if ([...modelSelect.options].some(option => option.value === project.model))
-            modelSelect.value = project.model;
-        rememberSelectedModel();
-
-        messages.innerHTML = "";
-        for (const turn of history) {
-            const message = addMessage(turn.role, "");
-            const content = message.querySelector(".message-content");
-            if (turn.role === "assistant")
-                renderStructuredResponse(content, turn.content);
-            else
-                content.textContent = formatUserMessage(turn.content);
-        }
-
-        if (!history.length)
-            addMessage("assistant", taskIntro(activeTask));
-
-        updateProjectTitle();
+        applyProjectToWorkspace(project);
         status.textContent = "Project loaded";
         closeProjects();
         scrollMessagesToBottom();
     } catch (error) {
         document.getElementById("projectsMessage").textContent = error.message;
     }
+}
+
+function applyProjectToWorkspace(project) {
+    currentProjectId = project.projectId;
+    currentProjectTitle = project.title;
+    activeTask = taskNames[project.task] ? project.task : "build-strategy";
+    history = Array.isArray(project.messages) ? project.messages : [];
+    promptQualityChecked = history.length > 0;
+
+    document.querySelectorAll(".task-button").forEach(item =>
+        item.classList.toggle("active", item.dataset.task === activeTask));
+    document.getElementById("taskTitle").textContent = taskNames[activeTask];
+    promptInput.placeholder = taskPlaceholders[activeTask];
+
+    if ([...modelSelect.options].some(option => option.value === project.model))
+        modelSelect.value = project.model;
+    rememberSelectedModel();
+
+    messages.innerHTML = "";
+    for (const turn of history) {
+        const message = addMessage(turn.role, "");
+        const content = message.querySelector(".message-content");
+        if (turn.role === "assistant")
+            renderStructuredResponse(content, turn.content);
+        else
+            content.textContent = formatUserMessage(turn.content);
+    }
+
+    if (!history.length)
+        addMessage("assistant", taskIntro(activeTask));
+    updateProjectTitle();
 }
 
 async function renameProject(project) {

@@ -14,10 +14,306 @@ public static class ProjectEndpoints
         var group = app.MapGroup("/api/projects").RequireAuthorization();
         group.MapGet("/", List);
         group.MapGet("/{projectId:guid}", Get);
+        group.MapGet("/{projectId:guid}/revisions", ListRevisions);
+        group.MapGet("/{projectId:guid}/revisions/{revisionId:int}", GetRevision);
+        group.MapPost("/{projectId:guid}/revisions/{revisionId:int}/restore", RestoreRevision);
         group.MapPost("/", Save);
         group.MapPatch("/{projectId:guid}", Rename);
         group.MapDelete("/{projectId:guid}", Delete);
         return app;
+    }
+
+    private static async Task<IResult> ListRevisions(
+        Guid projectId,
+        HttpContext context,
+        IConfiguration configuration)
+    {
+        if (!TryGetSubscriberId(context, out var subscriberId))
+            return Results.Unauthorized();
+
+        await using var connection = await OpenAuthorizedConnection(
+            configuration,
+            subscriberId);
+        if (connection is null)
+            return Results.Forbid();
+
+        var revisions = new List<object>();
+        await using var command = new SqlCommand("""
+            WITH Revisions AS
+            (
+                SELECT
+                    Id,
+                    Task,
+                    Model,
+                    Title,
+                    CreatedUtc,
+                    LEN(CodeText) AS CodeLength,
+                    ROW_NUMBER() OVER (ORDER BY CreatedUtc, Id) AS VersionNumber,
+                    COUNT(*) OVER () AS VersionCount
+                FROM dbo.ProjectRevisions
+                WHERE ConversationId = @ProjectId
+                  AND SubscriberId = @SubscriberId
+            )
+            SELECT
+                Id,
+                Task,
+                Model,
+                Title,
+                CreatedUtc,
+                CodeLength,
+                VersionNumber,
+                VersionCount
+            FROM Revisions
+            ORDER BY VersionNumber DESC;
+            """, connection);
+        command.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = projectId;
+        command.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            var versionNumber = Convert.ToInt32(reader.GetInt64(
+                reader.GetOrdinal("VersionNumber")));
+            var versionCount = reader.GetInt32(reader.GetOrdinal("VersionCount"));
+            revisions.Add(new
+            {
+                revisionId = reader.GetInt32(reader.GetOrdinal("Id")),
+                versionNumber,
+                isCurrent = versionNumber == versionCount,
+                task = reader.GetString(reader.GetOrdinal("Task")),
+                model = reader.GetString(reader.GetOrdinal("Model")),
+                title = reader.GetString(reader.GetOrdinal("Title")),
+                createdUtc = reader.GetDateTime(reader.GetOrdinal("CreatedUtc")),
+                codeLength = reader.IsDBNull(reader.GetOrdinal("CodeLength"))
+                    ? 0
+                    : Convert.ToInt32(reader.GetValue(reader.GetOrdinal("CodeLength")))
+            });
+        }
+
+        return Results.Ok(new { revisions });
+    }
+
+    private static async Task<IResult> GetRevision(
+        Guid projectId,
+        int revisionId,
+        HttpContext context,
+        IConfiguration configuration)
+    {
+        if (!TryGetSubscriberId(context, out var subscriberId))
+            return Results.Unauthorized();
+
+        await using var connection = await OpenAuthorizedConnection(
+            configuration,
+            subscriberId);
+        if (connection is null)
+            return Results.Forbid();
+
+        await using var command = new SqlCommand("""
+            SELECT Id, Task, Model, Title, CodeText, CreatedUtc
+            FROM dbo.ProjectRevisions
+            WHERE Id = @RevisionId
+              AND ConversationId = @ProjectId
+              AND SubscriberId = @SubscriberId;
+            """, connection);
+        command.Parameters.Add("@RevisionId", SqlDbType.Int).Value = revisionId;
+        command.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = projectId;
+        command.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+            return Results.NotFound();
+
+        return Results.Ok(new
+        {
+            revisionId = reader.GetInt32(reader.GetOrdinal("Id")),
+            task = reader.GetString(reader.GetOrdinal("Task")),
+            model = reader.GetString(reader.GetOrdinal("Model")),
+            title = reader.GetString(reader.GetOrdinal("Title")),
+            code = reader.GetString(reader.GetOrdinal("CodeText")),
+            createdUtc = reader.GetDateTime(reader.GetOrdinal("CreatedUtc"))
+        });
+    }
+
+    private static async Task<IResult> RestoreRevision(
+        Guid projectId,
+        int revisionId,
+        HttpContext context,
+        IConfiguration configuration)
+    {
+        if (!TryGetSubscriberId(context, out var subscriberId))
+            return Results.Unauthorized();
+
+        await using var connection = await OpenAuthorizedConnection(
+            configuration,
+            subscriberId);
+        if (connection is null)
+            return Results.Forbid();
+
+        await using var transaction =
+            (SqlTransaction)await connection.BeginTransactionAsync();
+        try
+        {
+            string title;
+            string task;
+            string model;
+            string messagesJson;
+            string code;
+
+            await using (var loadCommand = new SqlCommand("""
+                SELECT
+                    sc.Title AS CurrentTitle,
+                    pr.Task,
+                    pr.Model,
+                    pr.MessagesJson,
+                    pr.CodeText
+                FROM dbo.ProjectRevisions AS pr
+                INNER JOIN dbo.SavedConversations AS sc
+                    ON sc.ConversationId = pr.ConversationId
+                   AND sc.SubscriberId = pr.SubscriberId
+                WHERE pr.Id = @RevisionId
+                  AND pr.ConversationId = @ProjectId
+                  AND pr.SubscriberId = @SubscriberId;
+                """, connection, transaction))
+            {
+                loadCommand.Parameters.Add("@RevisionId", SqlDbType.Int).Value = revisionId;
+                loadCommand.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = projectId;
+                loadCommand.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+                await using var reader = await loadCommand.ExecuteReaderAsync();
+                if (!await reader.ReadAsync())
+                {
+                    await transaction.RollbackAsync();
+                    return Results.NotFound();
+                }
+
+                title = reader.GetString(reader.GetOrdinal("CurrentTitle"));
+                task = reader.GetString(reader.GetOrdinal("Task"));
+                model = reader.GetString(reader.GetOrdinal("Model"));
+                messagesJson = reader.GetString(reader.GetOrdinal("MessagesJson"));
+                code = reader.GetString(reader.GetOrdinal("CodeText"));
+            }
+
+            await using (var updateCommand = new SqlCommand("""
+                UPDATE dbo.SavedConversations
+                SET Task = @Task,
+                    Model = @Model,
+                    MessagesJson = @MessagesJson,
+                    CreatedUtc = SYSUTCDATETIME()
+                WHERE ConversationId = @ProjectId
+                  AND SubscriberId = @SubscriberId;
+                """, connection, transaction))
+            {
+                updateCommand.Parameters.Add("@Task", SqlDbType.NVarChar, 80).Value = task;
+                updateCommand.Parameters.Add("@Model", SqlDbType.NVarChar, 100).Value = model;
+                updateCommand.Parameters.Add("@MessagesJson", SqlDbType.NVarChar, -1).Value = messagesJson;
+                updateCommand.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = projectId;
+                updateCommand.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+                await updateCommand.ExecuteNonQueryAsync();
+            }
+
+            string? latestCode;
+            await using (var latestCommand = new SqlCommand("""
+                SELECT TOP (1) CodeText
+                FROM dbo.ProjectRevisions
+                WHERE ConversationId = @ProjectId
+                  AND SubscriberId = @SubscriberId
+                ORDER BY CreatedUtc DESC, Id DESC;
+                """, connection, transaction))
+            {
+                latestCommand.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = projectId;
+                latestCommand.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+                latestCode = await latestCommand.ExecuteScalarAsync() as string;
+            }
+
+            if (!string.Equals(latestCode?.Trim(), code.Trim(), StringComparison.Ordinal))
+            {
+                await using var insertCommand = new SqlCommand("""
+                    INSERT INTO dbo.ProjectRevisions
+                    (
+                        ConversationId,
+                        SubscriberId,
+                        Task,
+                        Model,
+                        Title,
+                        Notes,
+                        MessagesJson,
+                        CodeText,
+                        CreatedUtc
+                    )
+                    VALUES
+                    (
+                        @ProjectId,
+                        @SubscriberId,
+                        @Task,
+                        @Model,
+                        @Title,
+                        @Notes,
+                        @MessagesJson,
+                        @CodeText,
+                        SYSUTCDATETIME()
+                    );
+                    """, connection, transaction);
+                insertCommand.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = projectId;
+                insertCommand.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+                insertCommand.Parameters.Add("@Task", SqlDbType.NVarChar, 80).Value = task;
+                insertCommand.Parameters.Add("@Model", SqlDbType.NVarChar, 100).Value = model;
+                insertCommand.Parameters.Add("@Title", SqlDbType.NVarChar, 160).Value = title;
+                insertCommand.Parameters.Add("@Notes", SqlDbType.NVarChar, 500).Value =
+                    $"Restored from revision {revisionId}";
+                insertCommand.Parameters.Add("@MessagesJson", SqlDbType.NVarChar, -1).Value = messagesJson;
+                insertCommand.Parameters.Add("@CodeText", SqlDbType.NVarChar, -1).Value = code;
+                await insertCommand.ExecuteNonQueryAsync();
+            }
+
+            await using (var trimCommand = new SqlCommand("""
+                ;WITH Ranked AS
+                (
+                    SELECT
+                        Id,
+                        ROW_NUMBER() OVER (
+                            ORDER BY CreatedUtc DESC, Id DESC
+                        ) AS RowNumber
+                    FROM dbo.ProjectRevisions
+                    WHERE ConversationId = @ProjectId
+                      AND SubscriberId = @SubscriberId
+                )
+                DELETE FROM Ranked WHERE RowNumber > 50;
+                """, connection, transaction))
+            {
+                trimCommand.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = projectId;
+                trimCommand.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+                await trimCommand.ExecuteNonQueryAsync();
+            }
+
+            await transaction.CommitAsync();
+
+            IReadOnlyList<ChatTurn> messages;
+            try
+            {
+                messages = JsonSerializer.Deserialize<List<ChatTurn>>(
+                    messagesJson,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+            }
+            catch (JsonException)
+            {
+                messages = [];
+            }
+
+            return Results.Ok(new
+            {
+                success = true,
+                projectId,
+                title,
+                task,
+                model,
+                messages,
+                latestCode = code
+            });
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     private static async Task<IResult> List(
