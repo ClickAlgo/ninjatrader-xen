@@ -16,7 +16,9 @@ public static class ChatEndpoints
             "build-strategy",
             "build-indicator",
             "existing-strategy",
-            "existing-indicator"
+            "existing-indicator",
+            "convert-strategy",
+            "convert-indicator"
         };
 
     private static readonly HashSet<string> AllowedModels =
@@ -104,7 +106,7 @@ public static class ChatEndpoints
         }
 
         var ragCategory = request.Task is
-            "build-strategy" or "existing-strategy"
+            "build-strategy" or "existing-strategy" or "convert-strategy"
                 ? "Strategy"
                 : "Indicator";
         var rag = await knowledgeRetriever.RetrieveAsync(

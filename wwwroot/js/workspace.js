@@ -6,14 +6,18 @@ const taskNames = {
     "build-strategy": "Build Strategy",
     "build-indicator": "Build Indicator",
     "existing-strategy": "Existing Strategy",
-    "existing-indicator": "Existing Indicator"
+    "existing-indicator": "Existing Indicator",
+    "convert-strategy": "Convert Strategy",
+    "convert-indicator": "Convert Indicator"
 };
 
 const taskPlaceholders = {
     "build-strategy": "Describe your NinjaTrader strategy…",
     "build-indicator": "Describe your NinjaTrader indicator…",
     "existing-strategy": "Paste your strategy code and describe the changes…",
-    "existing-indicator": "Paste your indicator code and describe the changes…"
+    "existing-indicator": "Paste your indicator code and describe the changes…",
+    "convert-strategy": "Paste strategy source from another platform or upload a file…",
+    "convert-indicator": "Paste indicator source from another platform or upload a file…"
 };
 
 let activeTask = "build-strategy";
@@ -32,6 +36,7 @@ const messages = document.getElementById("messages");
 const form = document.getElementById("chatForm");
 const promptInput = document.getElementById("promptInput");
 const sendButton = document.getElementById("sendButton");
+const clearInputButton = document.getElementById("clearInputButton");
 const cancelButton = document.getElementById("cancelButton");
 const status = document.getElementById("chatStatus");
 const modelSelect = document.getElementById("modelSelect");
@@ -52,10 +57,16 @@ const codeWorkspaceModal = document.getElementById("codeWorkspaceModal");
 const codeWorkspacePreview = document.getElementById("codeWorkspacePreview");
 const revisionList = document.getElementById("revisionList");
 const revisionMessage = document.getElementById("revisionMessage");
+const sourceImport = document.getElementById("sourceImport");
+const sourceFileInput = document.getElementById("sourceFileInput");
+const sourceFileButton = document.getElementById("sourceFileButton");
+const sourceFileStatus = document.getElementById("sourceFileStatus");
 let codeWorkspaceCode = "";
 
 restoreSelectedModel();
 modelSelect.addEventListener("change", rememberSelectedModel);
+promptInput.addEventListener("input", updateClearInputButton);
+clearInputButton.addEventListener("click", clearComposerInput);
 cancelButton.addEventListener("click", () => {
     if (!currentController)
         return;
@@ -67,6 +78,10 @@ cancelButton.addEventListener("click", () => {
 loadBalance();
 showTrialWelcome();
 renderActiveBuildPlan();
+updateTaskSpecificUi();
+updateClearInputButton();
+sourceFileButton.addEventListener("click", () => sourceFileInput.click());
+sourceFileInput.addEventListener("change", importSourceFile);
 
 document.getElementById("projectsButton").addEventListener("click", openProjects);
 document.getElementById("codeViewButton").addEventListener(
@@ -134,6 +149,7 @@ document.getElementById("taskButtons").addEventListener("click", event => {
     document.getElementById("taskTitle").textContent = taskNames[activeTask];
     promptInput.placeholder = taskPlaceholders[activeTask];
     startNewProject(false);
+    updateTaskSpecificUi();
     applyCreditAvailability();
 });
 
@@ -169,6 +185,7 @@ form.addEventListener("submit", async event => {
     history.push({ role: "user", content: prompt });
     markBuildPlanPromptSent(prompt);
     promptInput.value = "";
+    updateClearInputButton();
 
     const assistantMessage = addMessage("assistant", "");
     const content = assistantMessage.querySelector(".message-content");
@@ -280,6 +297,7 @@ form.addEventListener("submit", async event => {
             userMessage.remove();
             assistantMessage.remove();
             promptInput.value = prompt;
+            updateClearInputButton();
             restoreBuildPlanPromptLoaded(prompt);
 
             if (createdProjectForRequest) {
@@ -319,9 +337,10 @@ function addMessage(role, text) {
 
     const content = document.createElement("div");
     content.className = "message-content";
-    content.textContent = role === "user"
-        ? formatUserMessage(text)
-        : text;
+    if (role === "user")
+        renderUserMessage(content, text);
+    else
+        content.textContent = text;
 
     article.append(label, content);
     messages.appendChild(article);
@@ -408,6 +427,113 @@ function renderStructuredResponse(container, source) {
     appendProse(container, source.slice(cursor));
 }
 
+function renderUserMessage(container, source) {
+    container.textContent = "";
+    const text = (source || "").replace(/\r/g, "").trim();
+    if (!text)
+        return;
+
+    const fencePattern = /```([A-Za-z0-9+#._-]*)[ \t]*\n?([\s\S]*?)```/g;
+    let cursor = 0;
+    let match;
+    let foundFence = false;
+
+    while ((match = fencePattern.exec(text)) !== null) {
+        foundFence = true;
+        appendUserProse(container, text.slice(cursor, match.index));
+        appendCodeBlock(
+            container,
+            match[2].trim(),
+            sourceLanguageLabel(match[1]),
+            false);
+        cursor = match.index + match[0].length;
+    }
+
+    if (foundFence) {
+        appendUserProse(container, text.slice(cursor));
+        return;
+    }
+
+    const uploadedSource = text.match(
+        /^([\s\S]*?\bSource file:\s*([^\n]+)\n\n)([\s\S]+)$/i);
+    if (uploadedSource) {
+        appendUserProse(container, uploadedSource[1].trim());
+        appendCodeBlock(
+            container,
+            uploadedSource[3].trim(),
+            sourceLanguageLabel(fileExtension(uploadedSource[2])),
+            false);
+        return;
+    }
+
+    const codeStart = findLikelyCodeStart(text);
+    if (codeStart >= 0) {
+        appendUserProse(container, text.slice(0, codeStart));
+        appendCodeBlock(
+            container,
+            text.slice(codeStart).trim(),
+            "Source code",
+            false);
+        return;
+    }
+
+    container.textContent = formatUserMessage(text);
+}
+
+function appendUserProse(container, text) {
+    const formatted = formatUserMessage(text);
+    if (!formatted)
+        return;
+
+    const paragraph = document.createElement("p");
+    paragraph.className = "user-message-prose";
+    paragraph.textContent = formatted;
+    container.appendChild(paragraph);
+}
+
+function findLikelyCodeStart(text) {
+    const lines = text.split("\n");
+    if (lines.length < 4)
+        return -1;
+
+    let offset = 0;
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (/^(using\s+[\w.]+\s*;|namespace\s+[\w.]+|#(?:property|include|region)\b|\/\/|\/\*|\[(?:NinjaScriptProperty|Strategy|Indicator|Robot)\b|(?:public|private|protected|internal)\s+(?:sealed\s+|partial\s+)?class\b)/i.test(trimmed)) {
+            const candidate = text.slice(offset);
+            const codeSignals = [
+                /[{};]/,
+                /\b(?:class|void|double|int|bool|string)\b/,
+                /\b(?:OnBarUpdate|OnStateChange|OnTick|OnStart|strategy|indicator)\b/i
+            ].filter(pattern => pattern.test(candidate)).length;
+            if (codeSignals >= 2)
+                return offset;
+        }
+        offset += line.length + 1;
+    }
+
+    return -1;
+}
+
+function fileExtension(fileName) {
+    const match = String(fileName || "").trim().match(/\.([A-Za-z0-9]+)$/);
+    return match ? match[1] : "";
+}
+
+function sourceLanguageLabel(language) {
+    const value = String(language || "").toLowerCase().replace(/^\./, "");
+    const labels = {
+        cs: "C# source",
+        csharp: "C# source",
+        mq4: "MQL4 source",
+        mq5: "MQL5 source",
+        mql4: "MQL4 source",
+        mql5: "MQL5 source",
+        pine: "Pine Script source"
+    };
+    return labels[value] || "Source code";
+}
+
 function appendProse(container, text) {
     if (!text.trim())
         return;
@@ -451,7 +577,11 @@ function appendProse(container, text) {
     }
 }
 
-function appendCodeBlock(container, code) {
+function appendCodeBlock(
+    container,
+    code,
+    languageLabel = "C# · NinjaScript",
+    includeDownload = true) {
     const wrapper = document.createElement("section");
     wrapper.className = "code-block";
 
@@ -459,7 +589,7 @@ function appendCodeBlock(container, code) {
     toolbar.className = "code-toolbar";
 
     const language = document.createElement("span");
-    language.textContent = "C# · NinjaScript";
+    language.textContent = languageLabel;
 
     const actions = document.createElement("div");
     actions.className = "code-actions";
@@ -480,7 +610,9 @@ function appendCodeBlock(container, code) {
     downloadButton.textContent = "Download .cs";
     downloadButton.addEventListener("click", () => downloadCode(code));
 
-    actions.append(copyButton, downloadButton);
+    actions.append(copyButton);
+    if (includeDownload)
+        actions.append(downloadButton);
     toolbar.append(language, actions);
 
     const pre = document.createElement("pre");
@@ -566,7 +698,9 @@ function taskIntro(task) {
         "build-strategy": "Describe the strategy, including entries, exits, risk and calculation mode.",
         "build-indicator": "Describe the calculation, plots, visual behaviour and configurable inputs.",
         "existing-strategy": "Paste the complete strategy source and explain exactly what should change.",
-        "existing-indicator": "Paste the complete indicator source and explain exactly what should change."
+        "existing-indicator": "Paste the complete indicator source and explain exactly what should change.",
+        "convert-strategy": "Paste the complete strategy source from another platform, or upload a source file. Xen will convert it into a NinjaTrader 8 Strategy.",
+        "convert-indicator": "Paste the complete indicator source from another platform, or upload a source file. Xen will convert it into a NinjaTrader 8 Indicator."
     };
     return intros[task];
 }
@@ -576,6 +710,8 @@ function startNewProject(resetTask = true) {
     currentProjectTitle = "";
     history = [];
     promptQualityChecked = false;
+    promptInput.value = "";
+    updateClearInputButton();
 
     if (resetTask) {
         activeTask = "build-strategy";
@@ -585,11 +721,128 @@ function startNewProject(resetTask = true) {
         promptInput.placeholder = taskPlaceholders[activeTask];
     }
 
+    updateTaskSpecificUi();
     messages.innerHTML = "";
     addMessage("assistant", taskIntro(activeTask));
     updateProjectTitle();
     status.textContent = "Ready";
     promptInput.focus();
+}
+
+function updateClearInputButton() {
+    clearInputButton.hidden =
+        generating || promptInput.disabled || !promptInput.value.trim();
+}
+
+function clearComposerInput() {
+    if (generating)
+        return;
+
+    promptInput.value = "";
+    updateTaskSpecificUi();
+    updateClearInputButton();
+    status.textContent = "Ready";
+    promptInput.focus();
+}
+
+function updateTaskSpecificUi() {
+    const uploadTasks = {
+        "convert-strategy": {
+            button: "Upload source file",
+            status: "or paste the complete strategy source below",
+            accept: ".cs,.txt,.mq4,.mq5,.pine,text/plain"
+        },
+        "convert-indicator": {
+            button: "Upload source file",
+            status: "or paste the complete indicator source below",
+            accept: ".cs,.txt,.mq4,.mq5,.pine,text/plain"
+        },
+        "existing-strategy": {
+            button: "Upload strategy file",
+            status: "or paste the complete NinjaScript Strategy below",
+            accept: ".cs,.txt,text/plain"
+        },
+        "existing-indicator": {
+            button: "Upload indicator file",
+            status: "or paste the complete NinjaScript Indicator below",
+            accept: ".cs,.txt,text/plain"
+        }
+    };
+    const options = uploadTasks[activeTask];
+    sourceImport.hidden = !options;
+    sourceFileInput.value = "";
+    sourceFileInput.accept = options?.accept || "";
+    sourceFileButton.textContent = options?.button || "Upload source file";
+    sourceFileStatus.textContent = options?.status || "";
+}
+
+async function importSourceFile() {
+    const file = sourceFileInput.files?.[0];
+    if (!file)
+        return;
+
+    const isStrategyConversion = activeTask === "convert-strategy";
+    const isIndicatorConversion = activeTask === "convert-indicator";
+    const isConversion = isStrategyConversion || isIndicatorConversion;
+    const allowedExtensions = isConversion
+        ? [".cs", ".txt", ".mq4", ".mq5", ".pine"]
+        : [".cs", ".txt"];
+    const extension = file.name.includes(".")
+        ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase()
+        : "";
+
+    if (!allowedExtensions.includes(extension)) {
+        sourceFileStatus.textContent = isConversion
+            ? "Use a .cs, .txt, .mq4, .mq5 or .pine source file."
+            : "Use a NinjaScript .cs or plain-text .txt file.";
+        sourceFileInput.value = "";
+        return;
+    }
+
+    if (file.size > 512 * 1024) {
+        sourceFileStatus.textContent =
+            "This file is too large. The maximum size is 512 KB.";
+        sourceFileInput.value = "";
+        return;
+    }
+
+    try {
+        const source = (await file.text()).trim();
+        if (!source) {
+            sourceFileStatus.textContent = "The selected file is empty.";
+            return;
+        }
+
+        let request = `Source file: ${file.name}\n\n${source}`;
+        if (isStrategyConversion) {
+            request =
+                "Convert the following automated trading strategy into a complete " +
+                "NinjaTrader 8 NinjaScript Strategy. Preserve its trading logic, " +
+                "configurable inputs and risk behaviour.\n\n" + request;
+        } else if (isIndicatorConversion) {
+            request =
+                "Convert the following indicator into a complete NinjaTrader 8 " +
+                "NinjaScript Indicator. Preserve its calculations, plots, visual " +
+                "behaviour and configurable inputs.\n\n" + request;
+        }
+
+        if (request.length > promptInput.maxLength) {
+            sourceFileStatus.textContent =
+                "The source is too long for one request. Remove comments or paste a smaller strategy.";
+            return;
+        }
+
+        promptInput.value = request;
+        updateClearInputButton();
+        sourceFileStatus.textContent =
+            `${file.name} loaded · review it, then press Send`;
+        promptInput.focus();
+        promptInput.setSelectionRange(0, 0);
+    } catch {
+        sourceFileStatus.textContent = "Xen could not read this source file.";
+    } finally {
+        sourceFileInput.value = "";
+    }
 }
 
 let resolvePromptBuilder = null;
@@ -632,6 +885,7 @@ async function reviewInitialBuildPrompt(prompt) {
             return null;
 
         promptInput.value = improvedPrompt;
+        updateClearInputButton();
         promptQualityChecked = true;
         return improvedPrompt;
     } catch {
@@ -1014,12 +1268,14 @@ function loadBuildPlanPrompt(index) {
         item.classList.toggle("active", item.dataset.task === activeTask));
     document.getElementById("taskTitle").textContent = taskNames[activeTask];
     promptInput.placeholder = taskPlaceholders[activeTask];
+    updateTaskSpecificUi();
 
     plan.currentIndex = index;
     plan.stepStatus = "loaded";
     plan.completed = false;
     updateBuildPlan(plan);
     promptInput.value = step.prompt;
+    updateClearInputButton();
     promptQualityChecked = true;
     promptInput.focus();
     promptInput.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1300,6 +1556,7 @@ function setComposerReviewState(reviewing, message) {
     sendButton.disabled = reviewing;
     modelSelect.disabled = reviewing;
     promptInput.disabled = reviewing;
+    updateClearInputButton();
     if (reviewing) {
         status.replaceChildren(
             createWorkingIndicator(message, "composer-review-loading"));
@@ -1710,11 +1967,14 @@ function applyProjectToWorkspace(project) {
     activeTask = taskNames[project.task] ? project.task : "build-strategy";
     history = Array.isArray(project.messages) ? project.messages : [];
     promptQualityChecked = history.length > 0;
+    promptInput.value = "";
+    updateClearInputButton();
 
     document.querySelectorAll(".task-button").forEach(item =>
         item.classList.toggle("active", item.dataset.task === activeTask));
     document.getElementById("taskTitle").textContent = taskNames[activeTask];
     promptInput.placeholder = taskPlaceholders[activeTask];
+    updateTaskSpecificUi();
 
     if ([...modelSelect.options].some(option => option.value === project.model))
         modelSelect.value = project.model;
@@ -1727,7 +1987,7 @@ function applyProjectToWorkspace(project) {
         if (turn.role === "assistant")
             renderStructuredResponse(content, turn.content);
         else
-            content.textContent = formatUserMessage(turn.content);
+            renderUserMessage(content, turn.content);
     }
 
     if (!history.length)
@@ -1822,6 +2082,7 @@ function applyCreditAvailability() {
     if (exhausted) {
         sendButton.disabled = true;
         promptInput.disabled = true;
+        updateClearInputButton();
         promptInput.placeholder =
             "Your Xen credit has run out. Please top up to continue.";
         if (!generating)
@@ -1833,6 +2094,7 @@ function applyCreditAvailability() {
         sendButton.disabled = false;
         promptInput.disabled = false;
         promptInput.placeholder = taskPlaceholders[activeTask];
+        updateClearInputButton();
     }
 }
 

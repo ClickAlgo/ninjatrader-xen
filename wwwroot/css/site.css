@@ -1283,6 +1283,40 @@ tbody tr:last-child td {
     line-height: 1.5;
 }
 
+.source-import {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 2px 2px 11px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.source-import[hidden],
+.source-import input[type="file"] {
+    display: none;
+}
+
+.source-file-button {
+    flex: 0 0 auto;
+    min-height: 32px;
+    padding: 6px 12px;
+    border-color: #484848;
+    background: #292929;
+    color: #f0f0f0;
+    font-size: 12px;
+}
+
+.source-file-button:hover {
+    border-color: var(--primary);
+}
+
+#sourceFileStatus {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .composer-footer {
     display: flex;
     align-items: center;
@@ -1786,6 +1820,10 @@ tbody tr:last-child td {
     display: flex;
     align-items: center;
     gap: 9px;
+}
+
+.clear-input-button[hidden] {
+    display: none;
 }
 
 .chat-status {

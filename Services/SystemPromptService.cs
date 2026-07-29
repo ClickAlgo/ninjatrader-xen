@@ -23,7 +23,11 @@ public sealed class SystemPromptService
             ["existing-strategy"] =
                 ReadPrompt(promptRoot, "existing-strategy.txt"),
             ["existing-indicator"] =
-                ReadPrompt(promptRoot, "existing-indicator.txt")
+                ReadPrompt(promptRoot, "existing-indicator.txt"),
+            ["convert-strategy"] =
+                ReadPrompt(promptRoot, "convert-strategy.txt"),
+            ["convert-indicator"] =
+                ReadPrompt(promptRoot, "convert-indicator.txt")
         };
     }
 
