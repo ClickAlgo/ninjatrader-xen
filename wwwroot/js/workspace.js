@@ -84,6 +84,18 @@ const removeImageButton = document.getElementById("removeImageButton");
 const themeToggleButton = document.getElementById("themeToggleButton");
 const themeToggleIcon = document.getElementById("themeToggleIcon");
 const themeToggleLabel = document.getElementById("themeToggleLabel");
+const requirementsValidationModal =
+    document.getElementById("requirementsValidationModal");
+const requirementsValidationForm =
+    document.getElementById("requirementsValidationForm");
+const requirementsValidationText =
+    document.getElementById("requirementsValidationText");
+const requirementsValidationStatus =
+    document.getElementById("requirementsValidationStatus");
+const requirementsValidationModel =
+    document.getElementById("requirementsValidationModel");
+const runRequirementsValidationButton =
+    document.getElementById("runRequirementsValidationButton");
 let codeWorkspaceCode = "";
 
 updateThemeToggle();
@@ -154,6 +166,17 @@ feedbackModal.addEventListener("click", event => {
         closeFeedback();
 });
 feedbackForm.addEventListener("submit", submitFeedback);
+document.getElementById("closeRequirementsValidationButton")
+    .addEventListener("click", closeRequirementsValidation);
+document.getElementById("cancelRequirementsValidationButton")
+    .addEventListener("click", closeRequirementsValidation);
+requirementsValidationModal.addEventListener("click", event => {
+    if (event.target === requirementsValidationModal)
+        closeRequirementsValidation();
+});
+requirementsValidationForm.addEventListener(
+    "submit",
+    submitRequirementsValidation);
 
 function toggleWorkspaceTheme() {
     const useLightTheme =
@@ -487,6 +510,40 @@ function renderStructuredResponse(container, source) {
     }
 
     appendProse(container, source.slice(cursor));
+    decorateRequirementsMatch(container, source);
+}
+
+function decorateRequirementsMatch(container, source) {
+    if (!/^# Requirements Verification\b/im.test(source))
+        return;
+
+    const match = source.match(
+        /##\s+Overall Match[\s\S]*?(?:Approximately\s+)?(\d{1,3})\s*%/i);
+    if (!match)
+        return;
+
+    const percentage = Math.max(
+        0,
+        Math.min(100, Number.parseInt(match[1], 10)));
+    const heading = [...container.querySelectorAll("h3")]
+        .find(element =>
+            element.textContent.trim().toLowerCase() === "overall match");
+    if (!heading)
+        return;
+
+    const badge = document.createElement("span");
+    badge.className = "requirements-match-badge";
+    if (percentage === 100) {
+        badge.classList.add("complete");
+        badge.textContent = `${percentage}% · Complete`;
+    } else if (percentage >= 70) {
+        badge.classList.add("review");
+        badge.textContent = `${percentage}% · Review required`;
+    } else {
+        badge.classList.add("action");
+        badge.textContent = `${percentage}% · Action required`;
+    }
+    heading.appendChild(badge);
 }
 
 function renderUserMessage(container, source) {
@@ -673,8 +730,17 @@ function appendCodeBlock(
     downloadButton.addEventListener("click", () => downloadCode(code));
 
     actions.append(copyButton);
-    if (includeDownload)
+    if (includeDownload) {
         actions.append(downloadButton);
+        const verifyButton = document.createElement("button");
+        verifyButton.type = "button";
+        verifyButton.className = "code-action verify-requirements-button";
+        verifyButton.textContent = "Verify requirements";
+        verifyButton.addEventListener(
+            "click",
+            () => openRequirementsValidation(code));
+        actions.append(verifyButton);
+    }
     toolbar.append(language, actions);
 
     const pre = document.createElement("pre");
@@ -1333,6 +1399,178 @@ function getLatestGeneratedCode() {
             return blocks.at(-1)[1].trim();
     }
     return "";
+}
+
+let requirementsValidationCode = "";
+
+function openRequirementsValidation(code = getLatestGeneratedCode()) {
+    if (!code) {
+        status.textContent = "No complete NinjaScript source is available to verify";
+        return;
+    }
+
+    requirementsValidationCode = code;
+    requirementsValidationText.value = collectRequirementsForValidation();
+    requirementsValidationModel.textContent =
+        `Verification uses ${selectedModelDisplayName()} and consumes Xen credit.`;
+    requirementsValidationStatus.textContent = "";
+    requirementsValidationStatus.classList.remove("error", "success");
+    runRequirementsValidationButton.disabled = false;
+    runRequirementsValidationButton.textContent = "Run verification";
+    requirementsValidationModal.hidden = false;
+    document.body.classList.add("modal-open");
+    window.setTimeout(() => requirementsValidationText.focus(), 0);
+}
+
+function closeRequirementsValidation() {
+    if (runRequirementsValidationButton.disabled)
+        return;
+    requirementsValidationModal.hidden = true;
+    document.body.classList.remove("modal-open");
+    requirementsValidationCode = "";
+}
+
+function collectRequirementsForValidation() {
+    const plan = getBuildPlan();
+    if (plan)
+        return formatBuildPlan(plan);
+
+    const userRequirements = history
+        .filter(turn => turn.role === "user")
+        .map(turn => turn.content?.trim())
+        .filter(Boolean)
+        .filter(text => findLikelyCodeStart(text) < 0)
+        .join("\n\n---\n\n");
+
+    return userRequirements ||
+        "Describe the requirements that the generated code must satisfy.";
+}
+
+async function submitRequirementsValidation(event) {
+    event.preventDefault();
+    const requirements = requirementsValidationText.value.trim();
+    if (!requirements || !requirementsValidationCode)
+        return;
+
+    runRequirementsValidationButton.disabled = true;
+    document.getElementById("cancelRequirementsValidationButton").disabled = true;
+    document.getElementById("closeRequirementsValidationButton").disabled = true;
+    runRequirementsValidationButton.textContent = "Verifying...";
+    requirementsValidationStatus.replaceChildren(
+        createWorkingIndicator(
+            "Auditing requirements against the latest source...",
+            "prompt-builder-loading"));
+
+    try {
+        const response = await fetch("/api/requirements/validate", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                requirements,
+                code: requirementsValidationCode,
+                task: activeTask,
+                model: modelSelect.value,
+                projectId: currentProjectId
+            })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+            sessionStorage.removeItem("nx_access_token");
+            location.replace("/login.html");
+            return;
+        }
+        if (!response.ok)
+            throw new Error(result.detail || result.message ||
+                "Requirements verification could not be completed.");
+
+        requirementsValidationModal.hidden = true;
+        document.body.classList.remove("modal-open");
+        renderRequirementsValidationResult(
+            result.message,
+            requirements,
+            result.model || modelSelect.value);
+        updateBalance(result.balanceGbp);
+        status.textContent = "Requirements verification complete · saving project...";
+        const saved = await saveCurrentProject();
+        status.textContent = saved
+            ? "Requirements verification saved"
+            : "Verification complete · project not saved";
+    } catch (error) {
+        requirementsValidationStatus.textContent = error.message;
+        requirementsValidationStatus.classList.add("error");
+    } finally {
+        runRequirementsValidationButton.disabled = false;
+        document.getElementById("cancelRequirementsValidationButton").disabled = false;
+        document.getElementById("closeRequirementsValidationButton").disabled = false;
+        runRequirementsValidationButton.textContent = "Run verification";
+    }
+}
+
+function renderRequirementsValidationResult(report, requirements, auditModel) {
+    const normalizedReport = report.replace(
+        /^# Requirements (?:Validation|Verification)\s*/i,
+        "").trim();
+    const storedReport =
+        `# Requirements Verification\n\n${normalizedReport}`;
+    history.push({ role: "assistant", content: storedReport });
+
+    const message = addMessage("assistant", "");
+    message.classList.add("requirements-validation-message");
+    const content = message.querySelector(".message-content");
+
+    const note = document.createElement("div");
+    note.className = "requirements-validation-note";
+    note.textContent =
+        `Requirements audit · ${modelDisplayName(auditModel)}`;
+    content.appendChild(note);
+
+    const reportContent = document.createElement("div");
+    renderStructuredResponse(reportContent, storedReport);
+    content.appendChild(reportContent);
+
+    const actions = document.createElement("div");
+    actions.className = "requirements-validation-actions";
+    const repair = document.createElement("button");
+    repair.type = "button";
+    repair.className = "button primary";
+    repair.textContent = "Repair missing requirements";
+    repair.addEventListener("click", () => {
+        if (generating || repair.disabled)
+            return;
+
+        repair.disabled = true;
+        promptInput.value =
+            "Repair the latest complete NinjaScript source to address only the " +
+            "explicit requirements classified as Partially implemented or Not " +
+            "implemented in the verification report below. Do not implement " +
+            "optional enhancements, risks or manual-test suggestions unless they " +
+            "are necessary for an explicit missing requirement. Preserve all " +
+            "working and unrelated behaviour. Return one complete compile-ready " +
+            "C# file.\n\n" +
+            `Original requirements:\n${requirements}\n\n` +
+            `Verification report:\n${storedReport}`;
+        promptQualityChecked = true;
+        updateClearInputButton();
+        status.textContent = "Starting focused repair...";
+        form.requestSubmit();
+    });
+    actions.appendChild(repair);
+    content.appendChild(actions);
+    scrollMessagesToBottom();
+}
+
+function selectedModelDisplayName() {
+    return modelSelect.selectedOptions[0]?.textContent?.trim() ||
+        modelSelect.value;
+}
+
+function modelDisplayName(model) {
+    return [...modelSelect.options]
+        .find(option => option.value === model)?.textContent?.trim() ||
+        model;
 }
 
 function openFeedback() {
@@ -2108,16 +2346,79 @@ function renderProjects(projects) {
         rename.textContent = "Rename";
         rename.addEventListener("click", () => renameProject(project));
 
+        const exportButton = document.createElement("button");
+        exportButton.type = "button";
+        exportButton.textContent = "Export";
+        exportButton.setAttribute(
+            "aria-label",
+            `Export conversation ${project.title}`);
+        exportButton.addEventListener(
+            "click",
+            () => exportProject(project));
+
         const remove = document.createElement("button");
         remove.type = "button";
         remove.textContent = "Delete";
         remove.className = "danger";
         remove.addEventListener("click", () => deleteProject(project));
 
-        actions.append(open, rename, remove);
+        actions.append(open, rename, exportButton, remove);
         row.append(main, actions);
         projectsList.appendChild(row);
     }
+}
+
+async function exportProject(project) {
+    const projectMessage = document.getElementById("projectsMessage");
+    try {
+        const response = await fetch(`/api/projects/${project.projectId}`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (!response.ok)
+            throw new Error("Unable to export the project.");
+
+        const savedProject = await response.json();
+        const taskName = taskNames[savedProject.task] || savedProject.task;
+        const exported = [
+            `# ${savedProject.title}`,
+            "",
+            `Task: ${taskName}`,
+            `Exported: ${new Date().toLocaleString()}`,
+            ""
+        ];
+
+        for (const turn of savedProject.messages || []) {
+            exported.push(
+                `## ${turn.role === "user" ? "You" : "Xen"}`,
+                "",
+                turn.content?.trim() || "",
+                "");
+        }
+
+        const blob = new Blob(
+            [exported.join("\n")],
+            { type: "text/markdown;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download =
+            `${safeExportFileName(savedProject.title)}-conversation.md`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(link.href);
+        projectMessage.textContent = "Conversation exported";
+    } catch (error) {
+        projectMessage.textContent = error.message;
+    }
+}
+
+function safeExportFileName(title) {
+    return (title || "xen-project")
+        .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 80) || "xen-project";
 }
 
 async function loadProject(projectId) {

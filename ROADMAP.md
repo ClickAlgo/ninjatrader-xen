@@ -21,7 +21,8 @@ Completed:
 - Registration, authentication and platform-specific accounts
 - Free trial credit, pay-as-you-go usage and Stripe top-ups
 - Low-credit and exhausted-credit controls
-- OpenAI, Claude and DeepSeek providers with model pricing
+- OpenAI, Claude, DeepSeek and Moonshot providers with model pricing
+- Kimi K2.7 Code low-cost coding model
 - Six NinjaScript tasks:
   - Build Strategy
   - Build Indicator
@@ -37,12 +38,13 @@ Completed:
 - Indicator reference-image uploads for supported vision models
 - Cancel generation, clear input and clear task controls
 - Feedback and diagnostic problem reporting
+- Persistent light/dark workspace theme with dark as the default
 
 ## Next development priorities
 
 ### 1. Requirements verification
 
-Add a deliberate verification step after Xen returns code.
+In progress: add a deliberate verification step after Xen returns code.
 
 - Compare the latest complete source against the active user request
 - When a Build Plan exists, verify against the requirements and current step
@@ -104,7 +106,6 @@ authentication and local-security architecture have been proven.
 
 ## Deferred or optional
 
-- Light mode; dark remains the default and primary design
 - Server-side NinjaTrader compilation
 - Server-side NinjaTrader backtesting
 - Automatic optimization

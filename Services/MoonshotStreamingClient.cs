@@ -60,10 +60,17 @@ public sealed class MoonshotStreamingClient(
 
         using var response = await SendAsync(body, cancellationToken);
         var completed = false;
+        var idleTimeoutSeconds = Math.Clamp(
+            configuration.GetValue(
+                "Moonshot:StreamIdleTimeoutSeconds",
+                90),
+            30,
+            300);
 
         await foreach (var payload in StreamingJson.ReadSse(
             response,
-            cancellationToken))
+            cancellationToken,
+            TimeSpan.FromSeconds(idleTimeoutSeconds)))
         {
             if (payload.TryGetProperty("choices", out var choices) &&
                 choices.ValueKind == JsonValueKind.Array &&

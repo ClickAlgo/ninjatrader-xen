@@ -2849,6 +2849,99 @@ html[data-theme="light"] .code-workspace-dialog {
     color-scheme: dark;
 }
 
+/* Requirements verification */
+.requirements-validation-dialog {
+    width: min(780px, calc(100vw - 32px));
+    max-height: min(860px, calc(100vh - 32px));
+    overflow: auto;
+    border: 1px solid #3a3a3a;
+    border-radius: 12px;
+    background: #181818;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, .55);
+}
+
+.requirements-validation-form {
+    display: grid;
+    gap: 16px;
+    padding: 20px 24px 24px;
+}
+
+.requirements-validation-form > p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.55;
+}
+
+.requirements-validation-model {
+    font-size: 11px;
+}
+
+.verify-requirements-button {
+    border-color: rgba(240, 68, 22, .58);
+    color: #ff8b6b;
+}
+
+.requirements-validation-message {
+    border-left: 2px solid var(--primary);
+    padding-left: 16px;
+}
+
+.requirements-validation-note {
+    margin-bottom: 14px;
+    color: var(--primary-bright);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.requirements-match-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 10px;
+    padding: 3px 8px;
+    border: 1px solid;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    line-height: 1.4;
+    text-transform: uppercase;
+    vertical-align: middle;
+}
+
+.requirements-match-badge.complete {
+    border-color: rgba(58, 194, 113, .48);
+    color: #73dda0;
+    background: rgba(35, 145, 82, .14);
+}
+
+.requirements-match-badge.review {
+    border-color: rgba(229, 171, 57, .5);
+    color: #f1c365;
+    background: rgba(176, 119, 20, .15);
+}
+
+.requirements-match-badge.action {
+    border-color: rgba(238, 82, 82, .5);
+    color: #ff8585;
+    background: rgba(179, 45, 45, .15);
+}
+
+.requirements-validation-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+html[data-theme="light"] .requirements-validation-dialog {
+    border-color: #cbd1d8;
+    background: #ffffff;
+    box-shadow: 0 24px 70px rgba(28, 36, 46, .22);
+}
+
 .feedback-dialog {
     width: min(620px, calc(100vw - 32px));
     overflow: hidden;

@@ -10,7 +10,7 @@
                 document.documentElement.dataset.theme = "light";
         })();
     </script>
-    <link rel="stylesheet" href="/css/site.css?v=0.4.9">
+    <link rel="stylesheet" href="/css/site.css?v=0.5.0">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -75,7 +75,7 @@
                     <span id="themeToggleLabel">Light theme</span>
                 </button>
             </div>
-            <div class="workspace-build-version">Build v0.7-beta</div>
+            <div class="workspace-build-version">Build v0.8-beta</div>
         </aside>
 
         <section class="chat-panel">
@@ -232,6 +232,44 @@
         </section>
     </div>
 
+    <div id="requirementsValidationModal" class="projects-modal" hidden>
+        <section class="requirements-validation-dialog" role="dialog"
+            aria-modal="true" aria-labelledby="requirementsValidationTitle">
+            <header class="projects-dialog-header">
+                <div>
+                    <p class="eyebrow">CODE AUDIT</p>
+                    <h2 id="requirementsValidationTitle">Verify requirements</h2>
+                </div>
+                <button id="closeRequirementsValidationButton" class="dialog-close"
+                    type="button" aria-label="Close">&times;</button>
+            </header>
+            <form id="requirementsValidationForm" class="requirements-validation-form">
+                <p>
+                    Xen will compare these requirements with the latest complete
+                    NinjaScript source. Review the automatically collected requirements
+                    before running the audit.
+                </p>
+                <label class="feedback-field">
+                    <span>Requirements to verify</span>
+                    <textarea id="requirementsValidationText" rows="12"
+                        maxlength="100000" required></textarea>
+                </label>
+                <p id="requirementsValidationModel"
+                    class="requirements-validation-model">
+                    Verification uses the selected model and consumes Xen credit.
+                </p>
+                <p id="requirementsValidationStatus"
+                    class="feedback-status" role="status"></p>
+                <div class="feedback-actions">
+                    <button id="cancelRequirementsValidationButton"
+                        class="button" type="button">Cancel</button>
+                    <button id="runRequirementsValidationButton"
+                        class="button primary" type="submit">Run verification</button>
+                </div>
+            </form>
+        </section>
+    </div>
+
     <div id="codeWorkspaceModal" class="projects-modal" hidden>
         <section class="code-workspace-dialog" role="dialog" aria-modal="true"
             aria-labelledby="codeWorkspaceTitle">
@@ -278,6 +316,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=0.5.0"></script>
+    <script src="/js/workspace.js?v=0.5.2"></script>
 </body>
 </html>

@@ -136,6 +136,7 @@ builder.Services.AddSingleton<AiStreamingClient>();
 builder.Services.AddSingleton<SystemPromptService>();
 builder.Services.AddSingleton<NinjaTraderKnowledgeRetriever>();
 builder.Services.AddSingleton<PromptBuilderService>();
+builder.Services.AddSingleton<RequirementsValidationService>();
 
 var app = builder.Build();
 
@@ -161,6 +162,7 @@ app.MapProjectEndpoints();
 app.MapStripeEndpoints();
 app.MapPromptBuilderEndpoints();
 app.MapFeedbackEndpoints();
+app.MapRequirementsEndpoints();
 
 app.Run();
 

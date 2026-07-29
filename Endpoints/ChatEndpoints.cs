@@ -273,6 +273,15 @@ public static class ChatEndpoints
         {
             return;
         }
+        catch (TimeoutException)
+        {
+            await WriteEvent(context, new
+            {
+                type = "error",
+                message =
+                    "Kimi stopped responding before the stream completed. Please try again."
+            });
+        }
         catch
         {
             await WriteEvent(context, new
