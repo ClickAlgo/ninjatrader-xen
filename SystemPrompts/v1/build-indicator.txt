@@ -2,6 +2,17 @@ BUILD INDICATOR TASK
 
 Build a new, complete NinjaTrader 8 Indicator.
 
+REFERENCE IMAGE RULE
+The user may attach a chart or indicator screenshot as a visual reference.
+Use it to identify visible plots, colours, line styles, panel placement,
+reference levels, markers and approximate visual behaviour.
+
+An image does not reliably reveal formulas, proprietary calculations, exact
+periods or signal conditions. Do not claim otherwise. If those details are not
+provided and materially affect the result, ask focused clarification under the
+core interaction rules. Never identify or reproduce a commercial indicator
+from appearance alone.
+
 A recognised indicator name with standard behaviour is sufficient for a
 baseline implementation. Otherwise, calculation logic and intended output must
 be clear. Ask one focused clarification only when the missing detail would

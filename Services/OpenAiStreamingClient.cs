@@ -16,11 +16,15 @@ public sealed class OpenAiStreamingClient(
     public bool Supports(string model) =>
         model.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase);
 
+    public bool SupportsImages(string model) =>
+        model.Equals("gpt-5.6-sol", StringComparison.OrdinalIgnoreCase);
+
     public async IAsyncEnumerable<AiStreamEvent> StreamAsync(
         string model,
         string systemPrompt,
         IReadOnlyList<ChatTurn> history,
         string prompt,
+        AiImage? image,
         int maximumOutputTokens,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -51,11 +55,24 @@ public sealed class OpenAiStreamingClient(
             });
         }
 
-        input.Add(new
+        var userContent = new List<object>
         {
-            role = "user",
-            content = new[] { new { type = "input_text", text = prompt } }
-        });
+            new { type = "input_text", text = prompt }
+        };
+        if (image is not null)
+        {
+            if (!SupportsImages(model))
+                throw new InvalidOperationException(
+                    "The selected OpenAI model does not support image uploads.");
+
+            userContent.Add(new
+            {
+                type = "input_image",
+                image_url =
+                    $"data:{image.MediaType};base64,{image.Base64Data}"
+            });
+        }
+        input.Add(new { role = "user", content = userContent });
 
         var body = new
         {

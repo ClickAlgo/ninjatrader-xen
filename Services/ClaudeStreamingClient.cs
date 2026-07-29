@@ -16,11 +16,14 @@ public sealed class ClaudeStreamingClient(
     public bool Supports(string model) =>
         model.StartsWith("claude-", StringComparison.OrdinalIgnoreCase);
 
+    public bool SupportsImages(string model) => Supports(model);
+
     public async IAsyncEnumerable<AiStreamEvent> StreamAsync(
         string model,
         string systemPrompt,
         IReadOnlyList<ChatTurn> history,
         string prompt,
+        AiImage? image,
         int maximumOutputTokens,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
@@ -32,7 +35,24 @@ public sealed class ClaudeStreamingClient(
             })
             .Cast<object>()
             .ToList();
-        messages.Add(new { role = "user", content = prompt });
+        var userContent = new List<object>
+        {
+            new { type = "text", text = prompt }
+        };
+        if (image is not null)
+        {
+            userContent.Add(new
+            {
+                type = "image",
+                source = new
+                {
+                    type = "base64",
+                    media_type = image.MediaType,
+                    data = image.Base64Data
+                }
+            });
+        }
+        messages.Add(new { role = "user", content = userContent });
 
         var body = new
         {

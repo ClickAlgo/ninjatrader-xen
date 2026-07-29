@@ -32,6 +32,13 @@ public static class ChatEndpoints
             "deepseek-v4-pro"
         };
 
+    private static readonly HashSet<string> ImageTasks =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "build-indicator",
+            "convert-indicator"
+        };
+
     public static IEndpointRouteBuilder MapChatEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/api/chat/stream", Stream).RequireAuthorization();
@@ -89,6 +96,36 @@ public static class ChatEndpoints
             return;
         }
 
+        var (image, imageError) = ValidateImage(request.Image);
+        if (imageError is not null)
+        {
+            await WriteEvent(context, new { type = "error", message = imageError });
+            await Complete(context);
+            return;
+        }
+
+        if (image is not null && !ImageTasks.Contains(request.Task))
+        {
+            await WriteEvent(context, new
+            {
+                type = "error",
+                message = "Reference images are available only for Build Indicator and Convert Indicator."
+            });
+            await Complete(context);
+            return;
+        }
+
+        if (image is not null && !aiClient.SupportsImages(request.Model))
+        {
+            await WriteEvent(context, new
+            {
+                type = "error",
+                message = "The selected AI model does not support image uploads."
+            });
+            await Complete(context);
+            return;
+        }
+
         var connectionString = configuration.GetConnectionString("CodePilot")
             ?? throw new InvalidOperationException("ConnectionStrings:CodePilot is not configured.");
 
@@ -136,7 +173,8 @@ public static class ChatEndpoints
             request.Prompt,
             request.History,
             systemPrompt,
-            balanceGbp);
+            balanceGbp,
+            image is not null);
 
         if (maximumOutputTokens < 800)
         {
@@ -172,6 +210,7 @@ public static class ChatEndpoints
                 systemPrompt,
                 cleanHistory,
                 request.Prompt.Trim(),
+                image,
                 maximumOutputTokens,
                 context.RequestAborted))
             {
@@ -199,6 +238,8 @@ public static class ChatEndpoints
                     request.Prompt.Length +
                     cleanHistory.Sum(turn => turn.Content.Length);
                 inputTokens = Math.Max(1, (int)Math.Ceiling(inputCharacters / 4m));
+                if (image is not null)
+                    inputTokens += 2_000;
             }
 
             if (outputTokens <= 0 && generatedCharacters > 0)
@@ -339,7 +380,8 @@ public static class ChatEndpoints
         string prompt,
         IReadOnlyList<ChatTurn>? history,
         string systemPrompt,
-        decimal balanceGbp)
+        decimal balanceGbp,
+        bool hasImage)
     {
         var pricing = configuration
             .GetSection($"Pricing:Models:{model}")
@@ -351,6 +393,8 @@ public static class ChatEndpoints
             (history ?? []).TakeLast(12).Sum(turn => Math.Min(turn.Content?.Length ?? 0, 40_000)) +
             systemPrompt.Length;
         var estimatedInputTokens = Math.Max(1_000, inputCharacters / 4);
+        if (hasImage)
+            estimatedInputTokens += 2_000;
         var estimatedInputUsd = estimatedInputTokens / 1_000_000m * pricing.InputPer1M;
 
         var usdToGbp = configuration.GetValue("Currency:UsdToGbp", 0.8m);
@@ -365,6 +409,77 @@ public static class ChatEndpoints
 
         return (int)Math.Clamp(affordableTokens, 0, 10_000);
     }
+
+    private static (AiImage? Image, string? Error) ValidateImage(
+        ChatImageRequest? request)
+    {
+        if (request is null)
+            return (null, null);
+
+        var mediaType = request.Type?.Trim().ToLowerInvariant();
+        if (mediaType is not ("image/png" or "image/jpeg" or "image/webp"))
+            return (null, "Use a PNG, JPEG or WebP reference image.");
+
+        if (string.IsNullOrWhiteSpace(request.Data) ||
+            request.Data.Length > 4_200_000)
+        {
+            return (null, "The reference image is invalid or exceeds 3 MB.");
+        }
+
+        var expectedPrefix = $"data:{mediaType};base64,";
+        if (!request.Data.StartsWith(
+            expectedPrefix,
+            StringComparison.OrdinalIgnoreCase))
+        {
+            return (null, "The reference image data does not match its file type.");
+        }
+
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromBase64String(
+                request.Data[expectedPrefix.Length..]);
+        }
+        catch (FormatException)
+        {
+            return (null, "The reference image could not be decoded.");
+        }
+
+        if (bytes.Length is 0 or > 3 * 1024 * 1024)
+            return (null, "The reference image must be 3 MB or smaller.");
+
+        if (!HasExpectedSignature(bytes, mediaType))
+            return (null, "The reference image content does not match its file type.");
+
+        var safeName = Path.GetFileName(request.Name ?? "reference-image");
+        return (
+            new AiImage(
+                safeName,
+                mediaType,
+                Convert.ToBase64String(bytes)),
+            null);
+    }
+
+    private static bool HasExpectedSignature(
+        ReadOnlySpan<byte> bytes,
+        string mediaType) =>
+        mediaType switch
+        {
+            "image/png" =>
+                bytes.Length >= 8 &&
+                bytes[..8].SequenceEqual(
+                    new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }),
+            "image/jpeg" =>
+                bytes.Length >= 3 &&
+                bytes[0] == 0xFF &&
+                bytes[1] == 0xD8 &&
+                bytes[2] == 0xFF,
+            "image/webp" =>
+                bytes.Length >= 12 &&
+                bytes[..4].SequenceEqual("RIFF"u8) &&
+                bytes.Slice(8, 4).SequenceEqual("WEBP"u8),
+            _ => false
+        };
 
     private static async Task WriteEvent(HttpContext context, object value)
     {

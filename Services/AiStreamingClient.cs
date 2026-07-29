@@ -11,11 +11,15 @@ public sealed class AiStreamingClient(
     public bool IsConfigured(string model) =>
         FindProvider(model)?.IsConfigured ?? false;
 
+    public bool SupportsImages(string model) =>
+        FindProvider(model)?.SupportsImages(model) ?? false;
+
     public IAsyncEnumerable<AiStreamEvent> StreamAsync(
         string model,
         string systemPrompt,
         IReadOnlyList<ChatTurn> history,
         string prompt,
+        AiImage? image,
         int maximumOutputTokens,
         CancellationToken cancellationToken)
     {
@@ -34,6 +38,7 @@ public sealed class AiStreamingClient(
             systemPrompt,
             history,
             prompt,
+            image,
             maximumOutputTokens,
             cancellationToken);
     }
@@ -47,12 +52,14 @@ public interface IAiStreamingProvider
     string DisplayName { get; }
     bool IsConfigured { get; }
     bool Supports(string model);
+    bool SupportsImages(string model);
 
     IAsyncEnumerable<AiStreamEvent> StreamAsync(
         string model,
         string systemPrompt,
         IReadOnlyList<ChatTurn> history,
         string prompt,
+        AiImage? image,
         int maximumOutputTokens,
         CancellationToken cancellationToken);
 }

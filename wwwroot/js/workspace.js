@@ -28,9 +28,15 @@ let currentProjectTitle = "";
 let currentController = null;
 let currentBalanceGbp = null;
 let promptQualityChecked = false;
+let pendingImage = null;
+let acceptedModelSelection = "";
 
 const lowCreditThresholdGbp = 1;
 const buildPlanStorageKey = "nx_active_build_plan_v1";
+const imageUnsupportedModels = new Set([
+    "gpt-5.3-codex",
+    "deepseek-v4-pro"
+]);
 
 const messages = document.getElementById("messages");
 const form = document.getElementById("chatForm");
@@ -61,10 +67,18 @@ const sourceImport = document.getElementById("sourceImport");
 const sourceFileInput = document.getElementById("sourceFileInput");
 const sourceFileButton = document.getElementById("sourceFileButton");
 const sourceFileStatus = document.getElementById("sourceFileStatus");
+const imageImport = document.getElementById("imageImport");
+const imageFileInput = document.getElementById("imageFileInput");
+const imageFileButton = document.getElementById("imageFileButton");
+const imageFileStatus = document.getElementById("imageFileStatus");
+const imagePreview = document.getElementById("imagePreview");
+const imagePreviewContent = document.getElementById("imagePreviewContent");
+const removeImageButton = document.getElementById("removeImageButton");
 let codeWorkspaceCode = "";
 
 restoreSelectedModel();
-modelSelect.addEventListener("change", rememberSelectedModel);
+acceptedModelSelection = modelSelect.value;
+modelSelect.addEventListener("change", handleModelChange);
 promptInput.addEventListener("input", updateClearInputButton);
 clearInputButton.addEventListener("click", clearComposerInput);
 cancelButton.addEventListener("click", () => {
@@ -82,6 +96,9 @@ updateTaskSpecificUi();
 updateClearInputButton();
 sourceFileButton.addEventListener("click", () => sourceFileInput.click());
 sourceFileInput.addEventListener("change", importSourceFile);
+imageFileButton.addEventListener("click", () => imageFileInput.click());
+imageFileInput.addEventListener("change", importReferenceImage);
+removeImageButton.addEventListener("click", clearPendingImage);
 
 document.getElementById("projectsButton").addEventListener("click", openProjects);
 document.getElementById("codeViewButton").addEventListener(
@@ -181,10 +198,14 @@ form.addEventListener("submit", async event => {
     }
 
     const previousHistory = [...history];
+    const requestImage = pendingImage;
     const userMessage = addMessage("user", prompt);
+    if (requestImage)
+        appendSubmittedImage(userMessage, requestImage);
     history.push({ role: "user", content: prompt });
     markBuildPlanPromptSent(prompt);
     promptInput.value = "";
+    clearPendingImage();
     updateClearInputButton();
 
     const assistantMessage = addMessage("assistant", "");
@@ -200,6 +221,7 @@ form.addEventListener("submit", async event => {
     `;
 
     generating = true;
+    updateImageUploadUi();
     sendButton.disabled = true;
     sendButton.classList.add("loading");
     cancelButton.disabled = false;
@@ -220,7 +242,8 @@ form.addEventListener("submit", async event => {
                 prompt,
                 task: activeTask,
                 model: modelSelect.value,
-                history: previousHistory
+                history: previousHistory,
+                image: requestImage
             }),
             signal: currentController.signal
         });
@@ -297,6 +320,8 @@ form.addEventListener("submit", async event => {
             userMessage.remove();
             assistantMessage.remove();
             promptInput.value = prompt;
+            if (requestImage)
+                setPendingImage(requestImage);
             updateClearInputButton();
             restoreBuildPlanPromptLoaded(prompt);
 
@@ -322,6 +347,7 @@ form.addEventListener("submit", async event => {
         modelSelect.disabled = false;
         currentController = null;
         applyCreditAvailability();
+        updateImageUploadUi();
         if (!promptInput.disabled)
             promptInput.focus();
     }
@@ -731,7 +757,9 @@ function startNewProject(resetTask = true) {
 
 function updateClearInputButton() {
     clearInputButton.hidden =
-        generating || promptInput.disabled || !promptInput.value.trim();
+        generating ||
+        promptInput.disabled ||
+        (!promptInput.value.trim() && !pendingImage);
 }
 
 function clearComposerInput() {
@@ -774,6 +802,120 @@ function updateTaskSpecificUi() {
     sourceFileInput.accept = options?.accept || "";
     sourceFileButton.textContent = options?.button || "Upload source file";
     sourceFileStatus.textContent = options?.status || "";
+    pendingImage = null;
+    imageFileInput.value = "";
+    imagePreview.hidden = true;
+    imagePreviewContent.removeAttribute("src");
+    updateImageUploadUi();
+}
+
+function updateImageUploadUi(message = "") {
+    const allowed =
+        activeTask === "build-indicator" ||
+        activeTask === "convert-indicator";
+    imageImport.hidden = !allowed;
+    if (!allowed)
+        return;
+
+    const supported = !imageUnsupportedModels.has(modelSelect.value);
+    imageFileButton.disabled = !supported || generating;
+    if (message) {
+        imageFileStatus.textContent = message;
+    } else if (pendingImage) {
+        imageFileStatus.textContent =
+            `${pendingImage.name} attached · add instructions, then press Send`;
+    } else if (!supported) {
+        imageFileStatus.textContent =
+            "The selected model does not support images. Choose Sol or Claude.";
+    } else {
+        imageFileStatus.textContent =
+            "PNG, JPEG or WebP · maximum 3 MB";
+    }
+}
+
+function handleModelChange() {
+    if (pendingImage && imageUnsupportedModels.has(modelSelect.value)) {
+        modelSelect.value = acceptedModelSelection;
+        updateImageUploadUi(
+            "Remove the attached image before selecting Codex or DeepSeek.");
+        return;
+    }
+
+    acceptedModelSelection = modelSelect.value;
+    rememberSelectedModel();
+    updateImageUploadUi();
+}
+
+async function importReferenceImage() {
+    const file = imageFileInput.files?.[0];
+    if (!file)
+        return;
+
+    imageFileInput.value = "";
+    if (imageUnsupportedModels.has(modelSelect.value)) {
+        updateImageUploadUi(
+            "The selected model does not support image uploads.");
+        return;
+    }
+
+    const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
+    if (!allowedTypes.includes(file.type)) {
+        updateImageUploadUi("Use a PNG, JPEG or WebP reference image.");
+        return;
+    }
+
+    if (file.size > 3 * 1024 * 1024) {
+        updateImageUploadUi("The reference image must be 3 MB or smaller.");
+        return;
+    }
+
+    try {
+        const data = await readFileAsDataUrl(file);
+        setPendingImage({
+            name: file.name,
+            type: file.type,
+            data
+        });
+        promptInput.focus();
+    } catch {
+        updateImageUploadUi("Xen could not read this reference image.");
+    }
+}
+
+function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.addEventListener("load", () => resolve(reader.result));
+        reader.addEventListener("error", reject);
+        reader.readAsDataURL(file);
+    });
+}
+
+function setPendingImage(image) {
+    pendingImage = image;
+    imagePreviewContent.src = image.data;
+    imagePreview.hidden = false;
+    updateImageUploadUi();
+    updateClearInputButton();
+}
+
+function clearPendingImage() {
+    pendingImage = null;
+    imageFileInput.value = "";
+    imagePreviewContent.removeAttribute("src");
+    imagePreview.hidden = true;
+    updateImageUploadUi();
+    updateClearInputButton();
+}
+
+function appendSubmittedImage(message, image) {
+    const preview = document.createElement("div");
+    preview.className = "submitted-image";
+    const element = document.createElement("img");
+    element.src = image.data;
+    element.alt = `Reference image: ${image.name}`;
+    preview.appendChild(element);
+    message.querySelector(".message-content")?.prepend(preview);
 }
 
 async function importSourceFile() {
@@ -1978,7 +2120,9 @@ function applyProjectToWorkspace(project) {
 
     if ([...modelSelect.options].some(option => option.value === project.model))
         modelSelect.value = project.model;
+    acceptedModelSelection = modelSelect.value;
     rememberSelectedModel();
+    updateImageUploadUi();
 
     messages.innerHTML = "";
     for (const turn of history) {

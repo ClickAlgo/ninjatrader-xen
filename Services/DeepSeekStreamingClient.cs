@@ -16,14 +16,21 @@ public sealed class DeepSeekStreamingClient(
     public bool Supports(string model) =>
         model.StartsWith("deepseek-", StringComparison.OrdinalIgnoreCase);
 
+    public bool SupportsImages(string model) => false;
+
     public async IAsyncEnumerable<AiStreamEvent> StreamAsync(
         string model,
         string systemPrompt,
         IReadOnlyList<ChatTurn> history,
         string prompt,
+        AiImage? image,
         int maximumOutputTokens,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        if (image is not null)
+            throw new InvalidOperationException(
+                "DeepSeek models do not support image uploads.");
+
         var messages = new List<object>
         {
             new { role = "system", content = systemPrompt }

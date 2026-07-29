@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Workspace | NinjaTrader Xen</title>
-    <link rel="stylesheet" href="/css/site.css?v=0.4.4">
+    <link rel="stylesheet" href="/css/site.css?v=0.4.5">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -64,7 +64,7 @@
                     <span>Feedback &amp; report a problem</span>
                 </button>
             </div>
-            <div class="workspace-build-version">Build v0.5-beta</div>
+            <div class="workspace-build-version">Build v0.6-beta</div>
         </aside>
 
         <section class="chat-panel">
@@ -106,6 +106,18 @@
                     <button id="sourceFileButton" class="button source-file-button"
                         type="button">Upload source file</button>
                     <span id="sourceFileStatus">or paste the complete strategy source below</span>
+                </div>
+                <div id="imageImport" class="image-import" hidden>
+                    <input id="imageFileInput" type="file"
+                        accept="image/png,image/jpeg,image/webp">
+                    <button id="imageFileButton" class="button source-file-button"
+                        type="button">Upload reference image</button>
+                    <span id="imageFileStatus">PNG, JPEG or WebP · maximum 3 MB</span>
+                    <div id="imagePreview" class="image-preview" hidden>
+                        <img id="imagePreviewContent" alt="Attached reference">
+                        <button id="removeImageButton" type="button"
+                            aria-label="Remove reference image">&times;</button>
+                    </div>
                 </div>
                 <textarea id="promptInput" rows="3" maxlength="60000"
                     placeholder="Describe your NinjaTrader strategy…" required></textarea>
@@ -252,6 +264,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=0.4.7"></script>
+    <script src="/js/workspace.js?v=0.4.8"></script>
 </body>
 </html>
