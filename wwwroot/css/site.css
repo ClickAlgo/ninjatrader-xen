@@ -2881,6 +2881,149 @@ html[data-theme="light"] .code-workspace-dialog {
     color: #ff8b6b;
 }
 
+.preflight-build-button {
+    border-color: rgba(65, 167, 112, .55);
+    color: #79d6a3;
+}
+
+.preflight-build-message {
+    border-left: 2px solid #d59a32;
+    padding-left: 16px;
+}
+
+.preflight-build-message.passed {
+    border-left-color: #3fc078;
+}
+
+.preflight-result-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+}
+
+.preflight-result-title {
+    color: var(--text);
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.preflight-result-summary {
+    flex: none;
+    padding: 4px 9px;
+    border: 1px solid;
+    border-radius: 999px;
+    font: 700 10px/1.35 "Manrope", sans-serif;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.preflight-result-summary.passed {
+    border-color: rgba(58, 194, 113, .48);
+    color: #73dda0;
+    background: rgba(35, 145, 82, .14);
+}
+
+.preflight-result-summary.failed {
+    border-color: rgba(229, 171, 57, .5);
+    color: #f1c365;
+    background: rgba(176, 119, 20, .15);
+}
+
+.preflight-result-description,
+.preflight-result-reminder {
+    margin: 0;
+    color: var(--text-soft);
+}
+
+.preflight-diagnostics {
+    max-height: 360px;
+    overflow: auto;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: #0d0d0d;
+    scrollbar-color: #484848 #161616;
+    scrollbar-width: thin;
+}
+
+.preflight-diagnostic {
+    display: grid;
+    grid-template-columns: minmax(150px, .36fr) minmax(260px, 1fr);
+    gap: 16px;
+    padding: 11px 13px;
+    border-bottom: 1px solid var(--border);
+}
+
+.preflight-diagnostic:last-child {
+    border-bottom: 0;
+}
+
+.preflight-diagnostic-metadata {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    min-width: 0;
+}
+
+.preflight-diagnostic-code {
+    flex: none;
+    padding: 2px 6px;
+    border: 1px solid rgba(229, 171, 57, .42);
+    border-radius: 4px;
+    color: #f1c365;
+    background: rgba(176, 119, 20, .12);
+    font: 700 11px/1.45 "Cascadia Code", Consolas, monospace;
+}
+
+.preflight-diagnostic-location {
+    overflow: hidden;
+    color: var(--muted);
+    font: 11px/1.55 "Cascadia Code", Consolas, monospace;
+    text-overflow: ellipsis;
+}
+
+.preflight-diagnostic-message {
+    color: #d8d8d8;
+    font: 12px/1.55 "Cascadia Code", Consolas, monospace;
+}
+
+.preflight-result-reminder {
+    margin-top: 14px;
+    font-size: 12px;
+}
+
+.preflight-build-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.preflight-codex-retry {
+    border-color: rgba(89, 148, 223, .58);
+    color: #9fc8ff;
+    background: rgba(52, 104, 171, .14);
+}
+
+html[data-theme="light"] .preflight-diagnostics {
+    background: #f7f8fa;
+}
+
+html[data-theme="light"] .preflight-diagnostic-message {
+    color: #2b3036;
+}
+
+@media (max-width: 700px) {
+    .preflight-diagnostic {
+        grid-template-columns: 1fr;
+        gap: 6px;
+    }
+}
+
 .requirements-validation-message {
     border-left: 2px solid var(--primary);
     padding-left: 16px;

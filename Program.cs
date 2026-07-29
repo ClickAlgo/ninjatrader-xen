@@ -24,6 +24,10 @@ builder.Services
         options => string.Equals(options.Name, "NinjaTrader", StringComparison.OrdinalIgnoreCase),
         "This application must identify itself as NinjaTrader.")
     .ValidateOnStart();
+builder.Services
+    .AddOptions<NinjaTraderCompilerOptions>()
+    .Bind(builder.Configuration.GetSection(
+        NinjaTraderCompilerOptions.SectionName));
 
 builder.Services.AddHealthChecks();
 
@@ -137,6 +141,7 @@ builder.Services.AddSingleton<SystemPromptService>();
 builder.Services.AddSingleton<NinjaTraderKnowledgeRetriever>();
 builder.Services.AddSingleton<PromptBuilderService>();
 builder.Services.AddSingleton<RequirementsValidationService>();
+builder.Services.AddSingleton<NinjaTraderPreflightCompiler>();
 
 var app = builder.Build();
 
@@ -163,6 +168,7 @@ app.MapStripeEndpoints();
 app.MapPromptBuilderEndpoints();
 app.MapFeedbackEndpoints();
 app.MapRequirementsEndpoints();
+app.MapPreflightBuildEndpoints();
 
 app.Run();
 

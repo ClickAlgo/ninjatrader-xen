@@ -30,10 +30,13 @@ let currentBalanceGbp = null;
 let promptQualityChecked = false;
 let pendingImage = null;
 let acceptedModelSelection = "";
+let preflightBuilding = false;
 
 const lowCreditThresholdGbp = 1;
 const buildPlanStorageKey = "nx_active_build_plan_v1";
 const defaultModel = "gpt-5.3-codex";
+const preflightRepairPromptPrefix =
+    "Repair the latest complete NinjaScript source so it passes";
 const lowCostModels = new Set([
     "deepseek-v4-pro",
     "kimi-k2.7-code"
@@ -499,6 +502,11 @@ function scrollMessagesToBottom() {
 
 function renderStructuredResponse(container, source) {
     container.textContent = "";
+    if (/^# NinjaTrader (?:Preflight Build|Build Check)\b/im.test(source)) {
+        renderPreflightBuildReport(container, source);
+        return;
+    }
+
     const fencePattern = /```(?:csharp|cs)?\s*([\s\S]*?)```/gi;
     let cursor = 0;
     let match;
@@ -511,6 +519,193 @@ function renderStructuredResponse(container, source) {
 
     appendProse(container, source.slice(cursor));
     decorateRequirementsMatch(container, source);
+}
+
+function renderPreflightBuildReport(container, source) {
+    const passed = /^## Build passed\b/im.test(source);
+    const message = container.closest(".message");
+    message?.classList.add(
+        "preflight-build-message",
+        passed ? "passed" : "failed");
+
+    const heading = document.createElement("div");
+    heading.className = "preflight-result-heading";
+
+    const title = document.createElement("div");
+    title.className = "preflight-result-title";
+    title.textContent = "NinjaTrader Build Check";
+
+    const diagnostics = passed ? [] : parsePreflightDiagnostics(source);
+    const groups = passed ? [] : groupPreflightDiagnostics(diagnostics);
+    const summary = document.createElement("span");
+    summary.className =
+        `preflight-result-summary ${passed ? "passed" : "failed"}`;
+    summary.textContent = passed
+        ? "Build passed"
+        : diagnostics.length
+            ? `${diagnostics.length} ${diagnostics.length === 1 ? "error" : "errors"} · ` +
+              `${groups.length} unique ${groups.length === 1 ? "issue" : "issues"}`
+            : "Build failed";
+    heading.append(title, summary);
+    container.appendChild(heading);
+
+    if (passed) {
+        const success = document.createElement("p");
+        success.className = "preflight-result-description";
+        success.textContent =
+            "Xen checked the source against the installed NinjaTrader assemblies and found no build errors.";
+        container.appendChild(success);
+    } else {
+        if (!diagnostics.length) {
+            const unavailable = document.createElement("p");
+            unavailable.className = "preflight-result-description";
+            unavailable.textContent =
+                "The build check failed without structured compiler diagnostics.";
+            container.appendChild(unavailable);
+        }
+
+        const panel = document.createElement("div");
+        panel.className = "preflight-diagnostics";
+        panel.hidden = groups.length === 0;
+        panel.setAttribute("role", "list");
+        panel.setAttribute(
+            "aria-label",
+            `${diagnostics.length} compiler errors`);
+
+        for (const group of groups) {
+            const row = document.createElement("div");
+            row.className = "preflight-diagnostic";
+            row.setAttribute("role", "listitem");
+
+            const metadata = document.createElement("div");
+            metadata.className = "preflight-diagnostic-metadata";
+
+            const code = document.createElement("span");
+            code.className = "preflight-diagnostic-code";
+            code.textContent = group.code;
+
+            const location = document.createElement("span");
+            location.className = "preflight-diagnostic-location";
+            location.textContent = formatDiagnosticLocations(group.locations);
+            metadata.append(code, location);
+
+            const errorMessage = document.createElement("div");
+            errorMessage.className = "preflight-diagnostic-message";
+            errorMessage.textContent = group.message;
+            row.append(metadata, errorMessage);
+            panel.appendChild(row);
+        }
+        container.appendChild(panel);
+    }
+
+    const reminder = document.createElement("p");
+    reminder.className = "preflight-result-reminder";
+    reminder.textContent = passed
+        ? "Final compilation and behavioural testing in NinjaTrader are still required."
+        : "The source was not executed. Repair these errors, then run the build check again.";
+    container.appendChild(reminder);
+
+    if (!passed && diagnostics.length)
+        appendPreflightRepairActions(container, diagnostics);
+    normalizePreflightRepairActions();
+}
+
+function appendPreflightRepairActions(container, errors) {
+    const actions = document.createElement("div");
+    actions.className = "preflight-build-actions";
+
+    const repair = document.createElement("button");
+    repair.type = "button";
+    repair.className = "button primary";
+    repair.textContent = "Repair build errors";
+    repair.addEventListener("click", () => {
+        if (generating || repair.disabled)
+            return;
+
+        repair.disabled = true;
+        startPreflightRepair(errors);
+    });
+    actions.appendChild(repair);
+
+    if (countConsecutivePreflightRepairs() >= 2 &&
+        modelSelect.value !== "gpt-5.3-codex") {
+        const retryWithCodex = document.createElement("button");
+        retryWithCodex.type = "button";
+        retryWithCodex.className = "button preflight-codex-retry";
+        retryWithCodex.textContent = "Retry repair with Codex 5.3";
+        retryWithCodex.addEventListener("click", () => {
+            if (generating || retryWithCodex.disabled)
+                return;
+
+            repair.disabled = true;
+            retryWithCodex.disabled = true;
+            startPreflightRepair(errors, "gpt-5.3-codex");
+        });
+        actions.appendChild(retryWithCodex);
+    }
+
+    container.appendChild(actions);
+}
+
+function normalizePreflightRepairActions() {
+    const reports = [
+        ...messages.querySelectorAll(".preflight-build-message")
+    ];
+    const latest = reports.at(-1);
+    for (const report of reports) {
+        const keep =
+            report === latest && report.classList.contains("failed");
+        if (!keep)
+            report.querySelectorAll(".preflight-build-actions")
+                .forEach(actions => actions.remove());
+    }
+}
+
+function parsePreflightDiagnostics(source) {
+    const diagnostics = [];
+    const pattern =
+        /^-\s+([A-Z]+\d+|BUILD|TIMEOUT)\s+at\s+(line\s+(\d+)(?:,\s*column\s+(\d+))?|build):\s+(.+)$/gim;
+    let match;
+    while ((match = pattern.exec(source)) !== null) {
+        diagnostics.push({
+            code: match[1].toUpperCase(),
+            line: match[3] ? Number.parseInt(match[3], 10) : null,
+            column: match[4] ? Number.parseInt(match[4], 10) : null,
+            message: match[5].trim()
+        });
+    }
+    return diagnostics;
+}
+
+function groupPreflightDiagnostics(diagnostics) {
+    const groups = new Map();
+    for (const diagnostic of diagnostics) {
+        const key = `${diagnostic.code}\u0000${diagnostic.message}`;
+        if (!groups.has(key)) {
+            groups.set(key, {
+                code: diagnostic.code,
+                message: diagnostic.message,
+                locations: []
+            });
+        }
+        groups.get(key).locations.push({
+            line: diagnostic.line,
+            column: diagnostic.column
+        });
+    }
+    return [...groups.values()];
+}
+
+function formatDiagnosticLocations(locations) {
+    const formatted = locations.map(location =>
+        location.line
+            ? `${location.line}${location.column ? `:${location.column}` : ""}`
+            : "Build");
+    if (formatted.every(location => location === "Build"))
+        return "Build";
+
+    const visible = formatted.slice(0, 5);
+    return `${formatted.length > 1 ? "Lines" : "Line"} ${visible.join(", ")}`;
 }
 
 function decorateRequirementsMatch(container, source) {
@@ -732,6 +927,15 @@ function appendCodeBlock(
     actions.append(copyButton);
     if (includeDownload) {
         actions.append(downloadButton);
+        const buildButton = document.createElement("button");
+        buildButton.type = "button";
+        buildButton.className = "code-action preflight-build-button";
+        buildButton.textContent = "Build check";
+        buildButton.addEventListener(
+            "click",
+            () => runPreflightBuild(code, buildButton));
+        actions.append(buildButton);
+
         const verifyButton = document.createElement("button");
         verifyButton.type = "button";
         verifyButton.className = "code-action verify-requirements-button";
@@ -751,6 +955,141 @@ function appendCodeBlock(
 
     wrapper.append(toolbar, pre);
     container.appendChild(wrapper);
+}
+
+async function runPreflightBuild(code, button) {
+    if (preflightBuilding || generating)
+        return;
+
+    preflightBuilding = true;
+    button.disabled = true;
+    button.textContent = "Checking build...";
+    status.textContent = "Running NinjaTrader build check...";
+
+    try {
+        const response = await fetch("/api/preflight/build", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                code,
+                task: activeTask
+            })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+            sessionStorage.removeItem("nx_access_token");
+            location.replace("/login.html");
+            return;
+        }
+        if (!response.ok)
+            throw new Error(
+                result.message ||
+                "The NinjaTrader build check could not be started.");
+
+        renderPreflightBuildResult(result);
+        status.textContent = result.success
+            ? "Build check passed · saving project..."
+            : "Build check found errors · saving diagnostics...";
+        const saved = await saveCurrentProject();
+        status.textContent = result.success
+            ? (saved ? "Build check passed and saved" : "Build check passed")
+            : (saved ? "Build errors saved" : "Build check found errors");
+    } catch (error) {
+        status.textContent = error.message;
+    } finally {
+        preflightBuilding = false;
+        button.disabled = false;
+        button.textContent = "Build check";
+    }
+}
+
+function renderPreflightBuildResult(result) {
+    const errors = Array.isArray(result.errors) ? result.errors : [];
+    const report = result.success
+        ? "# NinjaTrader Build Check\n\n" +
+          "## Build passed\n\n" +
+          "Xen checked the source against the installed NinjaTrader assemblies and found no build errors.\n\n" +
+          "Final compilation and behavioural testing in NinjaTrader are still required."
+        : "# NinjaTrader Build Check\n\n" +
+          "## Build failed\n\n" +
+          `${formatPreflightErrors(errors)}\n\n` +
+          "The source was not executed. Repair these errors, then run the build check again.";
+
+    history.push({ role: "assistant", content: report });
+    const message = addMessage("assistant", "");
+    message.classList.add(
+        "preflight-build-message",
+        result.success ? "passed" : "failed");
+    const content = message.querySelector(".message-content");
+
+    const reportContent = document.createElement("div");
+    renderStructuredResponse(reportContent, report);
+    content.appendChild(reportContent);
+    normalizePreflightRepairActions();
+
+    scrollMessagesToBottom();
+}
+
+function startPreflightRepair(errors, requestedModel = null) {
+    if (generating)
+        return;
+
+    if (requestedModel &&
+        [...modelSelect.options].some(option => option.value === requestedModel)) {
+        modelSelect.value = requestedModel;
+        acceptedModelSelection = requestedModel;
+        rememberSelectedModel();
+        updateModelCostBadge();
+        updateImageUploadUi();
+    }
+
+    promptInput.value =
+        `${preflightRepairPromptPrefix} the NinjaTrader build check. ` +
+        "Fix the exact compiler errors below, preserve all working behaviour " +
+        "and explicit requirements, and return one complete compile-ready C# " +
+        "file.\n\n" +
+        `Compiler errors:\n${formatPreflightErrors(errors)}`;
+    promptQualityChecked = true;
+    updateClearInputButton();
+    status.textContent = requestedModel
+        ? "Starting compiler-error repair with Codex 5.3..."
+        : "Starting compiler-error repair...";
+    form.requestSubmit();
+}
+
+function countConsecutivePreflightRepairs() {
+    let attempts = 0;
+    for (let index = history.length - 1; index >= 0; index--) {
+        const turn = history[index];
+        if (turn.role === "assistant" &&
+            /^# NinjaTrader (?:Preflight Build|Build Check)\s+## Build passed\b/im.test(
+                turn.content || "")) {
+            break;
+        }
+        if (turn.role !== "user")
+            continue;
+        if ((turn.content || "").startsWith(preflightRepairPromptPrefix)) {
+            attempts++;
+            continue;
+        }
+        break;
+    }
+    return attempts;
+}
+
+function formatPreflightErrors(errors) {
+    if (!errors.length)
+        return "- BUILD: The build check failed without a structured compiler error.";
+
+    return errors.map(error => {
+        const location = error.line
+            ? `line ${error.line}${error.column ? `, column ${error.column}` : ""}`
+            : "build";
+        return `- ${error.code || "BUILD"} at ${location}: ${error.message}`;
+    }).join("\n");
 }
 
 function highlightCSharp(code) {

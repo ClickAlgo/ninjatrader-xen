@@ -39,38 +39,12 @@ Completed:
 - Cancel generation, clear input and clear task controls
 - Feedback and diagnostic problem reporting
 - Persistent light/dark workspace theme with dark as the default
+- Requirements verification with percentage status and focused repair
+- Isolated NinjaTrader assembly preflight builds with compiler-error repair
 
 ## Next development priorities
 
-### 1. Requirements verification
-
-In progress: add a deliberate verification step after Xen returns code.
-
-- Compare the latest complete source against the active user request
-- When a Build Plan exists, verify against the requirements and current step
-- Report every requirement as:
-  - Implemented
-  - Partially implemented
-  - Not implemented
-  - Assumption made
-  - Manual test required
-- Cite the relevant class, property or method for each result
-- Detect placeholders, empty handlers and claims unsupported by the source
-- Keep verification separate from code generation
-- Offer a focused repair request for failed or partial requirements
-- Save the latest verification result with the project
-
-### 2. Compiler-error repair
-
-- Paste or upload NinjaTrader compiler output
-- Associate errors with the latest saved source
-- Explain the root cause without overwhelming the user
-- Return one complete repaired source file
-- Preserve working behaviour and unrelated code
-- Save every repair as a source snapshot
-- Support repeated compile-and-repair rounds
-
-### 3. Strategy Analyzer result analysis
+### 1. Strategy Analyzer result analysis
 
 Begin with exported results and screenshot uploads rather than attempting
 server-side NinjaTrader backtesting.
@@ -82,7 +56,7 @@ server-side NinjaTrader backtesting.
 - Warn about likely overfitting
 - Never present historical performance as a profitability guarantee
 
-### 4. NinjaTrader Xen connector investigation
+### 2. NinjaTrader Xen connector investigation
 
 Research a small supported NinjaTrader Add-On or connector that can safely:
 
@@ -95,7 +69,7 @@ Research a small supported NinjaTrader Add-On or connector that can safely:
 Do not begin implementation until the supported NinjaTrader extension,
 authentication and local-security architecture have been proven.
 
-### 5. Product guidance and launch preparation
+### 3. Product guidance and launch preparation
 
 - Task-specific help and examples
 - Requirements-verification documentation
