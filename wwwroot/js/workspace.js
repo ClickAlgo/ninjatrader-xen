@@ -33,9 +33,15 @@ let acceptedModelSelection = "";
 
 const lowCreditThresholdGbp = 1;
 const buildPlanStorageKey = "nx_active_build_plan_v1";
+const defaultModel = "gpt-5.3-codex";
+const lowCostModels = new Set([
+    "deepseek-v4-pro",
+    "kimi-k2.7-code"
+]);
 const imageUnsupportedModels = new Set([
     "gpt-5.3-codex",
-    "deepseek-v4-pro"
+    "deepseek-v4-pro",
+    "kimi-k2.7-code"
 ]);
 
 const messages = document.getElementById("messages");
@@ -46,6 +52,7 @@ const clearInputButton = document.getElementById("clearInputButton");
 const cancelButton = document.getElementById("cancelButton");
 const status = document.getElementById("chatStatus");
 const modelSelect = document.getElementById("modelSelect");
+const modelCostBadge = document.getElementById("modelCostBadge");
 const projectsModal = document.getElementById("projectsModal");
 const projectsList = document.getElementById("projectsList");
 const promptBuilderModal = document.getElementById("promptBuilderModal");
@@ -77,6 +84,7 @@ const removeImageButton = document.getElementById("removeImageButton");
 let codeWorkspaceCode = "";
 
 restoreSelectedModel();
+updateModelCostBadge();
 acceptedModelSelection = modelSelect.value;
 modelSelect.addEventListener("change", handleModelChange);
 promptInput.addEventListener("input", updateClearInputButton);
@@ -837,12 +845,14 @@ function handleModelChange() {
     if (pendingImage && imageUnsupportedModels.has(modelSelect.value)) {
         modelSelect.value = acceptedModelSelection;
         updateImageUploadUi(
-            "Remove the attached image before selecting Codex or DeepSeek.");
+            "Remove the attached image before selecting a model without image support.");
+        updateModelCostBadge();
         return;
     }
 
     acceptedModelSelection = modelSelect.value;
     rememberSelectedModel();
+    updateModelCostBadge();
     updateImageUploadUi();
 }
 
@@ -2118,10 +2128,13 @@ function applyProjectToWorkspace(project) {
     promptInput.placeholder = taskPlaceholders[activeTask];
     updateTaskSpecificUi();
 
-    if ([...modelSelect.options].some(option => option.value === project.model))
-        modelSelect.value = project.model;
+    modelSelect.value =
+        [...modelSelect.options].some(option => option.value === project.model)
+            ? project.model
+            : defaultModel;
     acceptedModelSelection = modelSelect.value;
     rememberSelectedModel();
+    updateModelCostBadge();
     updateImageUploadUi();
 
     messages.innerHTML = "";
@@ -2247,11 +2260,20 @@ function restoreSelectedModel() {
     if (savedModel &&
         [...modelSelect.options].some(option => option.value === savedModel)) {
         modelSelect.value = savedModel;
+        return;
     }
+
+    modelSelect.value = defaultModel;
+    if (savedModel)
+        localStorage.removeItem("nx_selected_model");
 }
 
 function rememberSelectedModel() {
     localStorage.setItem("nx_selected_model", modelSelect.value);
+}
+
+function updateModelCostBadge() {
+    modelCostBadge.hidden = !lowCostModels.has(modelSelect.value);
 }
 
 // Reserved integration point for NinjaTrader Xen's future real compile/build

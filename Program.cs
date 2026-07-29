@@ -112,9 +112,26 @@ builder.Services.AddHttpClient("deepseek", client =>
     if (!string.IsNullOrWhiteSpace(apiKey))
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 });
+builder.Services.AddHttpClient("moonshot", client =>
+{
+    var baseUrl =
+        builder.Configuration["Moonshot:BaseUrl"] ??
+        "https://api.moonshot.ai/v1/";
+    if (!baseUrl.EndsWith('/'))
+        baseUrl += "/";
+
+    client.BaseAddress = new Uri(baseUrl);
+    var apiKey =
+        builder.Configuration["Moonshot:ApiKey"] ??
+        Environment.GetEnvironmentVariable("MOONSHOT_API_KEY");
+    if (!string.IsNullOrWhiteSpace(apiKey))
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", apiKey);
+});
 builder.Services.AddSingleton<IAiStreamingProvider, OpenAiStreamingClient>();
 builder.Services.AddSingleton<IAiStreamingProvider, ClaudeStreamingClient>();
 builder.Services.AddSingleton<IAiStreamingProvider, DeepSeekStreamingClient>();
+builder.Services.AddSingleton<IAiStreamingProvider, MoonshotStreamingClient>();
 builder.Services.AddSingleton<AiStreamingClient>();
 builder.Services.AddSingleton<SystemPromptService>();
 builder.Services.AddSingleton<NinjaTraderKnowledgeRetriever>();

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Workspace | NinjaTrader Xen</title>
-    <link rel="stylesheet" href="/css/site.css?v=0.4.5">
+    <link rel="stylesheet" href="/css/site.css?v=0.4.8">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -64,7 +64,7 @@
                     <span>Feedback &amp; report a problem</span>
                 </button>
             </div>
-            <div class="workspace-build-version">Build v0.6-beta</div>
+            <div class="workspace-build-version">Build v0.7-beta</div>
         </aside>
 
         <section class="chat-panel">
@@ -75,14 +75,17 @@
                     <span id="projectTitle" class="project-title">Unsaved project</span>
                 </div>
                 <label class="model-field">
-                    <span>Model</span>
+                    <span class="model-field-label">
+                        <span>Model</span>
+                        <span id="modelCostBadge" class="model-cost-badge" hidden>LOW COST</span>
+                    </span>
                     <select id="modelSelect">
                         <option value="gpt-5.6-sol">ChatGPT Sol 5.6</option>
                         <option value="gpt-5.3-codex" selected>ChatGPT Codex 5.3</option>
                         <option value="claude-opus-5">Claude Opus 5</option>
                         <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
                         <option value="deepseek-v4-pro">DeepSeek Pro V4</option>
-                        <option value="claude-fable-5">Claude Fable 5</option>
+                        <option value="kimi-k2.7-code">Kimi K2.7 Code</option>
                     </select>
                 </label>
             </div>
@@ -264,6 +267,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=0.4.8"></script>
+    <script src="/js/workspace.js?v=0.4.9"></script>
 </body>
 </html>

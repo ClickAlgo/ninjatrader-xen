@@ -28,7 +28,7 @@ public static class ChatEndpoints
             "gpt-5.6-sol",
             "claude-sonnet-4-6",
             "claude-opus-5",
-            "claude-fable-5",
+            "kimi-k2.7-code",
             "deepseek-v4-pro"
         };
 
