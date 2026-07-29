@@ -1,91 +1,118 @@
 # NinjaTrader Xen Roadmap
 
-## Product baseline
+## Product position
 
-The current dark Manrope interface with restrained NinjaTrader-inspired
-red-orange accents is the approved visual baseline.
+NinjaTrader Xen is an advanced AI development, conversion and repair workspace
+for NinjaTrader strategies and indicators.
 
-Future work should reuse mature cTrader Xen workflows and infrastructure while
-retaining the NinjaTrader theme and NinjaScript terminology. Do not copy the
-cTrader visual theme or introduce cTrader-specific features.
+The native NinjaTrader AI Strategy Builder has the strongest integrated path
+for simple strategy generation, compilation and immediate backtesting. Xen
+should differentiate through advanced code quality, indicators, existing-code
+development, cross-platform conversion, requirements auditing, repair,
+multiple model choices and persistent source history.
+
+The approved interface baseline is the dark Manrope theme with restrained
+NinjaTrader-inspired red-orange accents.
+
+## Current beta baseline
+
+Completed:
+
+- Registration, authentication and platform-specific accounts
+- Free trial credit, pay-as-you-go usage and Stripe top-ups
+- Low-credit and exhausted-credit controls
+- OpenAI, Claude and DeepSeek providers with model pricing
+- Six NinjaScript tasks:
+  - Build Strategy
+  - Build Indicator
+  - Existing Strategy
+  - Existing Indicator
+  - Convert Strategy
+  - Convert Indicator
+- Dedicated system prompts for every task
+- NinjaTrader RAG using `Code.PlatformId = 2`
+- Integrated Prompt Builder and persistent staged Build Plans
+- Project persistence, conversation history and source snapshots
+- Source upload, formatted code display, copy and download
+- Indicator reference-image uploads for supported vision models
+- Cancel generation, clear input and clear task controls
+- Feedback and diagnostic problem reporting
 
 ## Next development priorities
 
-### 1. Conversation and project persistence
+### 1. Requirements verification
 
-- Projects list
-- Conversation history
-- Create, rename, load and delete projects
-- Persist task, model, messages and latest complete source
-- Restore a project after signing in on another browser
-- Enforce `PlatformId = 2` on every project and conversation query
+Add a deliberate verification step after Xen returns code.
 
-### 2. NinjaTrader RAG
+- Compare the latest complete source against the active user request
+- When a Build Plan exists, verify against the requirements and current step
+- Report every requirement as:
+  - Implemented
+  - Partially implemented
+  - Not implemented
+  - Assumption made
+  - Manual test required
+- Cite the relevant class, property or method for each result
+- Detect placeholders, empty handlers and claims unsupported by the source
+- Keep verification separate from code generation
+- Offer a focused repair request for failed or partial requirements
+- Save the latest verification result with the project
 
-- Retrieve only `Code.PlatformId = 2`
-- NinjaTrader Strategy and Indicator categories
-- Curated, compile-tested NinjaScript examples
-- Similarity confidence handling
-- Clear fallback when API usage cannot be verified
+### 2. Compiler-error repair
 
-### 3. Code workspace
+- Paste or upload NinjaTrader compiler output
+- Associate errors with the latest saved source
+- Explain the root cause without overwhelming the user
+- Return one complete repaired source file
+- Preserve working behaviour and unrelated code
+- Save every repair as a source snapshot
+- Support repeated compile-and-repair rounds
 
-- Code View
-- Dedicated C# editor with syntax highlighting
-- Copy and `.cs` download
-- Preserve the latest complete generated source
-- Source snapshots and version restore
-- Snippet View for explanation-only responses
+### 3. Strategy Analyzer result analysis
 
-### 4. Generation controls
+Begin with exported results and screenshot uploads rather than attempting
+server-side NinjaTrader backtesting.
 
-- Stop generation
-- Clear active task
-- Active-task status
-- Prevent task changes during generation
-- Better retry and provider-error messages
-- Model-specific cost warnings where appropriate
+- Import supported Strategy Analyzer exports
+- Summarise performance and trade distribution
+- Flag insufficient sample size, excessive drawdown and parameter sensitivity
+- Compare expected strategy behaviour with observed results
+- Warn about likely overfitting
+- Never present historical performance as a profitability guarantee
 
-### 5. Guided NinjaTrader workflows
+### 4. NinjaTrader Xen connector investigation
 
-- Task guides for Strategies and Indicators
-- Convert strategy from another platform
-- Convert indicator from another platform
-- Strategy Analyzer and backtesting guidance
-- Additional tasks behind a compact “More tasks” control
-- Prompt examples tailored to NinjaScript
+Research a small supported NinjaTrader Add-On or connector that can safely:
 
-### 6. Repair workflow
+- Send the active NinjaScript source to its Xen project
+- Send compiler errors to the repair workflow
+- Receive revised source
+- Report compilation success or failure
+- Transfer Strategy Analyzer results
 
-- Upload or paste an existing `.cs` file
-- Diagnose NinjaScript compiler output
-- Automated repair attempts
-- Version comparison and rollback
-- Compilation support only after a safe NinjaTrader build architecture is proven
+Do not begin implementation until the supported NinjaTrader extension,
+authentication and local-security architecture have been proven.
 
-### 7. Account and support
+### 5. Product guidance and launch preparation
 
-- Top-up workflow
-- Logout control in the workspace
-- Feedback
-- Report a bug
-- Video guide
-- Prompt help
-- User guide
-- Account identity in the navigation
+- Task-specific help and examples
+- Requirements-verification documentation
+- Compiler-repair documentation
+- Conversion limitations and copyright guidance
+- Production monitoring and provider diagnostics
+- Beta feedback review and onboarding refinements
 
 ## Deferred or optional
 
-- Light mode: optional; dark remains the default and primary design.
-- Server-side NinjaTrader compilation and import packages.
-- NinjaTrader backtest-report parsing.
-- Screenshot/image input.
+- Light mode; dark remains the default and primary design
+- Server-side NinjaTrader compilation
+- Server-side NinjaTrader backtesting
+- Automatic optimization
+- Direct live-trading or account control
 
 ## Explicitly excluded
 
-- cTrader cBots
-- cAlgo APIs
-- cTrader plugins and trading panels
-- `.algo` files
+- cTrader cBots and cAlgo APIs
+- cTrader plugins, panels and `.algo` packages
 - cTrader documentation retrieval
-- cTrader backtest parsing
+- Claims of guaranteed compilation, performance or profitability
