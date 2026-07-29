@@ -81,8 +81,12 @@ const imageFileStatus = document.getElementById("imageFileStatus");
 const imagePreview = document.getElementById("imagePreview");
 const imagePreviewContent = document.getElementById("imagePreviewContent");
 const removeImageButton = document.getElementById("removeImageButton");
+const themeToggleButton = document.getElementById("themeToggleButton");
+const themeToggleIcon = document.getElementById("themeToggleIcon");
+const themeToggleLabel = document.getElementById("themeToggleLabel");
 let codeWorkspaceCode = "";
 
+updateThemeToggle();
 restoreSelectedModel();
 updateModelCostBadge();
 acceptedModelSelection = modelSelect.value;
@@ -107,6 +111,7 @@ sourceFileInput.addEventListener("change", importSourceFile);
 imageFileButton.addEventListener("click", () => imageFileInput.click());
 imageFileInput.addEventListener("change", importReferenceImage);
 removeImageButton.addEventListener("click", clearPendingImage);
+themeToggleButton.addEventListener("click", toggleWorkspaceTheme);
 
 document.getElementById("projectsButton").addEventListener("click", openProjects);
 document.getElementById("codeViewButton").addEventListener(
@@ -149,6 +154,29 @@ feedbackModal.addEventListener("click", event => {
         closeFeedback();
 });
 feedbackForm.addEventListener("submit", submitFeedback);
+
+function toggleWorkspaceTheme() {
+    const useLightTheme =
+        document.documentElement.dataset.theme !== "light";
+
+    if (useLightTheme) {
+        document.documentElement.dataset.theme = "light";
+        localStorage.setItem("nx_workspace_theme", "light");
+    } else {
+        delete document.documentElement.dataset.theme;
+        localStorage.setItem("nx_workspace_theme", "dark");
+    }
+
+    updateThemeToggle();
+}
+
+function updateThemeToggle() {
+    const isLight =
+        document.documentElement.dataset.theme === "light";
+    themeToggleButton.setAttribute("aria-pressed", String(isLight));
+    themeToggleIcon.textContent = isLight ? "☾" : "☼";
+    themeToggleLabel.textContent = isLight ? "Dark theme" : "Light theme";
+}
 
 projectsModal.addEventListener("click", event => {
     if (event.target === projectsModal)

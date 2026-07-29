@@ -4,7 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Workspace | NinjaTrader Xen</title>
-    <link rel="stylesheet" href="/css/site.css?v=0.4.8">
+    <script>
+        (() => {
+            if (localStorage.getItem("nx_workspace_theme") === "light")
+                document.documentElement.dataset.theme = "light";
+        })();
+    </script>
+    <link rel="stylesheet" href="/css/site.css?v=0.4.9">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -62,6 +68,11 @@
                 <button id="feedbackButton" class="workspace-support-link" type="button">
                     <span class="workspace-support-icon" aria-hidden="true">?</span>
                     <span>Feedback &amp; report a problem</span>
+                </button>
+                <button id="themeToggleButton" class="workspace-support-link" type="button"
+                    aria-pressed="false">
+                    <span id="themeToggleIcon" class="workspace-theme-icon" aria-hidden="true">☼</span>
+                    <span id="themeToggleLabel">Light theme</span>
                 </button>
             </div>
             <div class="workspace-build-version">Build v0.7-beta</div>
@@ -267,6 +278,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=0.4.9"></script>
+    <script src="/js/workspace.js?v=0.5.0"></script>
 </body>
 </html>

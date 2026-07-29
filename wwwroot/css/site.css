@@ -2634,8 +2634,219 @@ tbody tr:last-child td {
     font-weight: 700;
 }
 
+.workspace-theme-icon {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    color: var(--muted);
+    font-size: 17px;
+    line-height: 1;
+}
+
 .workspace-build-version {
     margin-top: 0;
+}
+
+/* Workspace light theme. Code surfaces intentionally remain dark. */
+html[data-theme="light"] {
+    color-scheme: light;
+    --background: #f5f6f8;
+    --surface: #ffffff;
+    --surface-soft: #f1f3f5;
+    --surface-raised: #e9edf1;
+    --border: #d9dde3;
+    --border-strong: #c4cad2;
+    --text: #20242a;
+    --muted: #66717e;
+}
+
+html[data-theme="light"] body.workspace-body {
+    color: var(--text);
+    background: var(--background);
+}
+
+html[data-theme="light"] .workspace-header {
+    background: #ffffff;
+}
+
+html[data-theme="light"] .task-panel {
+    background: #f2f4f6;
+}
+
+html[data-theme="light"] .task-button {
+    border-bottom-color: #dfe3e8;
+}
+
+html[data-theme="light"] .task-button:hover {
+    border-color: #dfe3e8;
+    border-left-color: var(--primary);
+    background: #ffffff;
+}
+
+html[data-theme="light"] .task-button.active {
+    border-color: #dfe3e8;
+    border-left-color: var(--primary);
+    color: var(--text);
+    background:
+        linear-gradient(90deg, rgba(240, 68, 22, .12), rgba(240, 68, 22, .025) 70%),
+        #ffffff;
+}
+
+html[data-theme="light"] .task-button.active strong {
+    color: #171a1f;
+}
+
+html[data-theme="light"] .task-button.active span {
+    color: #59636f;
+}
+
+html[data-theme="light"] .workspace-support-link {
+    color: #4e5966;
+}
+
+html[data-theme="light"] .workspace-support-link:hover {
+    color: #15191e;
+}
+
+html[data-theme="light"] .workspace-support-icon {
+    border-color: #aeb6c0;
+}
+
+html[data-theme="light"] .chat-panel,
+html[data-theme="light"] .messages {
+    background: #f7f8fa;
+}
+
+html[data-theme="light"] .chat-toolbar {
+    background: #ffffff;
+}
+
+html[data-theme="light"] .model-field select,
+html[data-theme="light"] .balance-pill {
+    color: var(--text);
+    background: #ffffff;
+}
+
+html[data-theme="light"] .message {
+    border-bottom-color: #dfe3e8;
+}
+
+html[data-theme="light"] .message.assistant .message-content {
+    color: #24282e;
+}
+
+html[data-theme="light"] .message.user .message-label {
+    color: #687786;
+}
+
+html[data-theme="light"] .message.user .message-content {
+    color: #343a42;
+    background: rgba(32, 36, 42, .025);
+}
+
+html[data-theme="light"] .composer {
+    border-color: #d3d8df;
+    background: #ffffff;
+    box-shadow: 0 8px 28px rgba(28, 36, 46, .1);
+}
+
+html[data-theme="light"] .composer textarea {
+    border-color: #cbd1d9;
+    color: #20242a;
+    background: #f9fafb;
+}
+
+html[data-theme="light"] .composer textarea::placeholder {
+    color: #798491;
+}
+
+html[data-theme="light"] .composer textarea:disabled {
+    color: #7b8490;
+    background: #eef1f4;
+}
+
+html[data-theme="light"] .cancel-button {
+    border-color: #c4cad2;
+    color: #424a54;
+    background: #f2f4f6;
+}
+
+html[data-theme="light"] .active-build-plan {
+    border-color: #e0c9c1;
+    background: linear-gradient(90deg, rgba(240, 68, 22, .09), #ffffff 48%);
+}
+
+html[data-theme="light"] .active-build-plan-copy strong {
+    color: #252a30;
+}
+
+html[data-theme="light"] .active-build-plan-copy small,
+html[data-theme="light"] .project-title {
+    color: #697481;
+}
+
+html[data-theme="light"] .projects-modal {
+    background: rgba(30, 35, 42, .46);
+}
+
+html[data-theme="light"] .projects-dialog,
+html[data-theme="light"] .prompt-builder-dialog,
+html[data-theme="light"] .feedback-dialog {
+    border-color: #cbd1d8;
+    background: #ffffff;
+    box-shadow: 0 24px 70px rgba(28, 36, 46, .22);
+}
+
+html[data-theme="light"] .dialog-close,
+html[data-theme="light"] .project-row,
+html[data-theme="light"] .prompt-review-summary,
+html[data-theme="light"] .prompt-builder-field,
+html[data-theme="light"] .build-plan-instruction,
+html[data-theme="light"] .build-plan-assumptions,
+html[data-theme="light"] .build-plan-step {
+    color: var(--text);
+    background: #f5f7f9;
+}
+
+html[data-theme="light"] .project-actions button {
+    color: var(--text);
+    background: #ffffff;
+}
+
+html[data-theme="light"] .prompt-builder-reason,
+html[data-theme="light"] .prompt-builder-loading strong {
+    color: #4f5965;
+}
+
+html[data-theme="light"] .prompt-review-summary p,
+html[data-theme="light"] .prompt-builder-field small,
+html[data-theme="light"] .prompt-builder-status {
+    color: #66717e;
+}
+
+html[data-theme="light"] .prompt-builder-field > span {
+    color: #252a30;
+}
+
+html[data-theme="light"] .prompt-builder-field textarea,
+html[data-theme="light"] .prompt-builder-review {
+    border-color: #c7cdd5;
+    color: #20242a;
+    background: #ffffff;
+}
+
+html[data-theme="light"] .prompt-builder-actions {
+    border-top-color: #d9dde3;
+}
+
+html[data-theme="light"] .code-block,
+html[data-theme="light"] .code-block pre,
+html[data-theme="light"] .code-toolbar,
+html[data-theme="light"] .code-action,
+html[data-theme="light"] .code-workspace-dialog {
+    color-scheme: dark;
 }
 
 .feedback-dialog {
