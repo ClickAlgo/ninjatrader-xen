@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Top up | NinjaTrader Xen</title>
-    <link rel="stylesheet" href="/css/site.css">
+    <link rel="stylesheet" href="/css/site.css?v=0.8.10">
 </head>
 <body class="payment-body">
     <header class="site-header">
@@ -40,10 +40,32 @@
             <button id="checkoutButton" class="button topup-button full-width"
                 type="button">Continue to secure checkout</button>
 
-            <p class="payment-note">
-                Payment is completed securely on Stripe. Credit is added only
-                after Stripe confirms that the payment succeeded.
-            </p>
+            <div class="payment-assurance">
+                <p class="payment-terms">
+                    By clicking <strong>Continue</strong>, you agree to the
+                    ClickAlgo Xen
+                    <a href="https://ai.clickalgo.com/terms.html"
+                        target="_blank" rel="noopener noreferrer">Credit Terms</a>.
+                    <br>
+                    Unused credits are refundable within 14 days. See our
+                    <a href="https://ai.clickalgo.com/refunds.html"
+                        target="_blank" rel="noopener noreferrer">Refund Policy</a>.
+                </p>
+                <p></p>
+
+                <!--<p class="stripe-assurance">
+                    <span>Secure payment powered by</span>
+                    <img src="https://ai.clickalgo.com/images/stripe-logo.png"
+                        alt="Stripe">
+                </p>-->
+
+                <aside class="payment-help">
+                    <span>
+                        Payment problem? Contact
+                        <a href="mailto:xen@clickalgo.com">xen@clickalgo.com</a>.
+                    </span>
+                </aside>
+            </div>
         </section>
     </main>
 

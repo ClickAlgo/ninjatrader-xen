@@ -157,6 +157,7 @@ public sealed class FreeTrialService(
                     connection,
                     transaction,
                     subscriberId,
+                    deviceHash,
                     cancellationToken))
             {
                 await transaction.RollbackAsync(cancellationToken);
@@ -205,6 +206,40 @@ public sealed class FreeTrialService(
                     await transaction.RollbackAsync(cancellationToken);
                     return new FreeTrialResult(false, null);
                 }
+            }
+
+            await using (var grantCommand = new SqlCommand("""
+                INSERT INTO dbo.FreeTrialGrants
+                (
+                    SubscriberId,
+                    DeviceHash,
+                    IpPrefix,
+                    GrantedUtc
+                )
+                VALUES
+                (
+                    @SubscriberId,
+                    @DeviceHash,
+                    @IpPrefix,
+                    SYSUTCDATETIME()
+                );
+                """, connection, transaction))
+            {
+                grantCommand.Parameters.Add(
+                    "@SubscriberId",
+                    SqlDbType.Int).Value = subscriberId;
+                grantCommand.Parameters.Add(
+                    "@DeviceHash",
+                    SqlDbType.NVarChar,
+                    128).Value = deviceHash;
+                grantCommand.Parameters.Add(
+                    "@IpPrefix",
+                    SqlDbType.NVarChar,
+                    128).Value =
+                        CreateIpPrefix(registrationIp) is { } ipPrefix
+                            ? ipPrefix
+                            : DBNull.Value;
+                await grantCommand.ExecuteNonQueryAsync(cancellationToken);
             }
 
             DateTime expiresUtc;
@@ -289,17 +324,37 @@ public sealed class FreeTrialService(
         SqlConnection connection,
         SqlTransaction transaction,
         int subscriberId,
+        string deviceHash,
         CancellationToken cancellationToken)
     {
         await using var command = new SqlCommand("""
-            SELECT COUNT(1)
-            FROM dbo.CreditPurchases WITH (UPDLOCK, HOLDLOCK)
-            WHERE SubscriberId = @SubscriberId
-              AND CreditType = 'Trial';
+            SELECT
+                CASE
+                    WHEN EXISTS
+                    (
+                        SELECT 1
+                        FROM dbo.CreditPurchases WITH (UPDLOCK, HOLDLOCK)
+                        WHERE SubscriberId = @SubscriberId
+                          AND CreditType = 'Trial'
+                    )
+                    OR EXISTS
+                    (
+                        SELECT 1
+                        FROM dbo.FreeTrialGrants WITH (UPDLOCK, HOLDLOCK)
+                        WHERE SubscriberId = @SubscriberId
+                           OR DeviceHash = @DeviceHash
+                    )
+                    THEN 1
+                    ELSE 0
+                END;
             """, connection, transaction);
         command.Parameters.Add(
             "@SubscriberId",
             SqlDbType.Int).Value = subscriberId;
+        command.Parameters.Add(
+            "@DeviceHash",
+            SqlDbType.NVarChar,
+            128).Value = deviceHash;
         return Convert.ToInt32(
             await command.ExecuteScalarAsync(cancellationToken)) > 0;
     }
@@ -436,4 +491,26 @@ public sealed class FreeTrialService(
     private static bool IsUsableIp(string? value) =>
         !string.IsNullOrWhiteSpace(value) &&
         !string.Equals(value, "unknown", StringComparison.OrdinalIgnoreCase);
+
+    private static string? CreateIpPrefix(string? value)
+    {
+        var sanitized = SanitizeIp(value);
+        if (string.IsNullOrWhiteSpace(sanitized) ||
+            !IPAddress.TryParse(sanitized, out var address))
+        {
+            return null;
+        }
+
+        var bytes = address.GetAddressBytes();
+        if (address.AddressFamily == AddressFamily.InterNetwork)
+            return $"{bytes[0]}.{bytes[1]}.{bytes[2]}.0/24";
+
+        if (address.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            Array.Clear(bytes, 8, 8);
+            return $"{new IPAddress(bytes)}/64";
+        }
+
+        return null;
+    }
 }

@@ -14,5 +14,8 @@ or additional signals unless requested.
 Use managed order methods unless the user explicitly requests unmanaged order
 handling. Configure SetStopLoss, SetProfitTarget and related managed protection
 at the correct lifecycle stage and update dynamic protection safely when needed.
+Never call these Set methods from State.SetDefaults. Put their configurable
+input defaults in State.SetDefaults, then call static SetStopLoss,
+SetProfitTarget, SetTrailStop or SetParabolicStop methods from State.Configure.
 
 Return the complete Strategy source file, not a fragment or diff.

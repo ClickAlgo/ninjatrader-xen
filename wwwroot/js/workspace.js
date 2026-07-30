@@ -490,7 +490,12 @@ function appendRagDebug(message, debug) {
     element.textContent = debug.used
         ? `Knowledge match: ${debug.title} · Confidence ${confidence}%`
         : `Knowledge match not used: ${debug.title} · Confidence ${confidence}%`;
-    message.appendChild(element);
+    const content = message.querySelector(".message-content");
+    const responseActions = content?.querySelector(".response-code-actions");
+    if (content && responseActions)
+        content.insertBefore(element, responseActions);
+    else
+        message.appendChild(element);
 }
 
 function scrollMessagesToBottom() {
@@ -510,15 +515,25 @@ function renderStructuredResponse(container, source) {
     const fencePattern = /```(?:csharp|cs)?\s*([\s\S]*?)```/gi;
     let cursor = 0;
     let match;
+    const generatedCode = [];
 
     while ((match = fencePattern.exec(source)) !== null) {
         appendProse(container, source.slice(cursor, match.index));
-        appendCodeBlock(container, match[1].trim());
+        const code = match[1].trim();
+        appendCodeBlock(container, code);
+        generatedCode.push(code);
         cursor = match.index + match[0].length;
     }
 
     appendProse(container, source.slice(cursor));
     decorateRequirementsMatch(container, source);
+    if (generatedCode.length) {
+        const primaryCode = generatedCode.reduce(
+            (longest, code) =>
+                code.length > longest.length ? code : longest,
+            "");
+        appendResponseCodeActions(container, primaryCode);
+    }
 }
 
 function renderPreflightBuildReport(container, source) {
@@ -905,47 +920,13 @@ function appendCodeBlock(
     const language = document.createElement("span");
     language.textContent = languageLabel;
 
-    const actions = document.createElement("div");
-    actions.className = "code-actions";
-
-    const copyButton = document.createElement("button");
-    copyButton.type = "button";
-    copyButton.className = "code-action";
-    copyButton.textContent = "Copy";
-    copyButton.addEventListener("click", async () => {
-        await navigator.clipboard.writeText(code);
-        copyButton.textContent = "Copied";
-        setTimeout(() => copyButton.textContent = "Copy", 1200);
-    });
-
-    const downloadButton = document.createElement("button");
-    downloadButton.type = "button";
-    downloadButton.className = "code-action";
-    downloadButton.textContent = "Download .cs";
-    downloadButton.addEventListener("click", () => downloadCode(code));
-
-    actions.append(copyButton);
-    if (includeDownload) {
-        actions.append(downloadButton);
-        const buildButton = document.createElement("button");
-        buildButton.type = "button";
-        buildButton.className = "code-action preflight-build-button";
-        buildButton.textContent = "Build check";
-        buildButton.addEventListener(
-            "click",
-            () => runPreflightBuild(code, buildButton));
-        actions.append(buildButton);
-
-        const verifyButton = document.createElement("button");
-        verifyButton.type = "button";
-        verifyButton.className = "code-action verify-requirements-button";
-        verifyButton.textContent = "Verify requirements";
-        verifyButton.addEventListener(
-            "click",
-            () => openRequirementsValidation(code));
-        actions.append(verifyButton);
+    toolbar.appendChild(language);
+    if (!includeDownload) {
+        const actions = document.createElement("div");
+        actions.className = "code-actions";
+        actions.appendChild(createCopyCodeButton(code));
+        toolbar.appendChild(actions);
     }
-    toolbar.append(language, actions);
 
     const pre = document.createElement("pre");
     const codeElement = document.createElement("code");
@@ -955,6 +936,55 @@ function appendCodeBlock(
 
     wrapper.append(toolbar, pre);
     container.appendChild(wrapper);
+}
+
+function createCopyCodeButton(code) {
+    const copyButton = document.createElement("button");
+    copyButton.type = "button";
+    copyButton.className = "code-action";
+    copyButton.textContent = "Copy";
+    copyButton.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(code);
+        copyButton.textContent = "Copied";
+        setTimeout(() => copyButton.textContent = "Copy", 1200);
+    });
+    return copyButton;
+}
+
+function appendResponseCodeActions(container, code) {
+    const actions = document.createElement("div");
+    actions.className = "code-actions response-code-actions";
+    actions.setAttribute("role", "group");
+    actions.setAttribute("aria-label", "Generated code actions");
+
+    const downloadButton = document.createElement("button");
+    downloadButton.type = "button";
+    downloadButton.className = "code-action";
+    downloadButton.textContent = "Download .cs";
+    downloadButton.addEventListener("click", () => downloadCode(code));
+
+    const buildButton = document.createElement("button");
+    buildButton.type = "button";
+    buildButton.className = "code-action preflight-build-button";
+    buildButton.textContent = "Build check";
+    buildButton.addEventListener(
+        "click",
+        () => runPreflightBuild(code, buildButton));
+
+    const verifyButton = document.createElement("button");
+    verifyButton.type = "button";
+    verifyButton.className = "code-action verify-requirements-button";
+    verifyButton.textContent = "Verify requirements";
+    verifyButton.addEventListener(
+        "click",
+        () => openRequirementsValidation(code));
+
+    actions.append(
+        createCopyCodeButton(code),
+        downloadButton,
+        buildButton,
+        verifyButton);
+    container.appendChild(actions);
 }
 
 async function runPreflightBuild(code, button) {
@@ -2718,29 +2748,78 @@ async function exportProject(project) {
 
         const savedProject = await response.json();
         const taskName = taskNames[savedProject.task] || savedProject.task;
-        const exported = [
-            `# ${savedProject.title}`,
-            "",
-            `Task: ${taskName}`,
-            `Exported: ${new Date().toLocaleString()}`,
-            ""
-        ];
+        const messages = (savedProject.messages || []).map(turn => {
+            const speaker = turn.role === "user" ? "You" : "Xen";
+            const roleClass = turn.role === "user" ? "user" : "xen";
+            return `
+                <article class="message ${roleClass}">
+                    <h2>${speaker}</h2>
+                    <pre>${escapeHtml(turn.content?.trim() || "")}</pre>
+                </article>`;
+        }).join("");
 
-        for (const turn of savedProject.messages || []) {
-            exported.push(
-                `## ${turn.role === "user" ? "You" : "Xen"}`,
-                "",
-                turn.content?.trim() || "",
-                "");
+        const exported = `<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(savedProject.title)} - Xen conversation</title>
+    <style>
+        :root { color-scheme: dark; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: #101010;
+            color: #e7e7e7;
+            font: 15px/1.65 Arial, sans-serif;
         }
+        main { width: min(960px, calc(100% - 32px)); margin: 40px auto; }
+        header { border-bottom: 1px solid #353535; padding-bottom: 24px; }
+        h1 { margin: 0 0 8px; font-size: 28px; }
+        .meta { margin: 0; color: #aaa; }
+        .message { border-bottom: 1px solid #2c2c2c; padding: 24px 0; }
+        .message h2 {
+            margin: 0 0 10px;
+            color: #ff4b2b;
+            font-size: 12px;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+        }
+        .message.user h2 { color: #8cced7; }
+        pre {
+            margin: 0;
+            color: inherit;
+            font: inherit;
+            overflow-wrap: anywhere;
+            white-space: pre-wrap;
+        }
+        @media print {
+            :root { color-scheme: light; }
+            body { background: #fff; color: #111; }
+            main { width: 100%; margin: 0; }
+            .message, header { border-color: #ccc; }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <header>
+            <h1>${escapeHtml(savedProject.title)}</h1>
+            <p class="meta">Task: ${escapeHtml(taskName)}<br>
+                Exported: ${escapeHtml(new Date().toLocaleString())}</p>
+        </header>
+        ${messages || '<p class="message">No conversation messages were saved.</p>'}
+    </main>
+</body>
+</html>`;
 
         const blob = new Blob(
-            [exported.join("\n")],
-            { type: "text/markdown;charset=utf-8" });
+            [exported],
+            { type: "text/html;charset=utf-8" });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
         link.download =
-            `${safeExportFileName(savedProject.title)}-conversation.md`;
+            `${safeExportFileName(savedProject.title)}-conversation.html`;
         document.body.appendChild(link);
         link.click();
         link.remove();

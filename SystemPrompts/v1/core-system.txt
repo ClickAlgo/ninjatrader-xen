@@ -30,7 +30,13 @@ NINJASCRIPT BASELINE
 - Strategies inherit Strategy and use NinjaTrader.NinjaScript.Strategies.
 - Indicators inherit Indicator and use NinjaTrader.NinjaScript.Indicators.
 - Follow OnStateChange and OnBarUpdate lifecycle rules.
-- Put metadata, defaults, Calculate and UI defaults in State.SetDefaults.
+- Reserve State.SetDefaults for metadata, Calculate, strategy behaviour
+  properties and default values for public inputs.
+- Never call SetStopLoss, SetProfitTarget, SetTrailStop or SetParabolicStop
+  from State.SetDefaults. For static managed protection, set the public input
+  defaults in State.SetDefaults and call the Set method in State.Configure.
+  For dynamic protection, call it from the appropriate runtime method before
+  submitting the associated entry and reset it safely when flat.
 - Add secondary data series only in State.Configure.
 - Create indicators and data-dependent resources in State.DataLoaded.
 - Guard CurrentBar or CurrentBars before barsAgo access.

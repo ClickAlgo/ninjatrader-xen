@@ -73,6 +73,7 @@ public sealed partial class NinjaTraderPreflightCompiler
         string? buildDirectory = null;
         try
         {
+            var lifecycleErrors = FindLifecycleErrors(source);
             var options = _options.CurrentValue;
             var tempRoot = Path.GetFullPath(options.TempRoot);
             Directory.CreateDirectory(tempRoot);
@@ -160,6 +161,14 @@ public sealed partial class NinjaTraderPreflightCompiler
                 await standardOutput + Environment.NewLine + await standardError;
             if (process.ExitCode == 0)
             {
+                if (lifecycleErrors.Count > 0)
+                {
+                    return new PreflightBuildResult(
+                        false,
+                        lifecycleErrors,
+                        timer.ElapsedMilliseconds);
+                }
+
                 return new PreflightBuildResult(
                     true,
                     [],
@@ -167,6 +176,7 @@ public sealed partial class NinjaTraderPreflightCompiler
             }
 
             var errors = ParseErrors(combinedOutput);
+            errors.InsertRange(0, lifecycleErrors);
             if (errors.Count == 0)
             {
                 errors.Add(new PreflightBuildError(
@@ -313,6 +323,191 @@ public sealed partial class NinjaTraderPreflightCompiler
     private static string CleanMessage(string message) =>
         ProjectSuffixPattern().Replace(message.Trim(), string.Empty).Trim();
 
+    private static List<PreflightBuildError> FindLifecycleErrors(
+        string source)
+    {
+        var errors = new List<PreflightBuildError>();
+        var masked = MaskCommentsAndStrings(source);
+        foreach (Match stateMatch in SetDefaultsBlockPattern().Matches(masked))
+        {
+            var openBrace = masked.IndexOf('{', stateMatch.Index);
+            if (openBrace < 0)
+                continue;
+
+            var closeBrace = FindMatchingBrace(masked, openBrace);
+            if (closeBrace < 0)
+                continue;
+
+            var block = masked[
+                (openBrace + 1)..closeBrace];
+            foreach (Match methodMatch in
+                ManagedProtectionMethodPattern().Matches(block))
+            {
+                var sourceIndex =
+                    openBrace + 1 + methodMatch.Index;
+                var method = methodMatch.Groups["method"].Value;
+                errors.Add(new PreflightBuildError(
+                    "SubmittedNinjaScript.cs",
+                    LineNumber(source, sourceIndex),
+                    null,
+                    "NTX1001",
+                    $"{method} cannot be called from State.SetDefaults. " +
+                    "Move static managed protection configuration to State.Configure; " +
+                    "dynamic protection must be set before its associated entry order."));
+            }
+        }
+
+        return errors;
+    }
+
+    private static int FindMatchingBrace(string source, int openBrace)
+    {
+        var depth = 0;
+        for (var index = openBrace; index < source.Length; index++)
+        {
+            if (source[index] == '{')
+                depth++;
+            else if (source[index] == '}' && --depth == 0)
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static int LineNumber(string source, int index)
+    {
+        var line = 1;
+        for (var position = 0;
+             position < index && position < source.Length;
+             position++)
+        {
+            if (source[position] == '\n')
+                line++;
+        }
+        return line;
+    }
+
+    private static string MaskCommentsAndStrings(string source)
+    {
+        var masked = source.ToCharArray();
+        var index = 0;
+        while (index < source.Length)
+        {
+            if (index + 1 < source.Length &&
+                source[index] == '/' &&
+                source[index + 1] == '/')
+            {
+                Mask(masked, index, 2);
+                index += 2;
+                while (index < source.Length && source[index] != '\n')
+                    masked[index++] = ' ';
+                continue;
+            }
+
+            if (index + 1 < source.Length &&
+                source[index] == '/' &&
+                source[index + 1] == '*')
+            {
+                Mask(masked, index, 2);
+                index += 2;
+                while (index < source.Length)
+                {
+                    if (index + 1 < source.Length &&
+                        source[index] == '*' &&
+                        source[index + 1] == '/')
+                    {
+                        Mask(masked, index, 2);
+                        index += 2;
+                        break;
+                    }
+                    if (source[index] != '\n' && source[index] != '\r')
+                        masked[index] = ' ';
+                    index++;
+                }
+                continue;
+            }
+
+            var verbatim =
+                index + 1 < source.Length &&
+                source[index] == '@' &&
+                source[index + 1] == '"';
+            if (verbatim || source[index] == '"')
+            {
+                if (verbatim)
+                {
+                    masked[index++] = ' ';
+                }
+                masked[index++] = ' ';
+                while (index < source.Length)
+                {
+                    if (source[index] == '"' &&
+                        verbatim &&
+                        index + 1 < source.Length &&
+                        source[index + 1] == '"')
+                    {
+                        Mask(masked, index, 2);
+                        index += 2;
+                        continue;
+                    }
+                    if (source[index] == '"')
+                    {
+                        masked[index++] = ' ';
+                        break;
+                    }
+                    if (!verbatim &&
+                        source[index] == '\\' &&
+                        index + 1 < source.Length)
+                    {
+                        Mask(masked, index, 2);
+                        index += 2;
+                        continue;
+                    }
+                    if (source[index] != '\n' && source[index] != '\r')
+                        masked[index] = ' ';
+                    index++;
+                }
+                continue;
+            }
+
+            if (source[index] == '\'')
+            {
+                masked[index++] = ' ';
+                while (index < source.Length)
+                {
+                    if (source[index] == '\\' &&
+                        index + 1 < source.Length)
+                    {
+                        Mask(masked, index, 2);
+                        index += 2;
+                        continue;
+                    }
+                    var character = source[index];
+                    masked[index++] = character is '\n' or '\r'
+                        ? character
+                        : ' ';
+                    if (character == '\'')
+                        break;
+                }
+                continue;
+            }
+
+            index++;
+        }
+
+        return new string(masked);
+    }
+
+    private static void Mask(char[] text, int start, int length)
+    {
+        for (var index = start;
+             index < start + length && index < text.Length;
+             index++)
+        {
+            if (text[index] != '\n' && text[index] != '\r')
+                text[index] = ' ';
+        }
+    }
+
     private static void TryKill(Process process)
     {
         try
@@ -353,4 +548,14 @@ public sealed partial class NinjaTraderPreflightCompiler
 
     [GeneratedRegex(@"\s+\[[^\]]+\.csproj\]\s*$")]
     private static partial Regex ProjectSuffixPattern();
+
+    [GeneratedRegex(
+        @"if\s*\(\s*State\s*==\s*State\.SetDefaults\s*\)\s*\{",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex SetDefaultsBlockPattern();
+
+    [GeneratedRegex(
+        @"\b(?<method>SetStopLoss|SetProfitTarget|SetTrailStop|SetParabolicStop)\s*\(",
+        RegexOptions.IgnoreCase)]
+    private static partial Regex ManagedProtectionMethodPattern();
 }
