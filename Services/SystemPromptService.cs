@@ -27,7 +27,9 @@ public sealed class SystemPromptService
             ["convert-strategy"] =
                 ReadPrompt(promptRoot, "convert-strategy.txt"),
             ["convert-indicator"] =
-                ReadPrompt(promptRoot, "convert-indicator.txt")
+                ReadPrompt(promptRoot, "convert-indicator.txt"),
+            ["analyse-backtest"] =
+                ReadPrompt(promptRoot, "analyse-backtest.txt")
         };
     }
 
@@ -36,6 +38,13 @@ public sealed class SystemPromptService
         if (!_taskPrompts.TryGetValue(task, out var taskPrompt))
             throw new InvalidOperationException(
                 $"No system prompt is configured for task '{task}'.");
+
+        if (task.Equals(
+                "analyse-backtest",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return taskPrompt;
+        }
 
         return $"{_corePrompt}\n\n{taskPrompt}";
     }

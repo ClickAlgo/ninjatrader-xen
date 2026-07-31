@@ -18,7 +18,8 @@ public static class ChatEndpoints
             "existing-strategy",
             "existing-indicator",
             "convert-strategy",
-            "convert-indicator"
+            "convert-indicator",
+            "analyse-backtest"
         };
 
     private static readonly HashSet<string> AllowedModels =
@@ -142,14 +143,20 @@ public static class ChatEndpoints
             return;
         }
 
-        var ragCategory = request.Task is
-            "build-strategy" or "existing-strategy" or "convert-strategy"
-                ? "Strategy"
-                : "Indicator";
-        var rag = await knowledgeRetriever.RetrieveAsync(
-            request.Prompt,
-            ragCategory,
-            context.RequestAborted);
+        RagRetrieval? rag = null;
+        if (!request.Task.Equals(
+                "analyse-backtest",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            var ragCategory = request.Task is
+                "build-strategy" or "existing-strategy" or "convert-strategy"
+                    ? "Strategy"
+                    : "Indicator";
+            rag = await knowledgeRetriever.RetrieveAsync(
+                request.Prompt,
+                ragCategory,
+                context.RequestAborted);
+        }
         var systemPrompt = systemPrompts.Build(request.Task);
         if (rag is not null && rag.Confident)
             systemPrompt += knowledgeRetriever.BuildSystemContext(rag);

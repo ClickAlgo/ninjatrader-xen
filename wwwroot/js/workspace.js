@@ -8,7 +8,8 @@ const taskNames = {
     "existing-strategy": "Existing Strategy",
     "existing-indicator": "Existing Indicator",
     "convert-strategy": "Convert Strategy",
-    "convert-indicator": "Convert Indicator"
+    "convert-indicator": "Convert Indicator",
+    "analyse-backtest": "Analyse Backtest"
 };
 
 const taskPlaceholders = {
@@ -17,7 +18,8 @@ const taskPlaceholders = {
     "existing-strategy": "Paste your strategy code and describe the changes…",
     "existing-indicator": "Paste your indicator code and describe the changes…",
     "convert-strategy": "Paste strategy source from another platform or upload a file…",
-    "convert-indicator": "Paste indicator source from another platform or upload a file…"
+    "convert-indicator": "Paste indicator source from another platform or upload a file…",
+    "analyse-backtest": "Add the instrument, timeframe and any test context…"
 };
 
 let activeTask = "build-strategy";
@@ -29,6 +31,7 @@ let currentController = null;
 let currentBalanceGbp = null;
 let promptQualityChecked = false;
 let pendingImage = null;
+let pendingAnalyzerExports = [];
 let acceptedModelSelection = "";
 let preflightBuilding = false;
 
@@ -77,6 +80,8 @@ const sourceImport = document.getElementById("sourceImport");
 const sourceFileInput = document.getElementById("sourceFileInput");
 const sourceFileButton = document.getElementById("sourceFileButton");
 const sourceFileStatus = document.getElementById("sourceFileStatus");
+const analyzerAttachments =
+    document.getElementById("analyzerAttachments");
 const imageImport = document.getElementById("imageImport");
 const imageFileInput = document.getElementById("imageFileInput");
 const imageFileButton = document.getElementById("imageFileButton");
@@ -247,6 +252,28 @@ form.addEventListener("submit", async event => {
     if (!prompt)
         return;
 
+    const requestAnalyzerExports =
+        activeTask === "analyse-backtest"
+            ? pendingAnalyzerExports.map(item => ({ ...item }))
+            : [];
+    if (activeTask === "analyse-backtest" &&
+        !requestAnalyzerExports.length &&
+        !hasAnalyzerExportInHistory()) {
+        status.textContent =
+            "Upload the Strategy Analyzer Summary CSV first";
+        sourceFileButton.focus();
+        return;
+    }
+    if (requestAnalyzerExports.length &&
+        !requestAnalyzerExports.some(item => item.summary)) {
+        status.textContent =
+            "A Strategy Analyzer Summary CSV is required";
+        sourceFileButton.focus();
+        return;
+    }
+    if (requestAnalyzerExports.length)
+        prompt = buildAnalyzerRequest(prompt, requestAnalyzerExports);
+
     const reviewedPrompt = await reviewInitialBuildPrompt(prompt);
     if (!reviewedPrompt)
         return;
@@ -255,7 +282,10 @@ form.addEventListener("submit", async event => {
     const createdProjectForRequest = !currentProjectId;
     if (createdProjectForRequest) {
         currentProjectId = crypto.randomUUID();
-        currentProjectTitle = createProjectTitle(prompt);
+        currentProjectTitle = createProjectTitle(
+            isAnalyzerRequest(prompt)
+                ? "Analyse Strategy Analyzer results"
+                : prompt);
         updateProjectTitle();
     }
 
@@ -268,6 +298,7 @@ form.addEventListener("submit", async event => {
     markBuildPlanPromptSent(prompt);
     promptInput.value = "";
     clearPendingImage();
+    clearAnalyzerExports();
     updateClearInputButton();
 
     const assistantMessage = addMessage("assistant", "");
@@ -278,7 +309,9 @@ form.addEventListener("submit", async event => {
             <span class="working-dot"></span>
             <span class="working-dot"></span>
             <span class="working-dot"></span>
-            <strong>Xen is generating your NinjaScript…</strong>
+            <strong>${activeTask === "analyse-backtest"
+                ? "Xen is analysing your backtest…"
+                : "Xen is generating your NinjaScript…"}</strong>
         </div>
     `;
 
@@ -381,7 +414,16 @@ form.addEventListener("submit", async event => {
             history = previousHistory;
             userMessage.remove();
             assistantMessage.remove();
-            promptInput.value = prompt;
+            promptInput.value = activeTask === "analyse-backtest"
+                ? analyzerContextFromRequest(prompt)
+                : prompt;
+            if (requestAnalyzerExports.length) {
+                pendingAnalyzerExports = requestAnalyzerExports;
+                renderAnalyzerAttachments();
+                sourceFileStatus.textContent =
+                    `${requestAnalyzerExports.length} file${
+                        requestAnalyzerExports.length === 1 ? "" : "s"} ready`;
+            }
             if (requestImage)
                 setPendingImage(requestImage);
             updateClearInputButton();
@@ -620,9 +662,70 @@ function renderPreflightBuildReport(container, source) {
         : "The source was not executed. Repair these errors, then run the build check again.";
     container.appendChild(reminder);
 
-    if (!passed && diagnostics.length)
+    if (!passed && diagnostics.length) {
         appendPreflightRepairActions(container, diagnostics);
+    }
     normalizePreflightRepairActions();
+}
+
+async function downloadNinjaTraderAddon(code, button) {
+    if (button.disabled)
+        return;
+
+    const originalLabel = button.textContent;
+    button.disabled = true;
+    button.textContent = "Preparing Add-On...";
+    status.textContent = "Creating NinjaTrader Add-On...";
+
+    try {
+        const response = await fetch("/api/preflight/addon", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                code,
+                task: activeTask
+            })
+        });
+
+        if (response.status === 401) {
+            sessionStorage.removeItem("nx_access_token");
+            location.replace("/login.html");
+            return;
+        }
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(
+                error.message ||
+                "The NinjaTrader Add-On could not be created.");
+        }
+
+        const blob = await response.blob();
+        const disposition =
+            response.headers.get("Content-Disposition") || "";
+        const encodedName = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+        const quotedName = disposition.match(/filename="?([^";]+)"?/i);
+        const fileName = encodedName
+            ? decodeURIComponent(encodedName[1])
+            : quotedName?.[1] || "NinjaTrader-Xen-Addon.zip";
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(link.href);
+        status.textContent = "NinjaTrader Add-On downloaded";
+    } catch (error) {
+        status.textContent =
+            error.message || "The NinjaTrader Add-On download failed.";
+    } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+    }
 }
 
 function appendPreflightRepairActions(container, errors) {
@@ -762,6 +865,11 @@ function renderUserMessage(container, source) {
     if (!text)
         return;
 
+    if (isAnalyzerRequest(text)) {
+        renderAnalyzerUserMessage(container, text);
+        return;
+    }
+
     const fencePattern = /```([A-Za-z0-9+#._-]*)[ \t]*\n?([\s\S]*?)```/g;
     let cursor = 0;
     let match;
@@ -858,7 +966,8 @@ function sourceLanguageLabel(language) {
         mq5: "MQL5 source",
         mql4: "MQL4 source",
         mql5: "MQL5 source",
-        pine: "Pine Script source"
+        pine: "Pine Script source",
+        csv: "Strategy Analyzer CSV"
     };
     return labels[value] || "Source code";
 }
@@ -881,7 +990,7 @@ function appendProse(container, text) {
         if (heading) {
             const element = document.createElement(
                 heading[1].length === 1 ? "h2" : "h3");
-            element.textContent = heading[2];
+            appendInlineFormatting(element, heading[2]);
             container.appendChild(element);
             list = null;
             continue;
@@ -894,15 +1003,54 @@ function appendProse(container, text) {
                 container.appendChild(list);
             }
             const item = document.createElement("li");
-            item.textContent = bullet[1];
+            appendInlineFormatting(item, bullet[1]);
             list.appendChild(item);
             continue;
         }
 
         const paragraph = document.createElement("p");
-        paragraph.textContent = line.replace(/\*\*(.*?)\*\*/g, "$1");
+        appendInlineFormatting(paragraph, line);
         container.appendChild(paragraph);
         list = null;
+    }
+}
+
+function appendInlineFormatting(container, text) {
+    const pattern =
+        /(\*\*[^*\n]+?\*\*|`[^`\n]+?`|<code>[^<\n]*?<\/code>|<strong>[^<\n]*?<\/strong>)/gi;
+    let cursor = 0;
+    let match;
+
+    while ((match = pattern.exec(text)) !== null) {
+        if (match.index > cursor) {
+            container.appendChild(
+                document.createTextNode(text.slice(cursor, match.index)));
+        }
+
+        const token = match[0];
+        if (token.startsWith("**")) {
+            const strong = document.createElement("strong");
+            strong.textContent = token.slice(2, -2);
+            container.appendChild(strong);
+        } else if (/^<strong>/i.test(token)) {
+            const strong = document.createElement("strong");
+            strong.textContent = token.slice(8, -9);
+            container.appendChild(strong);
+        } else {
+            const code = document.createElement("code");
+            code.className = "inline-code";
+            code.textContent = token.startsWith("`")
+                ? token.slice(1, -1)
+                : token.slice(6, -7);
+            container.appendChild(code);
+        }
+
+        cursor = match.index + token.length;
+    }
+
+    if (cursor < text.length) {
+        container.appendChild(
+            document.createTextNode(text.slice(cursor)));
     }
 }
 
@@ -930,8 +1078,15 @@ function appendCodeBlock(
 
     const pre = document.createElement("pre");
     const codeElement = document.createElement("code");
-    codeElement.className = "language-csharp";
-    codeElement.innerHTML = highlightCSharp(code);
+    const isCSharp =
+        languageLabel.includes("C#") ||
+        languageLabel.includes("NinjaScript");
+    if (isCSharp) {
+        codeElement.className = "language-csharp";
+        codeElement.innerHTML = highlightCSharp(code);
+    } else {
+        codeElement.textContent = code;
+    }
     pre.appendChild(codeElement);
 
     wrapper.append(toolbar, pre);
@@ -963,13 +1118,45 @@ function appendResponseCodeActions(container, code) {
     downloadButton.textContent = "Download .cs";
     downloadButton.addEventListener("click", () => downloadCode(code));
 
+    const addonButton = document.createElement("button");
+    addonButton.type = "button";
+    addonButton.className = "code-action addon-download-button";
+    addonButton.textContent = "Download Add-On";
+
     const buildButton = document.createElement("button");
     buildButton.type = "button";
     buildButton.className = "code-action preflight-build-button";
     buildButton.textContent = "Build check";
-    buildButton.addEventListener(
-        "click",
-        () => runPreflightBuild(code, buildButton));
+
+    const addonNotice = document.createElement("div");
+    addonNotice.className = "addon-build-notice";
+    addonNotice.setAttribute("role", "alert");
+    addonNotice.hidden = true;
+
+    buildButton.addEventListener("click", () => {
+        addonNotice.hidden = true;
+        addonNotice.textContent = "";
+        runPreflightBuild(code, buildButton);
+    });
+    addonButton.addEventListener("click", () => {
+        if (hasSuccessfulBuildForCode(code)) {
+            addonNotice.hidden = true;
+            addonNotice.textContent = "";
+            downloadNinjaTraderAddon(code, addonButton);
+            return;
+        }
+
+        addonNotice.textContent =
+            "Run Build Check successfully before downloading the Add-On.";
+        addonNotice.hidden = false;
+        buildButton.classList.remove("needs-build-check");
+        void buildButton.offsetWidth;
+        buildButton.classList.add("needs-build-check");
+        buildButton.focus();
+        window.setTimeout(
+            () => buildButton.classList.remove("needs-build-check"),
+            1800);
+    });
 
     const verifyButton = document.createElement("button");
     verifyButton.type = "button";
@@ -982,9 +1169,45 @@ function appendResponseCodeActions(container, code) {
     actions.append(
         createCopyCodeButton(code),
         downloadButton,
+        addonButton,
         buildButton,
         verifyButton);
-    container.appendChild(actions);
+    container.append(actions, addonNotice);
+}
+
+function hasSuccessfulBuildForCode(code) {
+    const expected = code.trim();
+    let sourceIndex = -1;
+
+    for (let index = history.length - 1; index >= 0; index--) {
+        const turn = history[index];
+        if (turn.role !== "assistant")
+            continue;
+        const blocks = [...(turn.content || "").matchAll(
+            /```(?:csharp|cs)?\s*([\s\S]*?)```/gi)];
+        if (blocks.some(block => block[1].trim() === expected)) {
+            sourceIndex = index;
+            break;
+        }
+    }
+
+    if (sourceIndex < 0)
+        return false;
+
+    let passed = null;
+    for (let index = sourceIndex + 1; index < history.length; index++) {
+        const turn = history[index];
+        if (turn.role !== "assistant")
+            continue;
+        if (/```(?:csharp|cs)?\s*[\s\S]*?```/i.test(turn.content || ""))
+            break;
+        if (!/^# NinjaTrader (?:Preflight Build|Build Check)\b/im.test(
+                turn.content || ""))
+            continue;
+        passed = /^## Build passed\b/im.test(turn.content || "");
+    }
+
+    return passed === true;
 }
 
 async function runPreflightBuild(code, button) {
@@ -992,7 +1215,10 @@ async function runPreflightBuild(code, button) {
         return;
 
     preflightBuilding = true;
+    button.classList.remove("needs-build-check");
     button.disabled = true;
+    button.classList.add("is-checking");
+    button.setAttribute("aria-busy", "true");
     button.textContent = "Checking build...";
     status.textContent = "Running NinjaTrader build check...";
 
@@ -1032,6 +1258,8 @@ async function runPreflightBuild(code, button) {
     } finally {
         preflightBuilding = false;
         button.disabled = false;
+        button.classList.remove("is-checking");
+        button.removeAttribute("aria-busy");
         button.textContent = "Build check";
     }
 }
@@ -1197,7 +1425,8 @@ function taskIntro(task) {
         "existing-strategy": "Paste the complete strategy source and explain exactly what should change.",
         "existing-indicator": "Paste the complete indicator source and explain exactly what should change.",
         "convert-strategy": "Paste the complete strategy source from another platform, or upload a source file. Xen will convert it into a NinjaTrader 8 Strategy.",
-        "convert-indicator": "Paste the complete indicator source from another platform, or upload a source file. Xen will convert it into a NinjaTrader 8 Indicator."
+        "convert-indicator": "Paste the complete indicator source from another platform, or upload a source file. Xen will convert it into a NinjaTrader 8 Indicator.",
+        "analyse-backtest": "Upload a NinjaTrader Strategy Analyzer Summary CSV. You can also include a Trades CSV for deeper analysis."
     };
     return intros[task];
 }
@@ -1208,6 +1437,7 @@ function startNewProject(resetTask = true) {
     history = [];
     promptQualityChecked = false;
     promptInput.value = "";
+    clearAnalyzerExports(false);
     updateClearInputButton();
 
     if (resetTask) {
@@ -1230,7 +1460,9 @@ function updateClearInputButton() {
     clearInputButton.hidden =
         generating ||
         promptInput.disabled ||
-        (!promptInput.value.trim() && !pendingImage);
+        (!promptInput.value.trim() &&
+            !pendingImage &&
+            !pendingAnalyzerExports.length);
 }
 
 function clearComposerInput() {
@@ -1238,6 +1470,7 @@ function clearComposerInput() {
         return;
 
     promptInput.value = "";
+    clearAnalyzerExports(false);
     updateTaskSpecificUi();
     updateClearInputButton();
     status.textContent = "Ready";
@@ -1265,14 +1498,23 @@ function updateTaskSpecificUi() {
             button: "Upload indicator file",
             status: "or paste the complete NinjaScript Indicator below",
             accept: ".cs,.txt,text/plain"
+        },
+        "analyse-backtest": {
+            button: "Upload Analyzer CSV",
+            status: "Summary CSV required · Trades CSV optional",
+            accept: ".csv,text/csv"
         }
     };
     const options = uploadTasks[activeTask];
     sourceImport.hidden = !options;
     sourceFileInput.value = "";
     sourceFileInput.accept = options?.accept || "";
+    sourceFileInput.multiple = activeTask === "analyse-backtest";
     sourceFileButton.textContent = options?.button || "Upload source file";
     sourceFileStatus.textContent = options?.status || "";
+    sendButton.querySelector(".send-label").textContent =
+        activeTask === "analyse-backtest" ? "Analyse results" : "Send";
+    renderAnalyzerAttachments();
     pendingImage = null;
     imageFileInput.value = "";
     imagePreview.hidden = true;
@@ -1392,7 +1634,13 @@ function appendSubmittedImage(message, image) {
 }
 
 async function importSourceFile() {
-    const file = sourceFileInput.files?.[0];
+    const selectedFiles = [...(sourceFileInput.files || [])];
+    if (activeTask === "analyse-backtest") {
+        await importAnalyzerCsvFiles(selectedFiles);
+        return;
+    }
+
+    const file = selectedFiles[0];
     if (!file)
         return;
 
@@ -1458,6 +1706,192 @@ async function importSourceFile() {
     } finally {
         sourceFileInput.value = "";
     }
+}
+
+async function importAnalyzerCsvFiles(files) {
+    if (!files.length)
+        return;
+
+    if (files.length > 2) {
+        sourceFileStatus.textContent =
+            "Select one Summary CSV and optionally one Trades CSV.";
+        sourceFileInput.value = "";
+        return;
+    }
+
+    if (files.some(file =>
+        !file.name.toLowerCase().endsWith(".csv"))) {
+        sourceFileStatus.textContent =
+            "Use CSV exports from NinjaTrader Strategy Analyzer.";
+        sourceFileInput.value = "";
+        return;
+    }
+
+    if (files.some(file => file.size > 256 * 1024)) {
+        sourceFileStatus.textContent =
+            "Each Analyzer CSV must be 256 KB or smaller.";
+        sourceFileInput.value = "";
+        return;
+    }
+
+    try {
+        const exports = [];
+        for (const file of files) {
+            const csv = (await file.text())
+                .replace(/^\uFEFF/, "")
+                .replace(/\u0000/g, "")
+                .trim();
+            const lines = csv.split(/\r?\n/).filter(line => line.trim());
+            if (lines.length < 2 ||
+                !lines.slice(0, 5).some(line => /[,;\t]/.test(line))) {
+                throw new Error(
+                    `${file.name} does not appear to be a valid Analyzer CSV.`);
+            }
+            exports.push({
+                name: file.name,
+                csv: csv.replace(/```/g, "'''"),
+                summary: /^"?Performance"?[,;\t]/i.test(lines[0])
+            });
+        }
+
+        if (!exports.some(item => item.summary)) {
+            sourceFileStatus.textContent =
+                "Include the Strategy Analyzer Summary CSV.";
+            return;
+        }
+
+        const request = buildAnalyzerRequest("", exports);
+
+        if (request.length > promptInput.maxLength) {
+            sourceFileStatus.textContent =
+                "The selected exports are too large for one analysis. Upload the Summary alone or a smaller Trades export.";
+            return;
+        }
+
+        pendingAnalyzerExports = exports;
+        renderAnalyzerAttachments();
+        if (!promptInput.value.trim()) {
+            promptInput.value = [
+                "Instrument: ",
+                "Bar type and timeframe: ",
+                "Test period and notes: "
+            ].join("\n");
+        }
+        updateClearInputButton();
+        sourceFileStatus.textContent =
+            `${exports.length} file${exports.length === 1 ? "" : "s"} ready - add context, then analyse`;
+        promptInput.focus();
+        const firstValuePosition = promptInput.value.indexOf(":") + 2;
+        promptInput.setSelectionRange(firstValuePosition, firstValuePosition);
+    } catch (error) {
+        sourceFileStatus.textContent =
+            error.message || "Xen could not read the Analyzer export.";
+    } finally {
+        sourceFileInput.value = "";
+    }
+}
+
+function buildAnalyzerRequest(context, exports) {
+    return [
+        "Analyse the following NinjaTrader Strategy Analyzer export.",
+        "",
+        "Test context:",
+        context.trim() || "Not provided.",
+        "",
+        ...exports.flatMap(item => [
+            `Export file: ${item.name}`,
+            "```csv",
+            item.csv,
+            "```",
+            ""
+        ])
+    ].join("\n").trim();
+}
+
+function isAnalyzerRequest(value) {
+    return /^Analyse the following NinjaTrader Strategy Analyzer export\./i
+        .test((value || "").trim());
+}
+
+function analyzerContextFromRequest(value) {
+    const match = (value || "").match(
+        /Test context:\s*\n([\s\S]*?)(?=\n\s*Export file:)/i);
+    const context = match?.[1]?.trim() || "";
+    return context === "Not provided." ? "" : context;
+}
+
+function analyzerFileNamesFromRequest(value) {
+    return [...(value || "").matchAll(/^Export file:\s*(.+)$/gim)]
+        .map(match => match[1].trim())
+        .filter(Boolean);
+}
+
+function renderAnalyzerUserMessage(container, value) {
+    const files = analyzerFileNamesFromRequest(value);
+    const context = analyzerContextFromRequest(value);
+    const heading = document.createElement("p");
+    heading.className = "user-message-prose";
+    heading.textContent = "Analyse Strategy Analyzer results";
+    container.appendChild(heading);
+
+    if (files.length) {
+        const attachments = document.createElement("div");
+        attachments.className = "submitted-analyzer-files";
+        files.forEach(name => {
+            const item = document.createElement("span");
+            item.textContent = name;
+            attachments.appendChild(item);
+        });
+        container.appendChild(attachments);
+    }
+
+    if (context)
+        appendUserProse(container, context);
+}
+
+function hasAnalyzerExportInHistory() {
+    return history.some(turn =>
+        turn.role === "user" && isAnalyzerRequest(turn.content));
+}
+
+function renderAnalyzerAttachments() {
+    analyzerAttachments.replaceChildren();
+    const visible =
+        activeTask === "analyse-backtest" &&
+        pendingAnalyzerExports.length > 0;
+    analyzerAttachments.hidden = !visible;
+    if (!visible)
+        return;
+
+    pendingAnalyzerExports.forEach((item, index) => {
+        const chip = document.createElement("span");
+        chip.className = "analyzer-attachment";
+        const name = document.createElement("span");
+        name.textContent = item.name;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.setAttribute("aria-label", `Remove ${item.name}`);
+        remove.textContent = "\u00d7";
+        remove.addEventListener("click", () => {
+            pendingAnalyzerExports.splice(index, 1);
+            renderAnalyzerAttachments();
+            sourceFileStatus.textContent = pendingAnalyzerExports.length
+                ? `${pendingAnalyzerExports.length} file${
+                    pendingAnalyzerExports.length === 1 ? "" : "s"} ready`
+                : "Summary CSV required - Trades CSV optional";
+            updateClearInputButton();
+        });
+        chip.append(name, remove);
+        analyzerAttachments.appendChild(chip);
+    });
+}
+
+function clearAnalyzerExports(updateStatus = true) {
+    pendingAnalyzerExports = [];
+    renderAnalyzerAttachments();
+    if (updateStatus && activeTask === "analyse-backtest")
+        sourceFileStatus.textContent =
+            "Summary CSV required - Trades CSV optional";
 }
 
 let resolvePromptBuilder = null;
@@ -2751,10 +3185,19 @@ async function exportProject(project) {
         const messages = (savedProject.messages || []).map(turn => {
             const speaker = turn.role === "user" ? "You" : "Xen";
             const roleClass = turn.role === "user" ? "user" : "xen";
+            const exportedContent =
+                turn.role === "user" && isAnalyzerRequest(turn.content)
+                    ? [
+                        "Analyse Strategy Analyzer results",
+                        `Files: ${analyzerFileNamesFromRequest(turn.content)
+                            .join(", ")}`,
+                        analyzerContextFromRequest(turn.content)
+                    ].filter(Boolean).join("\n\n")
+                    : turn.content?.trim() || "";
             return `
                 <article class="message ${roleClass}">
                     <h2>${speaker}</h2>
-                    <pre>${escapeHtml(turn.content?.trim() || "")}</pre>
+                    <pre>${escapeHtml(exportedContent)}</pre>
                 </article>`;
         }).join("");
 
@@ -2867,6 +3310,7 @@ function applyProjectToWorkspace(project) {
     history = Array.isArray(project.messages) ? project.messages : [];
     promptQualityChecked = history.length > 0;
     promptInput.value = "";
+    clearAnalyzerExports(false);
     updateClearInputButton();
 
     document.querySelectorAll(".task-button").forEach(item =>

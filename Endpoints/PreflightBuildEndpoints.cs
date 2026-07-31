@@ -1,3 +1,6 @@
+using System.IO.Compression;
+using System.Text;
+using System.Text.RegularExpressions;
 using NinjaTrader_Xen.Models;
 using NinjaTrader_Xen.Services;
 
@@ -5,6 +8,8 @@ namespace NinjaTrader_Xen.Endpoints;
 
 public static class PreflightBuildEndpoints
 {
+    private const string NinjaTraderArchiveVersion = "8.0.0.9";
+
     private static readonly HashSet<string> AllowedTasks =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -22,7 +27,114 @@ public static class PreflightBuildEndpoints
         app.MapPost(
             "/api/preflight/build",
             Build).RequireAuthorization();
+        app.MapPost(
+            "/api/preflight/addon",
+            DownloadAddOn).RequireAuthorization();
         return app;
+    }
+
+    private static IResult DownloadAddOn(
+        PreflightBuildRequest request)
+    {
+        if (!AllowedTasks.Contains(request.Task))
+        {
+            return Results.BadRequest(new
+            {
+                message = "Select a valid NinjaTrader task."
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Code) ||
+            request.Code.Length > 500_000)
+        {
+            return Results.BadRequest(new
+            {
+                message =
+                    "A complete NinjaScript source file of 500,000 characters or fewer is required."
+            });
+        }
+
+        var indicator = request.Task.Contains(
+            "indicator",
+            StringComparison.OrdinalIgnoreCase);
+        var scriptType = indicator ? "Indicator" : "Strategy";
+        var scriptFolder = indicator ? "Indicators" : "Strategies";
+        var namespaceName =
+            $"NinjaTrader.NinjaScript.{scriptFolder}";
+
+        if (!Regex.IsMatch(
+                request.Code,
+                $@"\bnamespace\s+{Regex.Escape(namespaceName)}\b"))
+        {
+            return Results.BadRequest(new
+            {
+                message =
+                    $"The source must use the {namespaceName} namespace."
+            });
+        }
+
+        var classMatch = Regex.Match(
+            request.Code,
+            $@"\bpublic\s+(?:(?:sealed|partial|abstract)\s+)*class\s+(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?:[A-Za-z_][A-Za-z0-9_.]*\.)?{scriptType}\b");
+        if (!classMatch.Success)
+        {
+            return Results.BadRequest(new
+            {
+                message =
+                    $"Xen could not identify one public NinjaScript {scriptType} class."
+            });
+        }
+
+        var className = classMatch.Groups["name"].Value;
+        var downloadName = Regex.Replace(
+            className,
+            "Custom",
+            string.Empty,
+            RegexOptions.IgnoreCase);
+        if (string.IsNullOrWhiteSpace(downloadName))
+            downloadName = className;
+
+        using var output = new MemoryStream();
+        using (var archive = new ZipArchive(
+                   output,
+                   ZipArchiveMode.Create,
+                   leaveOpen: true))
+        {
+            WriteArchiveEntry(
+                archive,
+                "Info.xml",
+                $"""
+                <?xml version="1.0" encoding="utf-8"?>
+                <NinjaTrader>
+                  <Export>
+                    <Version>{NinjaTraderArchiveVersion}</Version>
+                  </Export>
+                </NinjaTrader>
+                """);
+            WriteArchiveEntry(
+                archive,
+                $"{scriptFolder}/{className}.cs",
+                request.Code.Trim());
+        }
+
+        return Results.File(
+            output.ToArray(),
+            "application/zip",
+            $"{downloadName}-Addon.zip");
+    }
+
+    private static void WriteArchiveEntry(
+        ZipArchive archive,
+        string path,
+        string content)
+    {
+        var entry = archive.CreateEntry(
+            path,
+            CompressionLevel.Optimal);
+        using var writer = new StreamWriter(
+            entry.Open(),
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        writer.Write(content);
     }
 
     private static async Task<IResult> Build(

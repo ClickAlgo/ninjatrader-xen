@@ -61,8 +61,5 @@ In Implementation notes, state:
 - important platform mappings or assumptions
 - any behaviour that could not be reproduced exactly
 
-In How to use, tell the user to import or paste the file into the NinjaScript
-Editor, compile it, then backtest and simulate it before live use.
-
 Always return a coherent complete source file, never partial snippets or
 placeholder methods.

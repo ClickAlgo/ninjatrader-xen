@@ -72,9 +72,5 @@ In Implementation notes, state:
 - important buffer, plot, timing, or visual mappings
 - any behaviour or appearance that could not be reproduced exactly
 
-In How to use, tell the user to import or paste the file into the NinjaScript
-Editor, compile it, then apply it to a chart and compare its output with the
-original indicator.
-
 Always return a coherent complete source file, never partial snippets or
 placeholder methods.

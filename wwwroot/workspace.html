@@ -10,7 +10,7 @@
                 document.documentElement.dataset.theme = "light";
         })();
     </script>
-    <link rel="stylesheet" href="/css/site.css?v=0.8.11">
+    <link rel="stylesheet" href="/css/site.css?v=0.9.4">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -62,6 +62,10 @@
                     <strong>Convert Indicator</strong>
                     <span>Convert an indicator from another trading platform.</span>
                 </button>
+                <button class="task-button" type="button" data-task="analyse-backtest">
+                    <strong>Analyse Backtest</strong>
+                    <span>Review exported Strategy Analyzer performance.</span>
+                </button>
             </div>
             <div class="workspace-support">
                 <p class="eyebrow">SUPPORT</p>
@@ -69,13 +73,19 @@
                     <span class="workspace-support-icon" aria-hidden="true">?</span>
                     <span>Feedback &amp; report a problem</span>
                 </button>
+                <a class="workspace-support-link"
+                    href="https://help.clickalgo.com/ninjatrader-xen/"
+                    target="_blank" rel="noopener noreferrer">
+                    <span class="workspace-guide-icon" aria-hidden="true"></span>
+                    <span>User guide</span>
+                </a>
                 <button id="themeToggleButton" class="workspace-support-link" type="button"
                     aria-pressed="false">
                     <span id="themeToggleIcon" class="workspace-theme-icon" aria-hidden="true">☼</span>
                     <span id="themeToggleLabel">Light theme</span>
                 </button>
             </div>
-            <div class="workspace-build-version">Build v0.9-beta</div>
+            <div class="workspace-build-version">Build v1.0-beta</div>
         </aside>
 
         <section class="chat-panel">
@@ -120,6 +130,8 @@
                     <button id="sourceFileButton" class="button source-file-button"
                         type="button">Upload source file</button>
                     <span id="sourceFileStatus">or paste the complete strategy source below</span>
+                    <div id="analyzerAttachments" class="analyzer-attachments"
+                        aria-label="Attached Strategy Analyzer files" hidden></div>
                 </div>
                 <div id="imageImport" class="image-import" hidden>
                     <input id="imageFileInput" type="file"
@@ -316,6 +328,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=0.8.11"></script>
+    <script src="/js/workspace.js?v=0.9.3"></script>
 </body>
 </html>

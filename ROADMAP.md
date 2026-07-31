@@ -23,13 +23,14 @@ Completed:
 - Low-credit and exhausted-credit controls
 - OpenAI, Claude, DeepSeek and Moonshot providers with model pricing
 - Kimi K2.7 Code low-cost coding model
-- Six NinjaScript tasks:
+- Seven specialist tasks:
   - Build Strategy
   - Build Indicator
   - Existing Strategy
   - Existing Indicator
   - Convert Strategy
   - Convert Indicator
+  - Analyse Backtest
 - Dedicated system prompts for every task
 - NinjaTrader RAG using `Code.PlatformId = 2`
 - Integrated Prompt Builder and persistent staged Build Plans
@@ -41,20 +42,36 @@ Completed:
 - Persistent light/dark workspace theme with dark as the default
 - Requirements verification with percentage status and focused repair
 - Isolated NinjaTrader assembly preflight builds with compiler-error repair
+- Strategy Analyzer Summary CSV analysis with optional Trades CSV context
 
 ## Next development priorities
 
-### 1. Strategy Analyzer result analysis
+### 1. Strategy Analyzer analysis expansion
 
-Begin with exported results and screenshot uploads rather than attempting
-server-side NinjaTrader backtesting.
+Build on the Summary and Trades CSV workflow without attempting server-side
+NinjaTrader backtesting.
 
-- Import supported Strategy Analyzer exports
-- Summarise performance and trade distribution
-- Flag insufficient sample size, excessive drawdown and parameter sensitivity
-- Compare expected strategy behaviour with observed results
-- Warn about likely overfitting
+- Add screenshot input for charts and non-exportable result views
+- Support comparisons between multiple saved backtests
+- Add richer trade-distribution analysis for larger Trades exports
+- Connect observed results to the current project's stated requirements
 - Never present historical performance as a profitability guarantee
+
+#### Backtest-to-Code Improvement Workflow
+
+Add a guided post-launch workflow that turns selected backtest findings into
+controlled strategy changes:
+
+- Let the user choose a specific improvement objective from the analysis
+- Attach strategy source or open the relevant saved strategy project
+- Relate the selected finding to the current implementation
+- Present a focused change plan for approval before modifying code
+- Generate the revised strategy, then run Build Check and requirements verification
+- Ask the user to rerun Strategy Analyzer and compare the new results
+- Warn against blindly optimizing every weak metric or fitting changes to one data set
+
+The workflow must not rewrite source from performance figures alone. Code
+changes require the relevant strategy source and explicit user approval.
 
 ### 2. NinjaTrader Xen connector investigation
 

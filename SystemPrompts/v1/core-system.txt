@@ -68,9 +68,6 @@ The complete source file.
 ### Implementation notes
 Concise bullets covering important behaviour, defaults and assumptions.
 
-### How to use
-Concise NinjaTrader import, compile, chart or Strategy Analyzer instructions.
-
 ### Next step
 One concise optional refinement. Do not ask for confirmation.
 
