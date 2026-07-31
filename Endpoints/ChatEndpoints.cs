@@ -1,9 +1,11 @@
 using Microsoft.Data.SqlClient;
+using NinjaTrader_Xen.Memory;
 using NinjaTrader_Xen.Models;
 using NinjaTrader_Xen.Options;
 using NinjaTrader_Xen.Services;
 using System.Data;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Json;
 
 namespace NinjaTrader_Xen.Endpoints;
@@ -27,6 +29,7 @@ public static class ChatEndpoints
         {
             "gpt-5.3-codex",
             "gpt-5.6-sol",
+            "gpt-5.6-luna",
             "claude-sonnet-4-6",
             "claude-opus-5",
             "kimi-k2.7-code",
@@ -52,7 +55,9 @@ public static class ChatEndpoints
         IConfiguration configuration,
         AiStreamingClient aiClient,
         SystemPromptService systemPrompts,
-        NinjaTraderKnowledgeRetriever knowledgeRetriever)
+        NinjaTraderKnowledgeRetriever knowledgeRetriever,
+        IProjectMemoryStore projectMemoryStore,
+        ILoggerFactory loggerFactory)
     {
         context.Response.ContentType = "text/event-stream";
         context.Response.Headers.CacheControl = "no-cache";
@@ -68,6 +73,17 @@ public static class ChatEndpoints
         if (string.IsNullOrWhiteSpace(request.Prompt) || request.Prompt.Length > 60_000)
         {
             await WriteEvent(context, new { type = "error", message = "Enter a prompt of 60,000 characters or fewer." });
+            await Complete(context);
+            return;
+        }
+
+        if (request.ProjectId is null || request.ProjectId == Guid.Empty)
+        {
+            await WriteEvent(context, new
+            {
+                type = "error",
+                message = "Project identity is required for conversation memory."
+            });
             await Complete(context);
             return;
         }
@@ -148,37 +164,122 @@ public static class ChatEndpoints
                 "analyse-backtest",
                 StringComparison.OrdinalIgnoreCase))
         {
-            var ragCategory = request.Task is
+            var retrievalPrompt = string.IsNullOrWhiteSpace(
+                request.RetrievalPrompt)
+                    ? request.Prompt
+                    : request.RetrievalPrompt.Trim();
+            if (retrievalPrompt.Length > 60_000)
+                retrievalPrompt = retrievalPrompt[..60_000];
+
+            IReadOnlyList<string> ragCategories = request.Task is
                 "build-strategy" or "existing-strategy" or "convert-strategy"
-                    ? "Strategy"
-                    : "Indicator";
+                    ? ["Strategy", "Indicator"]
+                    : ["Indicator"];
             rag = await knowledgeRetriever.RetrieveAsync(
-                request.Prompt,
-                ragCategory,
+                retrievalPrompt,
+                ragCategories,
                 context.RequestAborted);
         }
         var systemPrompt = systemPrompts.Build(request.Task);
         if (rag is not null && rag.Confident)
             systemPrompt += knowledgeRetriever.BuildSystemContext(rag);
 
+        var projectId = request.ProjectId.Value;
+        var logger = loggerFactory.CreateLogger("ProjectMemory");
+        try
+        {
+            await projectMemoryStore.SeedIfEmptyAsync(
+                subscriberId,
+                projectId,
+                request.Task,
+                request.History,
+                context.RequestAborted);
+            var memoryTurns = await projectMemoryStore.GetLatestTurnsAsync(
+                subscriberId,
+                projectId,
+                5,
+                context.RequestAborted);
+            if (memoryTurns.Count > 0)
+            {
+                systemPrompt += "\n\n" +
+                    PromptContextBuilder.BuildProjectMemoryTurnsBlock(
+                        memoryTurns);
+            }
+        }
+        catch (OperationCanceledException)
+            when (context.RequestAborted.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Could not load project memory for {ProjectId}.",
+                projectId);
+        }
+
+        string currentCode;
+        try
+        {
+            currentCode = await GetLatestProjectCode(
+                    connectionString,
+                    subscriberId,
+                    projectId,
+                    context.RequestAborted) ??
+                string.Empty;
+        }
+        catch (OperationCanceledException)
+            when (context.RequestAborted.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Could not load authoritative code for {ProjectId}.",
+                projectId);
+            currentCode = string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(currentCode))
+        {
+            currentCode = SqlProjectMemoryStore.ExtractLatestCode(
+                request.History);
+        }
+        if (!string.IsNullOrWhiteSpace(currentCode))
+        {
+            systemPrompt += "\n\n" +
+                PromptContextBuilder.BuildCurrentImplementationBlock(
+                    currentCode);
+        }
+
         if (knowledgeRetriever.Options.ShowDebug &&
             rag?.Best is not null)
         {
+            var similarityThreshold =
+                knowledgeRetriever.Options.SimilarityThreshold;
             await WriteEvent(context, new
             {
                 type = "rag.debug",
-                title = rag.Best.Title,
-                similarity = rag.Best.Similarity,
-                used = rag.Confident,
+                matches = rag.Matches.Select(match => new
+                {
+                    title = match.Title,
+                    similarity = match.Similarity,
+                    used = match.ForceInclude ||
+                        match.Similarity >= similarityThreshold
+                }),
                 category = rag.Category
             });
         }
 
+        IReadOnlyList<ChatTurn> cleanHistory = [];
         var maximumOutputTokens = CalculateAffordableOutputTokens(
             configuration,
             request.Model,
             request.Prompt,
-            request.History,
+            cleanHistory,
             systemPrompt,
             balanceGbp,
             image is not null);
@@ -195,21 +296,10 @@ public static class ChatEndpoints
             return;
         }
 
-        var cleanHistory = (request.History ?? [])
-            .TakeLast(12)
-            .Where(turn =>
-                turn.Role?.ToLowerInvariant() is "user" or "assistant" &&
-                !string.IsNullOrWhiteSpace(turn.Content))
-            .Select(turn => new ChatTurn(
-                turn.Role.ToLowerInvariant(),
-                turn.Content.Length > 40_000
-                    ? turn.Content[..40_000]
-                    : turn.Content))
-            .ToList();
-
         var inputTokens = 0;
         var outputTokens = 0;
         var generatedCharacters = 0;
+        var assistantText = new StringBuilder();
         try
         {
             await foreach (var streamEvent in aiClient.StreamAsync(
@@ -224,6 +314,7 @@ public static class ChatEndpoints
                 if (!string.IsNullOrEmpty(streamEvent.Delta))
                 {
                     generatedCharacters += streamEvent.Delta.Length;
+                    assistantText.Append(streamEvent.Delta);
                     await WriteEvent(context, new
                     {
                         type = "response.output_text.delta",
@@ -268,6 +359,28 @@ public static class ChatEndpoints
             if (charge > 0)
                 await DeductBalance(connectionString, subscriberId, charge);
 
+            try
+            {
+                var responseText = assistantText.ToString();
+                await projectMemoryStore.AppendTurnAsync(
+                    new ProjectMemoryUpdate(
+                        subscriberId,
+                        projectId,
+                        request.Task,
+                        request.Prompt.Trim(),
+                        responseText,
+                        SqlProjectMemoryStore.ExtractLatestCode(
+                            [new ChatTurn("assistant", responseText)])),
+                    context.RequestAborted);
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(
+                    exception,
+                    "Could not save project memory for {ProjectId}.",
+                    projectId);
+            }
+
             var remainingBalance = await GetBalance(connectionString, subscriberId);
             await WriteEvent(context, new
             {
@@ -299,6 +412,30 @@ public static class ChatEndpoints
         }
 
         await Complete(context);
+    }
+
+    private static async Task<string?> GetLatestProjectCode(
+        string connectionString,
+        int subscriberId,
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = new SqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand("""
+            SELECT TOP (1) CodeText
+            FROM dbo.ProjectRevisions
+            WHERE ConversationId = @ProjectId
+              AND SubscriberId = @SubscriberId
+            ORDER BY CreatedUtc DESC, Id DESC;
+            """, connection);
+        command.Parameters.Add(
+            "@ProjectId",
+            SqlDbType.UniqueIdentifier).Value = projectId;
+        command.Parameters.Add(
+            "@SubscriberId",
+            SqlDbType.Int).Value = subscriberId;
+        return await command.ExecuteScalarAsync(cancellationToken) as string;
     }
 
     private static async Task<decimal> GetEligibleBalance(string connectionString, int subscriberId)

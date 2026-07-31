@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using NinjaTrader_Xen.Endpoints;
+using NinjaTrader_Xen.Infrastructure;
+using NinjaTrader_Xen.Logging;
 using NinjaTrader_Xen.Options;
 using NinjaTrader_Xen.Services;
 using System.Net.Http.Headers;
@@ -13,6 +15,12 @@ builder.Configuration.AddJsonFile(
     "chatsettings.json",
     optional: false,
     reloadOnChange: true);
+
+var fileLogging = builder.Configuration
+    .GetSection(FileLoggingOptions.SectionName)
+    .Get<FileLoggingOptions>() ?? new FileLoggingOptions();
+if (fileLogging.Enabled)
+    builder.Logging.AddProvider(new RollingFileLoggerProvider(fileLogging));
 
 builder.Services
     .AddOptions<PlatformOptions>()
@@ -30,6 +38,8 @@ builder.Services
         NinjaTraderCompilerOptions.SectionName));
 
 builder.Services.AddHealthChecks();
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 
 var jwtSecret = builder.Configuration["Auth:JwtSecret"];
 if (string.IsNullOrWhiteSpace(jwtSecret) || jwtSecret.Length < 32)
@@ -142,9 +152,12 @@ builder.Services.AddSingleton<NinjaTraderKnowledgeRetriever>();
 builder.Services.AddSingleton<PromptBuilderService>();
 builder.Services.AddSingleton<RequirementsValidationService>();
 builder.Services.AddSingleton<NinjaTraderPreflightCompiler>();
+builder.Services.AddScoped<NinjaTrader_Xen.Memory.IProjectMemoryStore,
+    NinjaTrader_Xen.Memory.SqlProjectMemoryStore>();
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
 app.UseHttpsRedirection();
 app.UseDefaultFiles();
 app.UseStaticFiles();

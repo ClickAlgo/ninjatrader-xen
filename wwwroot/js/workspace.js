@@ -41,11 +41,13 @@ const defaultModel = "gpt-5.3-codex";
 const preflightRepairPromptPrefix =
     "Repair the latest complete NinjaScript source so it passes";
 const lowCostModels = new Set([
+    "gpt-5.6-luna",
     "deepseek-v4-pro",
     "kimi-k2.7-code"
 ]);
 const imageUnsupportedModels = new Set([
     "gpt-5.3-codex",
+    "gpt-5.6-luna",
     "deepseek-v4-pro",
     "kimi-k2.7-code"
 ]);
@@ -338,7 +340,9 @@ form.addEventListener("submit", async event => {
                 task: activeTask,
                 model: modelSelect.value,
                 history: previousHistory,
-                image: requestImage
+                image: requestImage,
+                projectId: currentProjectId,
+                retrievalPrompt: buildRetrievalPrompt(prompt)
             }),
             signal: currentController.signal
         });
@@ -524,14 +528,20 @@ function showTrialWelcome() {
 
 function appendRagDebug(message, debug) {
     const element = document.createElement("div");
-    element.className = debug.used
-        ? "rag-debug"
-        : "rag-debug rejected";
-    const confidence = Math.round(
-        Math.max(0, Math.min(1, Number(debug.similarity) || 0)) * 100);
-    element.textContent = debug.used
-        ? `Knowledge match: ${debug.title} · Confidence ${confidence}%`
-        : `Knowledge match not used: ${debug.title} · Confidence ${confidence}%`;
+    element.className = "rag-debug";
+    const matches = Array.isArray(debug.matches)
+        ? debug.matches
+        : [debug];
+    matches.forEach(match => {
+        const row = document.createElement("div");
+        row.className = match.used ? "rag-debug-row" : "rag-debug-row rejected";
+        const confidence = Math.round(
+            Math.max(0, Math.min(1, Number(match.similarity) || 0)) * 100);
+        row.textContent = match.used
+            ? `Knowledge match: ${match.title} · Confidence ${confidence}%`
+            : `Knowledge match not used: ${match.title} · Confidence ${confidence}%`;
+        element.appendChild(row);
+    });
     const content = message.querySelector(".message-content");
     const responseActions = content?.querySelector(".response-code-actions");
     if (content && responseActions)
@@ -2003,7 +2013,7 @@ async function runPromptBuilder(prompt) {
             prompt,
             answers
         });
-        const plan = saveBuildPlan(planResult, activeTask);
+        const plan = saveBuildPlan(planResult, activeTask, prompt);
         renderActiveBuildPlan();
         const action = await showBuildPlan(plan);
         if (action === "start")
@@ -2029,10 +2039,11 @@ async function runPromptBuilder(prompt) {
     }
 }
 
-function saveBuildPlan(result, task) {
+function saveBuildPlan(result, task, originalPrompt) {
     const plan = {
         version: 2,
         task,
+        originalPrompt: originalPrompt?.trim() || "",
         explanation: result.explanation || "",
         assumptions: Array.isArray(result.assumptions) ? result.assumptions : [],
         prompts: Array.isArray(result.prompts) ? result.prompts : [],
@@ -2546,6 +2557,14 @@ function markBuildPlanCompileSucceeded() {
 function isSavedBuildPlanPrompt(prompt) {
     return Boolean(getBuildPlan()?.prompts?.some(
         step => step.prompt?.trim() === prompt?.trim()));
+}
+
+function buildRetrievalPrompt(prompt) {
+    const plan = getBuildPlan();
+    if (!plan?.originalPrompt || !isSavedBuildPlanPrompt(prompt))
+        return prompt;
+
+    return `${plan.originalPrompt}\n\nCurrent Build Plan step:\n${prompt}`;
 }
 
 async function showBuildPlan(plan = getBuildPlan()) {

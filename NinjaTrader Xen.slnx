@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="NinjaTrader Xen.csproj" />
+  <Project Path="NinjaTrader Xen.Tests/NinjaTrader Xen.Tests.csproj" />
 </Solution>

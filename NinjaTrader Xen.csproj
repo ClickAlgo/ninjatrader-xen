@@ -15,6 +15,19 @@
   </ItemGroup>
 
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>NinjaTrader Xen.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="NinjaTrader Xen.Tests\**\*.cs" />
+    <Content Remove="NinjaTrader Xen.Tests\**\*" />
+    <EmbeddedResource Remove="NinjaTrader Xen.Tests\**\*" />
+    <None Remove="NinjaTrader Xen.Tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Content Update="chatsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
