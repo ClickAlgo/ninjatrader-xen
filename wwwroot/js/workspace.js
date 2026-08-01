@@ -25,6 +25,7 @@ const taskPlaceholders = {
 let activeTask = "build-strategy";
 let history = [];
 let generating = false;
+let preparingRequest = false;
 let currentProjectId = null;
 let currentProjectTitle = "";
 let currentController = null;
@@ -157,10 +158,13 @@ codeWorkspaceModal.addEventListener("click", event => {
         closeCodeWorkspace();
 });
 document.getElementById("newProjectButton").addEventListener("click", () => {
-    if (generating)
+    if (generating || preparingRequest)
+        return;
+    if (history.length && !window.confirm(
+        "Clear this task conversation? Your saved projects will remain available."))
         return;
     clearBuildPlan();
-    startNewProject();
+    startNewProject(false);
 });
 document.getElementById("feedbackButton").addEventListener(
     "click",
@@ -241,7 +245,7 @@ document.getElementById("taskButtons").addEventListener("click", event => {
 
 form.addEventListener("submit", async event => {
     event.preventDefault();
-    if (generating)
+    if (generating || preparingRequest)
         return;
 
     if (currentBalanceGbp !== null && currentBalanceGbp <= 0) {
@@ -253,6 +257,7 @@ form.addEventListener("submit", async event => {
     let prompt = promptInput.value.trim();
     if (!prompt)
         return;
+    const shouldInviteFeedback = isClearlyFrustrated(prompt);
 
     const requestAnalyzerExports =
         activeTask === "analyse-backtest"
@@ -276,7 +281,13 @@ form.addEventListener("submit", async event => {
     if (requestAnalyzerExports.length)
         prompt = buildAnalyzerRequest(prompt, requestAnalyzerExports);
 
-    const reviewedPrompt = await reviewInitialBuildPrompt(prompt);
+    preparingRequest = true;
+    let reviewedPrompt;
+    try {
+        reviewedPrompt = await reviewInitialBuildPrompt(prompt);
+    } finally {
+        preparingRequest = false;
+    }
     if (!reviewedPrompt)
         return;
     prompt = reviewedPrompt;
@@ -404,15 +415,34 @@ form.addEventListener("submit", async event => {
             throw new Error("The AI returned an empty response.");
 
         history.push({ role: "assistant", content: assistantText });
-        markBuildPlanResponseReady(prompt);
+        const buildPlanStepReady = markBuildPlanResponseReady(prompt);
         assistantMessage.classList.remove("generating");
         renderStructuredResponse(content, assistantText);
         if (ragDebug)
             appendRagDebug(assistantMessage, ragDebug);
+        if (shouldInviteFeedback)
+            appendFeedbackInvitation(assistantMessage);
         scrollMessagesToBottom();
-        status.textContent = "Saving project…";
-        const saved = await saveCurrentProject();
-        status.textContent = saved ? "Saved" : "Response ready · project not saved";
+        const generatedCode = buildPlanStepReady
+            ? extractLatestCodeBlock(assistantText)
+            : "";
+        if (buildPlanStepReady && !generatedCode)
+            setBuildPlanStepStatus("awaiting-clarification");
+        const automaticBuildResult = generatedCode
+            ? await runPreflightBuild(
+                generatedCode,
+                null,
+                { automatic: true })
+            : undefined;
+        if (!generatedCode || automaticBuildResult === null) {
+            status.textContent = "Saving project…";
+            const saved = await saveCurrentProject();
+            status.textContent = automaticBuildResult === null
+                ? (saved
+                    ? "Build Check unavailable · response saved"
+                    : "Build Check unavailable · project not saved")
+                : (saved ? "Saved" : "Response ready · project not saved");
+        }
     } catch (error) {
         if (error.name === "AbortError") {
             history = previousHistory;
@@ -1220,17 +1250,24 @@ function hasSuccessfulBuildForCode(code) {
     return passed === true;
 }
 
-async function runPreflightBuild(code, button) {
-    if (preflightBuilding || generating)
-        return;
+async function runPreflightBuild(code, button, options = {}) {
+    const automatic = options.automatic === true;
+    if (preflightBuilding || (generating && !automatic))
+        return null;
 
     preflightBuilding = true;
-    button.classList.remove("needs-build-check");
-    button.disabled = true;
-    button.classList.add("is-checking");
-    button.setAttribute("aria-busy", "true");
-    button.textContent = "Checking build...";
-    status.textContent = "Running NinjaTrader build check...";
+    if (button) {
+        button.classList.remove("needs-build-check");
+        button.disabled = true;
+        button.classList.add("is-checking");
+        button.setAttribute("aria-busy", "true");
+        button.textContent = "Checking build...";
+    }
+    if (automatic)
+        setBuildPlanStepStatus("build-checking");
+    status.textContent = automatic
+        ? "Code returned · running automatic Build Check..."
+        : "Running NinjaTrader build check...";
 
     try {
         const response = await fetch("/api/preflight/build", {
@@ -1248,7 +1285,7 @@ async function runPreflightBuild(code, button) {
         if (response.status === 401) {
             sessionStorage.removeItem("nx_access_token");
             location.replace("/login.html");
-            return;
+            return null;
         }
         if (!response.ok)
             throw new Error(
@@ -1256,6 +1293,8 @@ async function runPreflightBuild(code, button) {
                 "The NinjaTrader build check could not be started.");
 
         renderPreflightBuildResult(result);
+        if (automatic)
+            setBuildPlanStepStatus(result.success ? "compiled" : "build-failed");
         status.textContent = result.success
             ? "Build check passed · saving project..."
             : "Build check found errors · saving diagnostics...";
@@ -1263,14 +1302,20 @@ async function runPreflightBuild(code, button) {
         status.textContent = result.success
             ? (saved ? "Build check passed and saved" : "Build check passed")
             : (saved ? "Build errors saved" : "Build check found errors");
+        return result;
     } catch (error) {
+        if (automatic)
+            setBuildPlanStepStatus("build-failed");
         status.textContent = error.message;
+        return null;
     } finally {
         preflightBuilding = false;
-        button.disabled = false;
-        button.classList.remove("is-checking");
-        button.removeAttribute("aria-busy");
-        button.textContent = "Build check";
+        if (button) {
+            button.disabled = false;
+            button.classList.remove("is-checking");
+            button.removeAttribute("aria-busy");
+            button.textContent = "Build check";
+        }
     }
 }
 
@@ -1462,6 +1507,7 @@ function startNewProject(resetTask = true) {
     messages.innerHTML = "";
     addMessage("assistant", taskIntro(activeTask));
     updateProjectTitle();
+    renderActiveBuildPlan();
     status.textContent = "Ready";
     promptInput.focus();
 }
@@ -1931,7 +1977,9 @@ async function reviewInitialBuildPrompt(prompt) {
             return prompt;
         }
 
-        const decision = await showPromptReview(response.reason);
+        const decision = await showPromptReview(
+            response.reason,
+            response.required === true);
         if (decision === "build") {
             promptQualityChecked = true;
             return prompt;
@@ -1955,7 +2003,7 @@ async function reviewInitialBuildPrompt(prompt) {
     }
 }
 
-function showPromptReview(reason) {
+function showPromptReview(reason, required = false) {
     document.querySelector(".prompt-builder-dialog")
         ?.classList.remove("prompt-builder-plan-dialog");
     document.getElementById("promptBuilderTitle").textContent =
@@ -1964,11 +2012,14 @@ function showPromptReview(reason) {
         "A few details could materially improve the generated NinjaScript.";
     promptBuilderBody.replaceChildren(createReviewSummary());
     promptBuilderStatus.textContent = "";
-    setPromptBuilderActions([
+    const actions = [
         ["Plan with Prompt Builder", "clarify", "button primary"],
-        ["Build in Xen anyway", "build", "button"],
         ["Edit original request", "edit", "button"]
-    ]);
+    ];
+    if (!required)
+        actions.splice(1, 0,
+            ["Build in Xen anyway", "build", "button"]);
+    setPromptBuilderActions(actions);
     openPromptBuilder();
     return waitForPromptBuilderDecision();
 }
@@ -2042,6 +2093,7 @@ async function runPromptBuilder(prompt) {
 function saveBuildPlan(result, task, originalPrompt) {
     const plan = {
         version: 2,
+        projectId: currentProjectId,
         task,
         originalPrompt: originalPrompt?.trim() || "",
         explanation: result.explanation || "",
@@ -2064,9 +2116,11 @@ function getBuildPlan() {
             plan.stepStatus = "response-ready";
             localStorage.setItem(buildPlanStorageKey, JSON.stringify(plan));
         }
-        return plan && Array.isArray(plan.prompts) && plan.prompts.length
-            ? plan
-            : null;
+        if (!plan || !Array.isArray(plan.prompts) || !plan.prompts.length)
+            return null;
+        if (plan.projectId && plan.projectId !== currentProjectId)
+            return null;
+        return plan;
     } catch {
         return null;
     }
@@ -2133,6 +2187,24 @@ function renderActiveBuildPlan() {
             `Xen is generating the code for Prompt ${index + 1}.`;
         primary.textContent = "Generating current prompt";
         primary.disabled = true;
+    } else if (state === "awaiting-clarification") {
+        detail.textContent =
+            `Xen needs more information for Prompt ${index + 1}. Answer its question below; this step will remain active.`;
+        primary.textContent = "Waiting for your answer";
+        primary.disabled = true;
+    } else if (state === "build-checking") {
+        detail.textContent =
+            `Xen is checking Prompt ${index + 1} against the installed NinjaTrader assemblies.`;
+        primary.textContent = "Running Build Check";
+        primary.disabled = true;
+    } else if (state === "build-failed") {
+        const finalStep = index === plan.prompts.length - 1;
+        detail.textContent =
+            "Build Check did not pass. Repair the reported errors, or continue only if the server check is incompatible with your local setup.";
+        primary.textContent = finalStep
+            ? "Continue anyway and finish plan"
+            : `Continue anyway to Prompt ${index + 2}`;
+        primary.addEventListener("click", () => advanceBuildPlan(plan, index));
     } else if (state === "response-ready") {
         const finalStep = index === plan.prompts.length - 1;
         const toolName = plan.task === "build-indicator"
@@ -2213,6 +2285,12 @@ function getLatestGeneratedCode() {
             return blocks.at(-1)[1].trim();
     }
     return "";
+}
+
+function extractLatestCodeBlock(text) {
+    const blocks = [...(text || "").matchAll(
+        /```(?:csharp|cs)?\s*([\s\S]*?)```/gi)];
+    return blocks.length ? blocks.at(-1)[1].trim() : "";
 }
 
 let requirementsValidationCode = "";
@@ -2387,7 +2465,14 @@ function modelDisplayName(model) {
         model;
 }
 
-function openFeedback() {
+function openFeedback(options = {}) {
+    const promptedByFrustration = options?.promptedByFrustration === true;
+    document.getElementById("feedbackType").value =
+        promptedByFrustration ? "bug" : "feedback";
+    document.getElementById("feedbackIncludeDiagnostics").checked = true;
+    feedbackComment.placeholder = promptedByFrustration
+        ? "Tell us what went wrong or what you expected Xen to do..."
+        : "Describe your feedback or what went wrong...";
     feedbackStatus.textContent = "";
     feedbackStatus.classList.remove("error", "success");
     feedbackModal.hidden = false;
@@ -2400,10 +2485,69 @@ function closeFeedback() {
     document.body.classList.remove("modal-open");
     feedbackForm.reset();
     document.getElementById("feedbackIncludeDiagnostics").checked = true;
+    feedbackComment.placeholder =
+        "Describe your feedback or what went wrong...";
     submitFeedbackButton.disabled = false;
     submitFeedbackButton.textContent = "Send report";
     feedbackStatus.textContent = "";
     feedbackStatus.classList.remove("error", "success");
+}
+
+function isClearlyFrustrated(prompt) {
+    const text = String(prompt || "")
+        .replace(/```[\s\S]*?```/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (!text)
+        return false;
+
+    return [
+        /\b(fuck|fucking|shit|bullshit|crap|useless|stupid|idiot|garbage|rubbish)\b/i,
+        /\b(this|that|you|xen|model|code|response)\s+(is|are)\s+(wrong|useless|terrible|awful|broken)\b/i,
+        /\b(doesn['’]?t|does not|didn['’]?t|did not)\s+(work|listen|follow|understand)\b/i,
+        /\bwhy\s+(the hell|won['’]?t|doesn['’]?t|does not)\b/i
+    ].some(pattern => pattern.test(text));
+}
+
+function appendFeedbackInvitation(message) {
+    const invitationKey =
+        `nx_feedback_invitation_${currentProjectId || "session"}`;
+    if (sessionStorage.getItem(invitationKey))
+        return;
+    sessionStorage.setItem(invitationKey, "shown");
+
+    const invitation = document.createElement("div");
+    invitation.className = "feedback-invitation";
+
+    const copy = document.createElement("div");
+    copy.className = "feedback-invitation-copy";
+    const title = document.createElement("strong");
+    title.textContent = "Help us improve Xen";
+    const description = document.createElement("span");
+    description.textContent =
+        "It looks like this result may not have met your expectations. Tell us what went wrong so we can help.";
+    copy.append(title, description);
+
+    const actions = document.createElement("div");
+    actions.className = "feedback-invitation-actions";
+    const feedback = document.createElement("button");
+    feedback.type = "button";
+    feedback.className = "button primary";
+    feedback.textContent = "Provide feedback";
+    feedback.addEventListener("click", () => {
+        invitation.remove();
+        openFeedback({ promptedByFrustration: true });
+    });
+    const dismiss = document.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "button";
+    dismiss.textContent = "Not now";
+    dismiss.addEventListener("click", () => invitation.remove());
+    actions.append(feedback, dismiss);
+    invitation.append(copy, actions);
+
+    const content = message.querySelector(".message-content");
+    (content || message).appendChild(invitation);
 }
 
 async function submitFeedback(event) {
@@ -2504,6 +2648,7 @@ function loadBuildPlanPrompt(index) {
 
     plan.currentIndex = index;
     plan.stepStatus = "loaded";
+    delete plan.activePrompt;
     plan.completed = false;
     updateBuildPlan(plan);
     promptInput.value = step.prompt;
@@ -2518,8 +2663,13 @@ function markBuildPlanPromptSent(prompt) {
     if (!plan || plan.completed)
         return;
     const index = Math.min(plan.currentIndex || 0, plan.prompts.length - 1);
-    if (plan.prompts[index]?.prompt?.trim() !== prompt?.trim())
+    const isClarificationAnswer =
+        plan.stepStatus === "awaiting-clarification";
+    if (!isClarificationAnswer &&
+        plan.prompts[index]?.prompt?.trim() !== prompt?.trim())
         return;
+    plan.projectId = currentProjectId;
+    plan.activePrompt = prompt.trim();
     plan.stepStatus = "sent";
     updateBuildPlan(plan);
 }
@@ -2527,12 +2677,37 @@ function markBuildPlanPromptSent(prompt) {
 function markBuildPlanResponseReady(prompt) {
     const plan = getBuildPlan();
     if (!plan || plan.completed || plan.stepStatus !== "sent")
-        return;
+        return false;
     const index = Math.min(plan.currentIndex || 0, plan.prompts.length - 1);
-    if (plan.prompts[index]?.prompt?.trim() !== prompt?.trim())
-        return;
+    const expectedPrompt = plan.activePrompt ||
+        plan.prompts[index]?.prompt?.trim();
+    if (expectedPrompt !== prompt?.trim())
+        return false;
     plan.stepStatus = "response-ready";
     updateBuildPlan(plan);
+    return true;
+}
+
+function setBuildPlanStepStatus(stepStatus) {
+    const plan = getBuildPlan();
+    if (!plan || plan.completed)
+        return;
+    plan.stepStatus = stepStatus;
+    updateBuildPlan(plan);
+}
+
+function advanceBuildPlan(plan, index) {
+    const finalStep = index === plan.prompts.length - 1;
+    if (finalStep) {
+        plan.completed = true;
+        updateBuildPlan(plan);
+        return;
+    }
+    plan.currentIndex = index + 1;
+    plan.stepStatus = "ready";
+    delete plan.activePrompt;
+    updateBuildPlan(plan);
+    loadBuildPlanPrompt(plan.currentIndex);
 }
 
 function restoreBuildPlanPromptLoaded(prompt) {
@@ -2540,15 +2715,19 @@ function restoreBuildPlanPromptLoaded(prompt) {
     if (!plan || plan.stepStatus !== "sent")
         return;
     const index = Math.min(plan.currentIndex || 0, plan.prompts.length - 1);
-    if (plan.prompts[index]?.prompt?.trim() !== prompt?.trim())
+    const plannedPrompt = plan.prompts[index]?.prompt?.trim();
+    const expectedPrompt = plan.activePrompt || plannedPrompt;
+    if (expectedPrompt !== prompt?.trim())
         return;
-    plan.stepStatus = "loaded";
+    plan.stepStatus = plan.activePrompt === plannedPrompt
+        ? "loaded"
+        : "awaiting-clarification";
     updateBuildPlan(plan);
 }
 
 function markBuildPlanCompileSucceeded() {
     const plan = getBuildPlan();
-    if (!plan || plan.completed || plan.stepStatus !== "sent")
+    if (!plan || plan.completed)
         return;
     plan.stepStatus = "compiled";
     updateBuildPlan(plan);
@@ -3035,9 +3214,11 @@ async function restoreCodeRevision(revision) {
             throw new Error(result.detail || "Unable to restore this snapshot.");
 
         applyProjectToWorkspace(result);
+        clearBuildPlan();
         setCodeWorkspaceCode(result.latestCode, "Restored current source");
         revisionMessage.textContent =
-            `v${revision.versionNumber} was restored as a new current snapshot.`;
+            `v${revision.versionNumber} was restored as a new current snapshot. ` +
+            "The active Build Plan was cleared because it referred to a newer source state.";
         revisionMessage.classList.add("success");
 
         const listResponse = await fetch(
@@ -3047,7 +3228,8 @@ async function restoreCodeRevision(revision) {
             const listResult = await listResponse.json();
             renderCodeRevisions(listResult.revisions || []);
             revisionMessage.textContent =
-                `v${revision.versionNumber} was restored as a new current snapshot.`;
+                `v${revision.versionNumber} was restored as a new current snapshot. ` +
+                "The active Build Plan was cleared because it referred to a newer source state.";
             revisionMessage.classList.add("success");
         }
     } catch (error) {
@@ -3360,6 +3542,7 @@ function applyProjectToWorkspace(project) {
     if (!history.length)
         addMessage("assistant", taskIntro(activeTask));
     updateProjectTitle();
+    renderActiveBuildPlan();
 }
 
 async function renameProject(project) {

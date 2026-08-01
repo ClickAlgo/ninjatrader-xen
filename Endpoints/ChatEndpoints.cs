@@ -102,6 +102,22 @@ public static class ChatEndpoints
             return;
         }
 
+        var complexity = TradingRequestComplexityPolicy.Evaluate(
+            request.Task,
+            request.Prompt);
+        if (complexity.Rejected)
+        {
+            await WriteEvent(context, new
+            {
+                type = "error",
+                code = "REQUEST_TOO_LARGE_FOR_SINGLE_STEP",
+                message = "This request is too large for one reliable build. Use Prompt Builder to create shorter steps, build and test each step, then continue.",
+                detail = complexity.Reason
+            });
+            await Complete(context);
+            return;
+        }
+
         if (!aiClient.IsConfigured(request.Model))
         {
             await WriteEvent(context, new

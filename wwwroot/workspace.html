@@ -10,7 +10,7 @@
                 document.documentElement.dataset.theme = "light";
         })();
     </script>
-    <link rel="stylesheet" href="/css/site.css?v=0.9.4">
+    <link rel="stylesheet" href="/css/site.css?v=0.9.5">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -22,7 +22,6 @@
             </a>
         </div>
         <div class="workspace-header-actions">
-            <button id="newProjectButton" class="button workspace-action" type="button">Clear Task</button>
             <button id="projectsButton" class="button workspace-action" type="button">Projects</button>
             <button id="codeViewButton" class="button workspace-action" type="button">History</button>
             <span id="workspaceBalance" class="balance-pill">Credit: —</span>
@@ -148,7 +147,12 @@
                 <textarea id="promptInput" rows="3" maxlength="60000"
                     placeholder="Describe your NinjaTrader strategy…" required></textarea>
                 <div class="composer-footer">
-                    <span id="chatStatus" class="chat-status" role="status">Ready</span>
+                    <div class="composer-context-actions">
+                        <span id="chatStatus" class="chat-status" role="status">Ready</span>
+                        <button id="newProjectButton"
+                            class="button clear-task-button"
+                            type="button">Clear Task</button>
+                    </div>
                     <div class="composer-actions">
                         <button id="clearInputButton"
                             class="button clear-input-button"
@@ -328,6 +332,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=0.9.3"></script>
+    <script src="/js/workspace.js?v=0.9.5"></script>
 </body>
 </html>

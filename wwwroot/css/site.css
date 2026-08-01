@@ -1917,12 +1917,12 @@ html[data-theme="light"] .analyzer-attachment button {
 
 .message-content,
 .message.user .message-content {
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.7;
 }
 
 .message.assistant .message-content {
-    color: #d4d4d4;
+    color: #e4e4e4;
 }
 
 .message.assistant .message-content h2,
@@ -1932,10 +1932,20 @@ html[data-theme="light"] .analyzer-attachment button {
 }
 
 .message.user .message-content {
-    color: #d6dae0;
-    background: rgba(255, 255, 255, .018);
+    width: fit-content;
+    max-width: min(82%, 860px);
+    margin-left: auto;
+    padding: 14px 18px;
+    border: 1px solid #454545;
+    border-radius: 18px;
+    color: #f4f4f4;
+    background: #303030;
     white-space: pre-line;
     line-height: 1.62;
+}
+
+.message.user .message-label {
+    text-align: right;
 }
 
 .message-content p {
@@ -2001,6 +2011,26 @@ html[data-theme="light"] .analyzer-attachment button {
     display: flex;
     align-items: center;
     gap: 9px;
+}
+
+.composer-context-actions {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+}
+
+.clear-task-button {
+    flex: 0 0 auto;
+    border-color: #414141;
+    color: #b8b8b8;
+    background: transparent;
+}
+
+.clear-task-button:hover {
+    border-color: #686868;
+    color: #f1f1f1;
+    background: #292929;
 }
 
 .clear-input-button[hidden] {
@@ -2775,7 +2805,7 @@ html[data-theme="light"] .analyzer-attachment button {
     border: 0;
     color: #c7c7c7;
     background: transparent;
-    font: 400 11px/1.4 "Manrope", sans-serif;
+    font: 400 12px/1.4 "Manrope", sans-serif;
     text-align: left;
     text-decoration: none;
     cursor: pointer;
@@ -2940,14 +2970,26 @@ html[data-theme="light"] .message.user .message-label {
 }
 
 html[data-theme="light"] .message.user .message-content {
-    color: #343a42;
-    background: rgba(32, 36, 42, .025);
+    border-color: #d1d6dc;
+    color: #20242a;
+    background: #e8ebef;
 }
 
 html[data-theme="light"] .composer {
     border-color: #d3d8df;
     background: #ffffff;
     box-shadow: 0 8px 28px rgba(28, 36, 46, .1);
+}
+
+html[data-theme="light"] .clear-task-button {
+    border-color: #c5cbd2;
+    color: #4e5660;
+}
+
+html[data-theme="light"] .clear-task-button:hover {
+    border-color: #959da7;
+    color: #20242a;
+    background: #eef0f3;
 }
 
 html[data-theme="light"] .composer textarea {
@@ -3452,6 +3494,65 @@ html[data-theme="light"] .requirements-validation-dialog {
     justify-content: flex-end;
     gap: 9px;
     padding-top: 3px;
+}
+
+.feedback-invitation {
+    display: grid;
+    gap: 14px;
+    margin-top: 22px;
+    padding: 16px 18px;
+    border: 1px solid #4a342d;
+    border-left: 3px solid var(--primary);
+    border-radius: 9px;
+    color: #cfcfcf;
+    background: linear-gradient(100deg, rgba(255, 72, 40, .09), #181818 58%);
+    font-size: 13px;
+    line-height: 1.55;
+}
+
+.feedback-invitation-copy {
+    display: grid;
+    gap: 5px;
+}
+
+.feedback-invitation-copy strong {
+    color: #f3f3f3;
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.feedback-invitation-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 11px;
+}
+
+.feedback-invitation .button {
+    min-width: 104px;
+    min-height: 36px;
+    padding: 7px 14px;
+    font-size: 12px;
+}
+
+.feedback-invitation .button.primary {
+    min-width: 142px;
+}
+
+html[data-theme="light"] .feedback-invitation {
+    border-color: #e3c2b8;
+    border-left-color: var(--primary);
+    color: #49515a;
+    background: linear-gradient(100deg, #fff1ed, #f8f9fa 58%);
+}
+
+html[data-theme="light"] .feedback-invitation-copy strong {
+    color: #20262d;
+}
+
+@media (max-width: 680px) {
+    .feedback-invitation {
+        padding: 14px;
+    }
 }
 
 /* Code workspace and project source snapshots */

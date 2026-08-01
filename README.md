@@ -20,6 +20,13 @@ variables or another deployment secret provider:
 - `ConnectionStrings__CodePilot`
 - `OpenAI__ApiKey`
 
+Production also requires secure environment values for `Auth__JwtSecret`,
+`Stripe__SecretKey`, `Stripe__WebhookSecret`, the enabled AI providers, and
+SMTP credentials. Start from `appsettings.Production.example.json`; keep RAG
+debug output disabled and restrict `AllowedHosts` to the deployed hostname.
+The IIS application-pool identity must have modify access to the configured
+file-log and preflight-build temporary directories.
+
 ## Deliberately excluded
 
 The initial application does not include:

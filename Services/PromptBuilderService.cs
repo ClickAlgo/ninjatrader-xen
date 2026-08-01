@@ -20,8 +20,17 @@ public sealed class PromptBuilderService(
         string prompt,
         CancellationToken cancellationToken)
     {
+        var complexity = TradingRequestComplexityPolicy.Evaluate(task, prompt);
+        if (complexity.Rejected)
+        {
+            return new(
+                true,
+                "This request is too large for one reliable build. Use Prompt Builder to split it into shorter build-test-build steps.",
+                true);
+        }
+
         if (!IsSupportedTask(task) || ShouldSkipCheck(prompt))
-            return new(false, "");
+            return new(false, "", false);
 
         const string systemPrompt = """
             You classify whether a NinjaTrader 8 NinjaScript build request would benefit
@@ -50,12 +59,13 @@ public sealed class PromptBuilderService(
                 result?.RecommendPromptBuilder == true,
                 string.IsNullOrWhiteSpace(result?.Reason)
                     ? "This request may benefit from clearer requirements before implementation."
-                    : result.Reason.Trim());
+                    : result.Reason.Trim(),
+                false);
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Prompt-quality check failed open.");
-            return new(false, "");
+            return new(false, "", false);
         }
     }
 
@@ -280,7 +290,10 @@ public sealed class PromptBuilderService(
     private sealed record PlanStepResponse(string Title, string Prompt);
 }
 
-public sealed record PromptQualityResult(bool RecommendPromptBuilder, string Reason);
+public sealed record PromptQualityResult(
+    bool RecommendPromptBuilder,
+    string Reason,
+    bool Required);
 public sealed record PromptBuilderQuestion(string Id, string Label, string Question, string Placeholder);
 public sealed record PromptBuilderAnswer(string Question, string? Answer);
 public sealed record PromptBuilderPlan(
