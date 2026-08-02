@@ -1487,6 +1487,42 @@ html[data-theme="light"] .analyzer-attachment button {
     white-space: nowrap;
 }
 
+.analyzer-export-guide {
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: #a9b9c9;
+    font-size: 11px;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.analyzer-export-guide:hover,
+.analyzer-export-guide:focus-visible {
+    color: #fff;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.analyzer-export-guide[hidden] {
+    display: none;
+}
+
+html[data-theme="light"] .analyzer-export-guide {
+    color: #49677e;
+}
+
+html[data-theme="light"] .analyzer-export-guide:hover,
+html[data-theme="light"] .analyzer-export-guide:focus-visible {
+    color: #173e5b;
+}
+
+@media (max-width: 620px) {
+    .analyzer-export-guide {
+        flex-basis: 100%;
+        margin-left: 0;
+    }
+}
+
 .composer-footer {
     display: flex;
     align-items: center;
@@ -2698,6 +2734,112 @@ html[data-theme="light"] .analyzer-attachment button {
     display: none;
 }
 
+.backtest-report-message .message-content {
+    display: grid;
+    gap: 14px;
+}
+
+.backtest-report-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 17px 18px;
+    border: 1px solid #454545;
+    border-left: 3px solid var(--primary);
+    border-radius: 9px;
+    background: linear-gradient(110deg, rgba(240, 68, 22, .1), #202020 48%);
+}
+
+.backtest-report-header > div {
+    display: grid;
+    gap: 4px;
+}
+
+.backtest-report-header .eyebrow {
+    margin: 0;
+    font-size: 9px;
+}
+
+.backtest-report-header strong {
+    color: #f4f4f4;
+    font-size: 17px;
+}
+
+.backtest-report-header small {
+    color: #aaa;
+    font-size: 11px;
+}
+
+.backtest-report-pdf {
+    flex: 0 0 auto;
+    border-color: #555;
+    background: #292929;
+}
+
+.backtest-report-sections {
+    display: grid;
+    gap: 12px;
+}
+
+.backtest-report-section {
+    padding: 17px 19px;
+    border: 1px solid #393939;
+    border-radius: 9px;
+    background: #1c1c1c;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
+}
+
+.backtest-report-section:first-child {
+    border-color: #514039;
+    background: linear-gradient(135deg, rgba(240, 68, 22, .065), #1c1c1c 45%);
+}
+
+.backtest-report-message .backtest-report-section h2,
+.backtest-report-message .backtest-report-section h3 {
+    margin: 0 0 11px;
+    color: #ff7658;
+    font-size: 15px;
+    letter-spacing: .01em;
+}
+
+.backtest-report-section p {
+    margin: 0 0 10px;
+    color: #d7d7d7;
+}
+
+.backtest-report-section p:last-child,
+.backtest-report-section ul:last-child {
+    margin-bottom: 0;
+}
+
+.backtest-report-section ul {
+    display: grid;
+    gap: 7px;
+    margin: 8px 0 0;
+    padding-left: 21px;
+}
+
+.backtest-report-section li {
+    padding-left: 2px;
+    color: #d9d9d9;
+}
+
+@media (max-width: 640px) {
+    .backtest-report-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .backtest-report-pdf {
+        width: 100%;
+    }
+
+    .backtest-report-section {
+        padding: 15px;
+    }
+}
+
 .active-build-plan-copy {
     display: grid;
     gap: 3px;
@@ -2725,8 +2867,26 @@ html[data-theme="light"] .analyzer-attachment button {
 
 .active-build-plan-controls {
     display: flex;
+    align-items: center;
     flex: 0 0 auto;
     gap: 8px;
+}
+
+.build-plan-exit {
+    padding: 5px 2px;
+    border: 0;
+    color: #aaa;
+    background: transparent;
+    font: 500 11px/1.4 "Manrope", sans-serif;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.build-plan-exit:hover,
+.build-plan-exit:focus-visible {
+    color: #fff;
+    text-decoration: underline;
+    text-underline-offset: 3px;
 }
 
 .prompt-builder-plan-dialog {
@@ -2814,11 +2974,17 @@ html[data-theme="light"] .analyzer-attachment button {
     }
 
     .active-build-plan-controls {
+        flex-wrap: wrap;
         width: 100%;
     }
 
     .active-build-plan-controls .button {
         flex: 1;
+    }
+
+    .active-build-plan-controls .build-plan-exit {
+        flex: 1 1 100%;
+        text-align: right;
     }
 }
 
@@ -3054,6 +3220,43 @@ html[data-theme="light"] .cancel-button {
 html[data-theme="light"] .active-build-plan {
     border-color: #e0c9c1;
     background: linear-gradient(90deg, rgba(240, 68, 22, .09), #ffffff 48%);
+}
+
+html[data-theme="light"] .backtest-report-header {
+    border-color: #d6d0cc;
+    border-left-color: var(--primary);
+    background: linear-gradient(110deg, rgba(240, 68, 22, .08), #f5f5f5 48%);
+}
+
+html[data-theme="light"] .backtest-report-header strong {
+    color: #202124;
+}
+
+html[data-theme="light"] .backtest-report-header small {
+    color: #60646b;
+}
+
+html[data-theme="light"] .backtest-report-pdf {
+    border-color: #bbb;
+    color: #303238;
+    background: #fff;
+}
+
+html[data-theme="light"] .backtest-report-section,
+html[data-theme="light"] .backtest-report-section:first-child {
+    border-color: #d7d9dc;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(24, 28, 34, .05);
+}
+
+html[data-theme="light"] .backtest-report-message .backtest-report-section h2,
+html[data-theme="light"] .backtest-report-message .backtest-report-section h3 {
+    color: #b52e0c;
+}
+
+html[data-theme="light"] .backtest-report-section p,
+html[data-theme="light"] .backtest-report-section li {
+    color: #303238;
 }
 
 html[data-theme="light"] .active-build-plan-copy strong {

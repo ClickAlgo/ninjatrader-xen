@@ -112,6 +112,8 @@ validated independently.
 - [x] Same email permitted across supported platforms while accounts remain scoped
 - [x] Once-per-platform free credit with device hash, IP-prefix and grant audit records
 - [x] Disposable-email protection
+- [x] Configuration-driven exact-IP and IPv4/IPv6 CIDR free-trial blocklist,
+  applied only to promotional credit without restricting account or paid usage
 - [x] Stripe Checkout top-ups, signed webhooks, transaction history and return pages
 - [x] Configurable model pricing with immediate token-based credit deduction
 - [x] Healthy, low and exhausted credit states, with generation blocked at zero
@@ -135,6 +137,8 @@ validated independently.
   and indicators
 - [x] Task-specific prompts, placeholders, upload controls and platform terminology
 - [x] Source file and supported reference-image uploads
+- [x] Structural source-type validation redirects Strategy/Indicator files to
+  the matching existing-code task before RAG or model execution
 - [x] Code-aware rendering for user source and model source
 - [x] Copy source, download source and platform-native package download
 - [x] Generation progress, cancellation, clear input and clear task controls
@@ -152,6 +156,8 @@ validated independently.
 - [x] Prompt Builder asks only the necessary number of clarification questions
 - [x] Optional baseline suggestions for users who want Xen to choose sensible defaults
 - [x] Approved answers become a persistent, staged Build Plan
+- [x] Active Build Plans can be exited without deleting project history,
+  generated source or snapshots
 - [x] Simple contextual modifications bypass unnecessary replanning
 - [x] Contradictory, unsafe or source-deficient repair requests may still ask for clarification
 - [x] Oversized prompts are redirected into shorter build-test-build steps
@@ -205,6 +211,8 @@ validated independently.
 - [x] Platform backtest-summary import and AI analysis
 - [x] Optional detailed trade export context
 - [x] Performance analysis separated from code generation when source is unavailable
+- [x] Dedicated Strategy Analyzer report presentation with section cards and
+  browser-native print/PDF export, including restored saved reports
 - [ ] Guided backtest-to-code improvement workflow requiring source and user approval
 - [ ] Comparison of multiple saved backtests
 - [ ] Screenshot support for non-exportable analyzer views
@@ -229,6 +237,7 @@ validated independently.
 
 - [x] Product homepage describing only currently available capabilities
 - [x] Platform-specific user-guide structure and workspace links
+- [x] Contextual task guidance links, including Strategy Analyzer CSV export help
 - [x] Credit terms, refund policy and payment-support information
 - [ ] Complete task guides with screenshots
 - [ ] Requirements verification, Build Check and repair documentation

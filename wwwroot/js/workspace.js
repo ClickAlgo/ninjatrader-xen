@@ -86,6 +86,7 @@ const sourceImport = document.getElementById("sourceImport");
 const sourceFileInput = document.getElementById("sourceFileInput");
 const sourceFileButton = document.getElementById("sourceFileButton");
 const sourceFileStatus = document.getElementById("sourceFileStatus");
+const analyzerExportGuide = document.getElementById("analyzerExportGuide");
 const analyzerAttachments =
     document.getElementById("analyzerAttachments");
 const imageImport = document.getElementById("imageImport");
@@ -260,6 +261,8 @@ form.addEventListener("submit", async event => {
     let prompt = promptInput.value.trim();
     if (!prompt)
         return;
+    if (redirectMismatchedExistingSource(prompt))
+        return;
     const shouldInviteFeedback = isClearlyFrustrated(prompt);
 
     const requestAnalyzerExports =
@@ -429,7 +432,12 @@ form.addEventListener("submit", async event => {
         history.push({ role: "assistant", content: assistantText });
         const buildPlanStepReady = markBuildPlanResponseReady(prompt);
         assistantMessage.classList.remove("generating");
-        renderStructuredResponse(content, assistantText);
+        if (activeTask === "analyse-backtest") {
+            assistantMessage.classList.add("backtest-report-message");
+            renderBacktestReport(content, assistantText);
+        } else {
+            renderStructuredResponse(content, assistantText);
+        }
         if (ragDebug)
             appendRagDebug(assistantMessage, ragDebug);
         if (shouldInviteFeedback)
@@ -634,6 +642,112 @@ function renderStructuredResponse(container, source) {
             "");
         appendResponseCodeActions(container, primaryCode);
     }
+}
+
+function isBacktestReportSource(source) {
+    return /^#{1,6}\s+Performance summary\b/im.test(source || "") &&
+           /^#{1,6}\s+Key findings\b/im.test(source || "");
+}
+
+function renderBacktestReport(container, source) {
+    renderStructuredResponse(container, source);
+
+    const reportHeader = document.createElement("header");
+    reportHeader.className = "backtest-report-header";
+
+    const heading = document.createElement("div");
+    const eyebrow = document.createElement("span");
+    eyebrow.className = "eyebrow";
+    eyebrow.textContent = "STRATEGY ANALYZER";
+    const title = document.createElement("strong");
+    title.textContent = "Backtest performance report";
+    const subtitle = document.createElement("small");
+    subtitle.textContent =
+        "Evidence-based review of the supplied NinjaTrader results";
+    heading.append(eyebrow, title, subtitle);
+
+    const savePdf = document.createElement("button");
+    savePdf.type = "button";
+    savePdf.className = "button backtest-report-pdf";
+    savePdf.textContent = "Save report as PDF";
+    savePdf.addEventListener(
+        "click",
+        () => printBacktestReport(container));
+    reportHeader.append(heading, savePdf);
+
+    const sections = document.createElement("div");
+    sections.className = "backtest-report-sections";
+    let section = null;
+    for (const node of [...container.childNodes]) {
+        if (node.nodeType === Node.ELEMENT_NODE &&
+            (node.tagName === "H2" || node.tagName === "H3")) {
+            section = document.createElement("section");
+            section.className = "backtest-report-section";
+            sections.appendChild(section);
+        }
+
+        if (!section) {
+            section = document.createElement("section");
+            section.className = "backtest-report-section introduction";
+            sections.appendChild(section);
+        }
+        section.appendChild(node);
+    }
+
+    container.replaceChildren(reportHeader, sections);
+}
+
+function printBacktestReport(container) {
+    const reportSections = container.querySelector(
+        ".backtest-report-sections");
+    if (!reportSections)
+        return;
+
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) {
+        status.textContent =
+            "Allow pop-ups to save the backtest report as a PDF";
+        return;
+    }
+
+    reportWindow.opener = null;
+    const reportTitle = currentProjectTitle ||
+        "NinjaTrader Strategy Analyzer Report";
+    reportWindow.document.write(`<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(reportTitle)}</title>
+    <style>
+        @page { size: A4; margin: 16mm; }
+        * { box-sizing: border-box; }
+        body { margin: 0; color: #202124; font: 10.5pt/1.55 Arial, sans-serif; }
+        header { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 2px solid #f04416; }
+        h1 { margin: 0 0 5px; font-size: 20pt; }
+        header p { margin: 0; color: #60646b; }
+        section { break-inside: avoid; margin: 0 0 13px; padding: 12px 14px;
+            border: 1px solid #d9dce1; border-radius: 6px; }
+        h2, h3 { margin: 0 0 9px; color: #b52e0c; font-size: 13pt; }
+        p { margin: 0 0 8px; }
+        ul { margin: 7px 0 0; padding-left: 20px; }
+        li { margin: 0 0 6px; }
+        code { padding: 1px 4px; border-radius: 3px; background: #f0f1f3; }
+        .notice { margin-top: 15px; color: #666; font-size: 8.5pt; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>${escapeHtml(reportTitle)}</h1>
+        <p>NinjaTrader Strategy Analyzer review generated by Xen</p>
+    </header>
+    ${reportSections.innerHTML}
+    <p class="notice">Backtest results are historical and do not guarantee future performance.</p>
+</body>
+</html>`);
+    reportWindow.document.close();
+    reportWindow.focus();
+    window.setTimeout(() => reportWindow.print(), 250);
 }
 
 function renderPreflightBuildReport(container, source) {
@@ -1503,6 +1617,61 @@ function taskIntro(task) {
     return intros[task];
 }
 
+function detectNinjaScriptSourceType(source) {
+    const classDeclaration =
+        /\bclass\s+[A-Za-z_][A-Za-z0-9_]*(?:\s*<[^>{}]+>)?\s*:\s*([^{]+)\{/g;
+    let match;
+    while ((match = classDeclaration.exec(source || "")) !== null) {
+        const baseType = match[1].match(
+            /\b(?:NinjaTrader\.NinjaScript\.)?(Strategy|Indicator)\b/);
+        if (baseType)
+            return baseType[1].toLowerCase();
+    }
+    return null;
+}
+
+function redirectMismatchedExistingSource(source, fileName = "") {
+    if (activeTask !== "existing-strategy" &&
+        activeTask !== "existing-indicator") {
+        return false;
+    }
+
+    const sourceType = detectNinjaScriptSourceType(source);
+    const expectedType = activeTask === "existing-strategy"
+        ? "strategy"
+        : "indicator";
+    if (!sourceType || sourceType === expectedType)
+        return false;
+
+    const sourceRequest = source;
+    activeTask = sourceType === "strategy"
+        ? "existing-strategy"
+        : "existing-indicator";
+    document.querySelectorAll(".task-button").forEach(item =>
+        item.classList.toggle("active", item.dataset.task === activeTask));
+    document.getElementById("taskTitle").textContent = taskNames[activeTask];
+    promptInput.placeholder = taskPlaceholders[activeTask];
+    clearBuildPlan();
+    startNewProject(false);
+    promptInput.value = sourceRequest;
+    updateClearInputButton();
+
+    const typeLabel = sourceType === "strategy" ? "Strategy" : "Indicator";
+    const taskLabel = sourceType === "strategy"
+        ? "Existing Strategy"
+        : "Existing Indicator";
+    const sourceLabel = fileName ? `${fileName} is` : "This source is";
+    const message =
+        `${sourceLabel} a NinjaTrader ${typeLabel}. ` +
+        `Xen moved it to ${taskLabel} so the correct specialist prompt is used. ` +
+        "Review it, then press Send.";
+    sourceFileStatus.textContent = message;
+    status.textContent = message;
+    promptInput.focus();
+    promptInput.setSelectionRange(0, 0);
+    return true;
+}
+
 function startNewProject(resetTask = true) {
     currentProjectId = null;
     currentProjectTitle = "";
@@ -1584,6 +1753,7 @@ function updateTaskSpecificUi() {
     sourceFileInput.multiple = activeTask === "analyse-backtest";
     sourceFileButton.textContent = options?.button || "Upload source file";
     sourceFileStatus.textContent = options?.status || "";
+    analyzerExportGuide.hidden = activeTask !== "analyse-backtest";
     sendButton.querySelector(".send-label").textContent =
         activeTask === "analyse-backtest" ? "Analyse results" : "Send";
     renderAnalyzerAttachments();
@@ -1769,6 +1939,8 @@ async function importSourceFile() {
 
         promptInput.value = request;
         updateClearInputButton();
+        if (redirectMismatchedExistingSource(request, file.name))
+            return;
         sourceFileStatus.textContent =
             `${file.name} loaded · review it, then press Send`;
         promptInput.focus();
@@ -2214,6 +2386,30 @@ function clearBuildPlan() {
     renderActiveBuildPlan();
 }
 
+function exitBuildPlan() {
+    const plan = getBuildPlan();
+    if (!plan || !window.confirm(
+        "Exit this Build Plan? Completed work and conversation history will remain saved.")) {
+        return;
+    }
+
+    const index = Math.min(
+        plan.currentIndex || 0,
+        plan.prompts.length - 1);
+    const loadedPrompt = plan.prompts[index]?.prompt?.trim();
+    if (plan.stepStatus === "loaded" &&
+        loadedPrompt &&
+        promptInput.value.trim() === loadedPrompt) {
+        promptInput.value = "";
+        updateClearInputButton();
+    }
+
+    clearBuildPlan();
+    status.textContent =
+        "Build Plan exited · project and conversation retained";
+    promptInput.focus();
+}
+
 function renderActiveBuildPlan() {
     const plan = getBuildPlan();
     activeBuildPlanPanel.replaceChildren();
@@ -2249,6 +2445,11 @@ function renderActiveBuildPlan() {
         if (action === "start")
             loadBuildPlanPrompt(getBuildPlan()?.currentIndex || 0);
     });
+    const exit = document.createElement("button");
+    exit.type = "button";
+    exit.className = "build-plan-exit";
+    exit.textContent = "Exit plan";
+    exit.addEventListener("click", exitBuildPlan);
 
     const state = plan.stepStatus || "ready";
     if (plan.completed) {
@@ -2349,6 +2550,7 @@ function renderActiveBuildPlan() {
         }
     }
     controls.appendChild(view);
+    controls.appendChild(exit);
     activeBuildPlanPanel.append(copy, controls);
 }
 
@@ -3614,10 +3816,16 @@ function applyProjectToWorkspace(project) {
     for (const turn of history) {
         const message = addMessage(turn.role, "");
         const content = message.querySelector(".message-content");
-        if (turn.role === "assistant")
+        if (turn.role === "assistant" &&
+            activeTask === "analyse-backtest" &&
+            isBacktestReportSource(turn.content)) {
+            message.classList.add("backtest-report-message");
+            renderBacktestReport(content, turn.content);
+        } else if (turn.role === "assistant") {
             renderStructuredResponse(content, turn.content);
-        else
+        } else {
             renderUserMessage(content, turn.content);
+        }
     }
 
     if (!history.length)

@@ -169,6 +169,56 @@ public sealed class PromptBuilderRetrievalContextTests
     }
 
     [Fact]
+    public void Workspace_CanExitBuildPlanWithoutClearingSavedWork()
+    {
+        var script = ReadWorkspaceScript();
+        var exitStart = script.IndexOf(
+            "function exitBuildPlan()",
+            StringComparison.Ordinal);
+        var exitEnd = script.IndexOf(
+            "function renderActiveBuildPlan()",
+            exitStart,
+            StringComparison.Ordinal);
+        var exitFunction = script[exitStart..exitEnd];
+
+        Assert.Contains("Exit this Build Plan?", exitFunction);
+        Assert.Contains("clearBuildPlan();", exitFunction);
+        Assert.Contains("conversation history will remain saved", exitFunction);
+        Assert.Contains("plan.stepStatus === \"loaded\"", exitFunction);
+        Assert.DoesNotContain("startNewProject", exitFunction);
+        Assert.Contains("exit.textContent = \"Exit plan\"", script);
+    }
+
+    [Fact]
+    public void Workspace_RedirectsMismatchedExistingNinjaScriptBeforeChat()
+    {
+        var script = ReadWorkspaceScript();
+        var submitStart = script.IndexOf(
+            "form.addEventListener(\"submit\"",
+            StringComparison.Ordinal);
+        var chatRequest = script.IndexOf(
+            "fetch(\"/api/chat/stream\"",
+            submitStart,
+            StringComparison.Ordinal);
+        var redirectCheck = script.IndexOf(
+            "redirectMismatchedExistingSource(prompt)",
+            submitStart,
+            StringComparison.Ordinal);
+
+        Assert.True(redirectCheck > submitStart);
+        Assert.True(redirectCheck < chatRequest);
+        Assert.Contains("(Strategy|Indicator)", script);
+        Assert.Contains(
+            "? \"existing-strategy\"\n        : \"existing-indicator\"",
+            script);
+        Assert.Contains("startNewProject(false);", script);
+        Assert.Contains("correct specialist prompt is used", script);
+        Assert.Contains(
+            "redirectMismatchedExistingSource(request, file.name)",
+            script);
+    }
+
+    [Fact]
     public void Workspace_RestoringSourceClearsTheActiveBuildPlan()
     {
         var script = ReadWorkspaceScript();

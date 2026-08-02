@@ -1,5 +1,6 @@
 using Microsoft.Data.SqlClient;
 using NinjaTrader_Xen.Options;
+using NinjaTrader_Xen.Security;
 using System.Data;
 using System.Net;
 using System.Net.Sockets;
@@ -15,6 +16,7 @@ public sealed class FreeTrialOptions
     public decimal AmountGbp { get; init; } = 5m;
     public int DurationHours { get; init; } = 48;
     public string[] BlockedCountryCodes { get; init; } = [];
+    public string[] BlockedIpRanges { get; init; } = [];
 }
 
 public sealed class ProxyCheckOptions
@@ -35,7 +37,7 @@ public sealed class FreeTrialService(
         int subscriberId,
         string email,
         string? deviceFingerprint,
-        string? remoteIp,
+        IPAddress? remoteIp,
         CancellationToken cancellationToken)
     {
         var options = configuration
@@ -51,8 +53,20 @@ public sealed class FreeTrialService(
             return new FreeTrialResult(false, null);
         }
 
+        if (IpBlocklist.TryMatch(
+                remoteIp,
+                options.BlockedIpRanges,
+                out var matchedRule))
+        {
+            logger.LogWarning(
+                "Free-trial credit withheld because client IP {ClientIp} matched configured blocklist rule {BlockedIpRule}.",
+                remoteIp,
+                matchedRule);
+            return new FreeTrialResult(false, null);
+        }
+
         var networkCheck = await CheckNetworkAsync(
-            remoteIp,
+            remoteIp?.ToString(),
             options,
             cancellationToken);
         if (networkCheck.Blocked)
