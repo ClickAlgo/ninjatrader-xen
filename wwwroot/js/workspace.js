@@ -30,7 +30,8 @@ let currentProjectId = null;
 let currentProjectTitle = "";
 let currentController = null;
 let currentBalanceGbp = null;
-let promptQualityChecked = false;
+let promptBuilderBypassed = false;
+let promptReviewCompleted = false;
 let pendingImage = null;
 let pendingAnalyzerExports = [];
 let acceptedModelSelection = "";
@@ -41,6 +42,8 @@ const buildPlanStorageKey = "nx_active_build_plan_v1";
 const defaultModel = "gpt-5.3-codex";
 const preflightRepairPromptPrefix =
     "Repair the latest complete NinjaScript source so it passes";
+const generatedRepairPromptPrefix =
+    "Repair the latest complete NinjaScript source";
 const lowCostModels = new Set([
     "gpt-5.6-luna",
     "deepseek-v4-pro",
@@ -282,15 +285,18 @@ form.addEventListener("submit", async event => {
         prompt = buildAnalyzerRequest(prompt, requestAnalyzerExports);
 
     preparingRequest = true;
+    promptBuilderBypassed = false;
+    promptReviewCompleted = false;
     let reviewedPrompt;
     try {
-        reviewedPrompt = await reviewInitialBuildPrompt(prompt);
+        reviewedPrompt = await reviewBuildPrompt(prompt);
     } finally {
         preparingRequest = false;
     }
     if (!reviewedPrompt)
         return;
     prompt = reviewedPrompt;
+    const isGeneratedRepair = isGeneratedRepairPrompt(prompt);
 
     const createdProjectForRequest = !currentProjectId;
     if (createdProjectForRequest) {
@@ -324,7 +330,7 @@ form.addEventListener("submit", async event => {
             <span class="working-dot"></span>
             <strong>${activeTask === "analyse-backtest"
                 ? "Xen is analysing your backtest…"
-                : "Xen is generating your NinjaScript…"}</strong>
+                : "Xen is preparing your response…"}</strong>
         </div>
     `;
 
@@ -338,6 +344,10 @@ form.addEventListener("submit", async event => {
     status.textContent = "Working…";
     scrollMessagesToBottom();
     currentController = new AbortController();
+    const bypassedPromptBuilder = promptBuilderBypassed;
+    const completedPromptReview = promptReviewCompleted;
+    promptBuilderBypassed = false;
+    promptReviewCompleted = false;
 
     try {
         const response = await fetch("/api/chat/stream", {
@@ -353,7 +363,9 @@ form.addEventListener("submit", async event => {
                 history: previousHistory,
                 image: requestImage,
                 projectId: currentProjectId,
-                retrievalPrompt: buildRetrievalPrompt(prompt)
+                retrievalPrompt: buildRetrievalPrompt(prompt),
+                promptBuilderBypassed: bypassedPromptBuilder,
+                promptReviewCompleted: completedPromptReview
             }),
             signal: currentController.signal
         });
@@ -423,7 +435,9 @@ form.addEventListener("submit", async event => {
         if (shouldInviteFeedback)
             appendFeedbackInvitation(assistantMessage);
         scrollMessagesToBottom();
-        const generatedCode = buildPlanStepReady
+        const shouldAutomaticallyBuild =
+            buildPlanStepReady || isGeneratedRepair;
+        const generatedCode = shouldAutomaticallyBuild
             ? extractLatestCodeBlock(assistantText)
             : "";
         if (buildPlanStepReady && !generatedCode)
@@ -437,7 +451,11 @@ form.addEventListener("submit", async event => {
         if (!generatedCode || automaticBuildResult === null) {
             status.textContent = "Saving project…";
             const saved = await saveCurrentProject();
-            status.textContent = automaticBuildResult === null
+            status.textContent = isGeneratedRepair && !generatedCode
+                ? (saved
+                    ? "Repair saved · no complete C# file returned for Build Check"
+                    : "Repair response ready · no complete C# file returned")
+                : automaticBuildResult === null
                 ? (saved
                     ? "Build Check unavailable · response saved"
                     : "Build Check unavailable · project not saved")
@@ -1026,7 +1044,7 @@ function appendProse(container, text) {
             continue;
         }
 
-        const heading = line.match(/^(#{1,3})\s+(.+)$/);
+        const heading = line.match(/^(#{1,6})\s+(.+)$/);
         if (heading) {
             const element = document.createElement(
                 heading[1].length === 1 ? "h2" : "h3");
@@ -1365,7 +1383,6 @@ function startPreflightRepair(errors, requestedModel = null) {
         "and explicit requirements, and return one complete compile-ready C# " +
         "file.\n\n" +
         `Compiler errors:\n${formatPreflightErrors(errors)}`;
-    promptQualityChecked = true;
     updateClearInputButton();
     status.textContent = requestedModel
         ? "Starting compiler-error repair with Codex 5.3..."
@@ -1490,7 +1507,6 @@ function startNewProject(resetTask = true) {
     currentProjectId = null;
     currentProjectTitle = "";
     history = [];
-    promptQualityChecked = false;
     promptInput.value = "";
     clearAnalyzerExports(false);
     updateClearInputButton();
@@ -1952,16 +1968,15 @@ function clearAnalyzerExports(updateStatus = true) {
 
 let resolvePromptBuilder = null;
 
-async function reviewInitialBuildPrompt(prompt) {
-    if (isSavedBuildPlanPrompt(prompt)) {
-        promptQualityChecked = true;
+async function reviewBuildPrompt(prompt) {
+    if (isSavedBuildPlanPrompt(prompt) ||
+        prompt.trimStart().startsWith(
+            "Repair the latest complete NinjaScript source")) {
+        promptReviewCompleted = true;
         return prompt;
     }
 
-    if (promptQualityChecked ||
-        currentProjectId ||
-        history.length > 0 ||
-        !["build-strategy", "build-indicator"].includes(activeTask)) {
+    if (!["build-strategy", "build-indicator"].includes(activeTask)) {
         return prompt;
     }
 
@@ -1969,11 +1984,13 @@ async function reviewInitialBuildPrompt(prompt) {
     try {
         const response = await promptBuilderFetch("/api/prompt-builder/check", {
             task: activeTask,
-            prompt
+            prompt,
+            hasCurrentCode: Boolean(getLatestGeneratedCode()),
+            previousAssistantResponse: getLatestHistoryContent("assistant")
         });
 
         if (!response.recommendPromptBuilder) {
-            promptQualityChecked = true;
+            promptReviewCompleted = true;
             return prompt;
         }
 
@@ -1981,7 +1998,8 @@ async function reviewInitialBuildPrompt(prompt) {
             response.reason,
             response.required === true);
         if (decision === "build") {
-            promptQualityChecked = true;
+            promptReviewCompleted = true;
+            promptBuilderBypassed = true;
             return prompt;
         }
         if (decision !== "clarify")
@@ -1993,10 +2011,9 @@ async function reviewInitialBuildPrompt(prompt) {
 
         promptInput.value = improvedPrompt;
         updateClearInputButton();
-        promptQualityChecked = true;
+        promptReviewCompleted = true;
         return improvedPrompt;
     } catch {
-        promptQualityChecked = true;
         return prompt;
     } finally {
         setComposerReviewState(false, "Ready");
@@ -2043,10 +2060,12 @@ async function runPromptBuilder(prompt) {
             ["Build original request", "build", "button"],
             ["Edit request", "edit", "button"]
         ]);
+        addBaselineSuggestionAction(prompt);
 
         const decision = await waitForPromptBuilderDecision();
         if (decision === "build") {
-            promptQualityChecked = true;
+            promptReviewCompleted = true;
+            promptBuilderBypassed = true;
             return prompt;
         }
         if (decision !== "compose")
@@ -2088,6 +2107,65 @@ async function runPromptBuilder(prompt) {
     } finally {
         setPromptBuilderBusy(false);
     }
+}
+
+function addBaselineSuggestionAction(prompt) {
+    const row = document.createElement("div");
+    row.className = "prompt-builder-suggestion-link-row";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "prompt-builder-suggestion-link";
+    button.textContent = "Let Xen suggest baseline answers";
+    button.addEventListener("click", async () => {
+        const fields = [...promptBuilderBody.querySelectorAll("[data-question]")]
+            .filter(field => !field.value.trim());
+        if (!fields.length) {
+            promptBuilderStatus.textContent =
+                "All clarification questions already have answers.";
+            return;
+        }
+
+        setPromptBuilderBusy(true);
+        setPromptBuilderLoading("Xen is suggesting editable baseline answers...");
+        try {
+            const result = await promptBuilderFetch(
+                "/api/prompt-builder/suggestions", {
+                    task: activeTask,
+                    prompt,
+                    questions: fields.map(field => field.dataset.question)
+                });
+            const answers = Array.isArray(result.answers) ? result.answers : [];
+            if (answers.length !== fields.length)
+                throw new Error("Xen did not return every baseline suggestion.");
+
+            fields.forEach((field, index) => {
+                if (field.value.trim())
+                    return;
+                field.value = answers[index];
+                const container = field.closest(".prompt-builder-field");
+                container?.classList.add("suggested");
+                if (container &&
+                    !container.querySelector(".prompt-builder-suggestion-note")) {
+                    const note = document.createElement("small");
+                    note.className = "prompt-builder-suggestion-note";
+                    note.textContent =
+                        "Xen suggestion - review and edit before creating the plan.";
+                    container.appendChild(note);
+                }
+            });
+            promptBuilderStatus.textContent =
+                "Editable baseline suggestions added to blank answers.";
+            promptBuilderStatus.classList.remove("error");
+        } catch (error) {
+            promptBuilderStatus.textContent =
+                error.message || "Xen could not suggest baseline answers.";
+            promptBuilderStatus.classList.add("error");
+        } finally {
+            setPromptBuilderBusy(false);
+        }
+    });
+    row.appendChild(button);
+    promptBuilderBody.prepend(row);
 }
 
 function saveBuildPlan(result, task, originalPrompt) {
@@ -2293,6 +2371,12 @@ function extractLatestCodeBlock(text) {
     return blocks.length ? blocks.at(-1)[1].trim() : "";
 }
 
+function isGeneratedRepairPrompt(prompt) {
+    return (prompt || "")
+        .trimStart()
+        .startsWith(generatedRepairPromptPrefix);
+}
+
 let requirementsValidationCode = "";
 
 function openRequirementsValidation(code = getLatestGeneratedCode()) {
@@ -2444,7 +2528,6 @@ function renderRequirementsValidationResult(report, requirements, auditModel) {
             "C# file.\n\n" +
             `Original requirements:\n${requirements}\n\n` +
             `Verification report:\n${storedReport}`;
-        promptQualityChecked = true;
         updateClearInputButton();
         status.textContent = "Starting focused repair...";
         form.requestSubmit();
@@ -2653,7 +2736,6 @@ function loadBuildPlanPrompt(index) {
     updateBuildPlan(plan);
     promptInput.value = step.prompt;
     updateClearInputButton();
-    promptQualityChecked = true;
     promptInput.focus();
     promptInput.scrollIntoView({ behavior: "smooth", block: "center" });
 }
@@ -3509,7 +3591,6 @@ function applyProjectToWorkspace(project) {
     currentProjectTitle = project.title;
     activeTask = taskNames[project.task] ? project.task : "build-strategy";
     history = Array.isArray(project.messages) ? project.messages : [];
-    promptQualityChecked = history.length > 0;
     promptInput.value = "";
     clearAnalyzerExports(false);
     updateClearInputButton();

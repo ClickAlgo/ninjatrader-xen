@@ -7,7 +7,9 @@ public sealed record ChatRequest(
     IReadOnlyList<ChatTurn>? History,
     ChatImageRequest? Image = null,
     Guid? ProjectId = null,
-    string? RetrievalPrompt = null);
+    string? RetrievalPrompt = null,
+    bool PromptBuilderBypassed = false,
+    bool PromptReviewCompleted = false);
 
 public sealed record ChatTurn(string Role, string Content);
 

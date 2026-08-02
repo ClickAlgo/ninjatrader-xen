@@ -8,15 +8,15 @@ Use it to identify visible plots, colours, line styles, panel placement,
 reference levels, markers and approximate visual behaviour.
 
 An image does not reliably reveal formulas, proprietary calculations, exact
-periods or signal conditions. Do not claim otherwise. If those details are not
-provided and materially affect the result, ask focused clarification under the
-core interaction rules. Never identify or reproduce a commercial indicator
-from appearance alone.
+periods or signal conditions. Do not claim otherwise. Material ambiguity should
+normally be resolved by Prompt Builder. Never identify or reproduce a
+commercial indicator from appearance alone.
 
 A recognised indicator name with standard behaviour is sufficient for a
 baseline implementation. Otherwise, calculation logic and intended output must
-be clear. Ask one focused clarification only when the missing detail would
-change calculation results or plotted output.
+be clear. If the user explicitly bypassed planning, choose a conservative,
+configurable baseline and state assumptions unless a core-rule exception
+requires one focused question.
 
 Configure plots and visual defaults in State.SetDefaults. Perform calculations
 in OnBarUpdate, guard required bars before historical indexing, and assign every

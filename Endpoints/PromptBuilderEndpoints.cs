@@ -10,6 +10,7 @@ public static class PromptBuilderEndpoints
         var group = app.MapGroup("/api/prompt-builder").RequireAuthorization();
         group.MapPost("/check", Check);
         group.MapPost("/questions", Questions);
+        group.MapPost("/suggestions", Suggestions);
         group.MapPost("/compose", Compose);
         return app;
     }
@@ -26,6 +27,8 @@ public static class PromptBuilderEndpoints
         var result = await service.CheckAsync(
             request.Task,
             request.Prompt,
+            request.HasCurrentCode,
+            request.PreviousAssistantResponse,
             cancellationToken);
         return Results.Ok(result);
     }
@@ -102,6 +105,51 @@ public static class PromptBuilderEndpoints
         }
     }
 
+    private static async Task<IResult> Suggestions(
+        SuggestionRequest request,
+        PromptBuilderService service,
+        CancellationToken cancellationToken)
+    {
+        var validation = ValidatePrompt(new PromptRequest(request.Task, request.Prompt));
+        if (validation is not null)
+            return validation;
+        if (!service.IsConfigured)
+            return Results.Problem(
+                "Prompt Builder is not configured.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        if (request.Questions is null || request.Questions.Count is < 1 or > 3 ||
+            request.Questions.Any(question =>
+                string.IsNullOrWhiteSpace(question) || question.Length > 500))
+        {
+            return Results.BadRequest(new
+            {
+                message = "Provide between 1 and 3 valid clarification questions."
+            });
+        }
+
+        try
+        {
+            var answers = await service.SuggestAnswersAsync(
+                request.Task,
+                request.Prompt,
+                request.Questions,
+                cancellationToken);
+            return Results.Ok(new { answers });
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Results.Problem(
+                "Baseline suggestions took too long to respond.",
+                statusCode: StatusCodes.Status504GatewayTimeout);
+        }
+        catch
+        {
+            return Results.Problem(
+                "Xen could not suggest baseline answers.",
+                statusCode: StatusCodes.Status502BadGateway);
+        }
+    }
+
     private static IResult? ValidatePrompt(PromptRequest request)
     {
         if (request.Task is not ("build-strategy" or "build-indicator"))
@@ -111,9 +159,17 @@ public static class PromptBuilderEndpoints
         return null;
     }
 
-    public sealed record PromptRequest(string Task, string Prompt);
+    public sealed record PromptRequest(
+        string Task,
+        string Prompt,
+        bool HasCurrentCode = false,
+        string? PreviousAssistantResponse = null);
     public sealed record ComposeRequest(
         string Task,
         string Prompt,
         List<PromptBuilderAnswer> Answers);
+    public sealed record SuggestionRequest(
+        string Task,
+        string Prompt,
+        List<string> Questions);
 }

@@ -6,6 +6,7 @@ namespace NinjaTrader_Xen.Services;
 public sealed class PromptBuilderService(
     IHttpClientFactory httpClientFactory,
     IConfiguration configuration,
+    RequestRouterService requestRouter,
     ILogger<PromptBuilderService> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions =
@@ -18,6 +19,8 @@ public sealed class PromptBuilderService(
     public async Task<PromptQualityResult> CheckAsync(
         string task,
         string prompt,
+        bool hasCurrentCode,
+        string? previousAssistantResponse,
         CancellationToken cancellationToken)
     {
         var complexity = TradingRequestComplexityPolicy.Evaluate(task, prompt);
@@ -32,32 +35,17 @@ public sealed class PromptBuilderService(
         if (!IsSupportedTask(task) || ShouldSkipCheck(prompt))
             return new(false, "", false);
 
-        const string systemPrompt = """
-            You classify whether a NinjaTrader 8 NinjaScript build request would benefit
-            from a separate Prompt Builder before code generation.
-
-            Return JSON only:
-            {"recommendPromptBuilder":true|false,"reason":"One concise sentence"}
-
-            Recommend planning only when important behaviour is materially ambiguous,
-            several interacting systems are combined, the user asks Xen to invent the
-            strategy, or the project is too broad for one reliable initial build. Do not
-            recommend it merely because a prompt is short. Do not recommend it for a
-            recognised indicator or common strategy with a natural baseline, such as RSI,
-            SMA, EMA, MACD, Bollinger Bands, Supertrend or a moving-average crossover.
-            When uncertain, return false.
-            """;
-
         try
         {
-            var result = await CompleteJsonAsync<QualityResponse>(
-                systemPrompt,
-                $"Task: {task}\nBuild request:\n{prompt}",
-                250,
+            var result = await requestRouter.RouteAsync(
+                task,
+                prompt,
+                hasCurrentCode,
+                previousAssistantResponse,
                 cancellationToken);
             return new(
-                result?.RecommendPromptBuilder == true,
-                string.IsNullOrWhiteSpace(result?.Reason)
+                result.RecommendPromptBuilder,
+                string.IsNullOrWhiteSpace(result.Reason)
                     ? "This request may benefit from clearer requirements before implementation."
                     : result.Reason.Trim(),
                 false);
@@ -220,6 +208,47 @@ public sealed class PromptBuilderService(
             prompts);
     }
 
+    public async Task<IReadOnlyList<string>> SuggestAnswersAsync(
+        string task,
+        string prompt,
+        IReadOnlyList<string> questions,
+        CancellationToken cancellationToken)
+    {
+        EnsureSupportedTask(task);
+        if (questions.Count is < 1 or > 3)
+            throw new ArgumentException("Provide between 1 and 3 questions.");
+
+        const string systemPrompt = """
+            You provide editable baseline requirement suggestions for NinjaTrader Xen's
+            Prompt Builder. Suggest one concise answer for every supplied question.
+
+            Use conservative, configurable and testable NinjaScript behaviour. Preserve
+            the original request. Do not claim any rule is best, optimal or profitable.
+            Do not give trading advice. Do not generate source code. When several sensible
+            interpretations exist, choose one straightforward baseline that a user can
+            understand and edit before creating a Build Plan.
+
+            Return JSON only in the same order as the questions:
+            {"answers":["Editable baseline answer 1","Editable baseline answer 2"]}
+            """;
+
+        var questionText = string.Join("\n", questions.Select(
+            (question, index) => $"{index + 1}. {question.Trim()}"));
+        var result = await CompleteJsonAsync<SuggestionsResponse>(
+            systemPrompt,
+            $"Task: {task}\nOriginal request:\n{prompt}\nQuestions:\n{questionText}",
+            1000,
+            cancellationToken);
+        var answers = result?.Answers?
+            .Select(answer => answer?.Trim() ?? "")
+            .Take(questions.Count)
+            .ToArray() ?? [];
+        if (answers.Length != questions.Count || answers.Any(string.IsNullOrWhiteSpace))
+            throw new InvalidOperationException(
+                "Prompt Builder did not return a suggestion for every question.");
+        return answers;
+    }
+
     private async Task<T?> CompleteJsonAsync<T>(
         string systemPrompt,
         string userPrompt,
@@ -268,7 +297,6 @@ public sealed class PromptBuilderService(
     private static bool ShouldSkipCheck(string prompt) =>
         string.IsNullOrWhiteSpace(prompt) ||
         prompt.Contains("```", StringComparison.Ordinal) ||
-        prompt.Length > 4000 ||
         prompt.Count(character => character == '\n') > 40;
 
     private static bool IsSupportedTask(string task) =>
@@ -280,8 +308,8 @@ public sealed class PromptBuilderService(
             throw new ArgumentException("Prompt Builder is only available for new builds.");
     }
 
-    private sealed record QualityResponse(bool RecommendPromptBuilder, string? Reason);
     private sealed record QuestionsResponse(List<QuestionResponse>? Questions);
+    private sealed record SuggestionsResponse(List<string?>? Answers);
     private sealed record QuestionResponse(string Id, string? Label, string Question, string? Placeholder);
     private sealed record PlanResponse(
         string? Explanation,

@@ -30,6 +30,44 @@ public sealed class PromptBuilderRetrievalContextTests
     }
 
     [Fact]
+    public void Workspace_ReviewsEveryBuildMessageNotOnlyEmptyProjects()
+    {
+        var script = ReadWorkspaceScript();
+        var start = script.IndexOf(
+            "async function reviewBuildPrompt",
+            StringComparison.Ordinal);
+        var end = script.IndexOf(
+            "function showPromptReview",
+            start,
+            StringComparison.Ordinal);
+        var reviewFunction = script[start..end];
+
+        Assert.Contains("/api/prompt-builder/check", reviewFunction);
+        Assert.DoesNotContain("currentProjectId ||", reviewFunction);
+        Assert.DoesNotContain("history.length > 0", reviewFunction);
+        Assert.DoesNotContain("promptQualityChecked", script);
+        Assert.Contains("promptReviewCompleted: completedPromptReview", script);
+        Assert.Contains("hasCurrentCode: Boolean(getLatestGeneratedCode())", script);
+        Assert.Contains(
+            "previousAssistantResponse: getLatestHistoryContent(\"assistant\")",
+            script);
+    }
+
+    [Fact]
+    public void Workspace_SuggestsEditableBaselinesOnlyForBlankAnswers()
+    {
+        var script = ReadWorkspaceScript();
+
+        Assert.Contains("Let Xen suggest baseline answers", script);
+        Assert.Contains("promptBuilderBody.prepend(row)", script);
+        Assert.DoesNotContain("promptBuilderActions.insertBefore", script);
+        Assert.Contains("/api/prompt-builder/suggestions", script);
+        Assert.Contains(".filter(field => !field.value.trim())", script);
+        Assert.Contains("if (field.value.trim())", script);
+        Assert.Contains("review and edit before creating the plan", script);
+    }
+
+    [Fact]
     public void Workspace_ScopesBuildPlanToTheActiveProject()
     {
         var script = ReadWorkspaceScript();
@@ -94,6 +132,25 @@ public sealed class PromptBuilderRetrievalContextTests
             "result.success ? \"compiled\" : \"build-failed\"",
             script);
         Assert.Contains("Continue anyway to Prompt", script);
+    }
+
+    [Fact]
+    public void Workspace_AutomaticallyBuildChecksGeneratedRepairs()
+    {
+        var script = ReadWorkspaceScript();
+
+        Assert.Contains(
+            "\"Repair the latest complete NinjaScript source\"",
+            script);
+        Assert.Contains(
+            "buildPlanStepReady || isGeneratedRepair",
+            script);
+        Assert.Contains(
+            "isGeneratedRepair && !generatedCode",
+            script);
+        Assert.Contains(
+            "no complete C# file returned for Build Check",
+            script);
     }
 
     [Fact]

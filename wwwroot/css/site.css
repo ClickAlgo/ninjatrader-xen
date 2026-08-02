@@ -1917,7 +1917,7 @@ html[data-theme="light"] .analyzer-attachment button {
 
 .message-content,
 .message.user .message-content {
-    font-size: 15px;
+    font-size: 14px;
     line-height: 1.7;
 }
 
@@ -2592,6 +2592,44 @@ html[data-theme="light"] .analyzer-attachment button {
 .prompt-builder-review:focus {
     border-color: #ff4b2b;
     outline: 1px solid #ff4b2b;
+}
+
+.prompt-builder-field.suggested {
+    border-color: #3d6d59;
+}
+
+.prompt-builder-field .prompt-builder-suggestion-note {
+    color: #79c99e;
+}
+
+.prompt-builder-suggestion-link-row {
+    display: flex;
+    justify-content: flex-end;
+    margin: -2px 0 2px;
+}
+
+.prompt-builder-suggestion-link {
+    appearance: none;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #8fc8ff;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.prompt-builder-suggestion-link:hover,
+.prompt-builder-suggestion-link:focus-visible {
+    color: #b8dcff;
+    text-decoration: underline;
+}
+
+.prompt-builder-suggestion-link:disabled {
+    color: #666;
+    cursor: default;
+    text-decoration: none;
 }
 
 .prompt-builder-status {

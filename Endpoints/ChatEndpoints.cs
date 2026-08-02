@@ -56,6 +56,7 @@ public static class ChatEndpoints
         AiStreamingClient aiClient,
         SystemPromptService systemPrompts,
         NinjaTraderKnowledgeRetriever knowledgeRetriever,
+        RequestRoutingCoordinator routingCoordinator,
         IProjectMemoryStore projectMemoryStore,
         ILoggerFactory loggerFactory)
     {
@@ -175,15 +176,63 @@ public static class ChatEndpoints
             return;
         }
 
-        RagRetrieval? rag = null;
-        if (!request.Task.Equals(
-                "analyse-backtest",
-                StringComparison.OrdinalIgnoreCase))
+        var projectId = request.ProjectId.Value;
+        var logger = loggerFactory.CreateLogger("ProjectMemory");
+        string currentCode;
+        try
         {
-            var retrievalPrompt = string.IsNullOrWhiteSpace(
-                request.RetrievalPrompt)
-                    ? request.Prompt
-                    : request.RetrievalPrompt.Trim();
+            currentCode = await GetLatestProjectCode(connectionString, subscriberId,
+                projectId, context.RequestAborted) ?? string.Empty;
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(exception, "Could not load authoritative code for {ProjectId}.", projectId);
+            currentCode = string.Empty;
+        }
+        if (string.IsNullOrWhiteSpace(currentCode))
+            currentCode = SqlProjectMemoryStore.ExtractLatestCode(request.History);
+
+        var previousAssistantResponse = request.History?
+            .LastOrDefault(turn => turn.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase))?.Content;
+        var routing = await routingCoordinator.DecideAsync(
+            new RequestRoutingContext(
+                request.Task,
+                request.Prompt,
+                request.RetrievalPrompt,
+                request.PromptBuilderBypassed,
+                request.PromptReviewCompleted,
+                !string.IsNullOrWhiteSpace(currentCode),
+                previousAssistantResponse),
+            context.RequestAborted);
+        var route = routing.Decision;
+
+        logger.LogDebug("Request route: {Intent}; RAG={UseRag}; Store={Store}; Fallback={Fallback}.",
+            route.Intent, route.UseRag, route.StoreAsRequirement, route.UsedFallback);
+
+        if (route.RecommendPromptBuilder && request.Task is
+                ("build-strategy" or "build-indicator"))
+        {
+            await WriteEvent(context, new
+            {
+                type = "error",
+                code = "PROMPT_BUILDER_REQUIRED",
+                message = "This request needs clarification in Prompt Builder before code generation."
+            });
+            await Complete(context);
+            return;
+        }
+
+        RagRetrieval? rag = null;
+        if (route.UseRag)
+        {
+            var retrievalPrompt = SelectRetrievalPrompt(
+                request.Prompt,
+                request.RetrievalPrompt,
+                routing.IsBuildPlanStep);
             if (retrievalPrompt.Length > 60_000)
                 retrievalPrompt = retrievalPrompt[..60_000];
 
@@ -199,17 +248,28 @@ public static class ChatEndpoints
         var systemPrompt = systemPrompts.Build(request.Task);
         if (rag is not null && rag.Confident)
             systemPrompt += knowledgeRetriever.BuildSystemContext(rag);
+        if (route.Intent == "question")
+        {
+            systemPrompt += """
 
-        var projectId = request.ProjectId.Value;
-        var logger = loggerFactory.CreateLogger("ProjectMemory");
+                CURRENT REQUEST MODE: QUESTION
+                Answer the user's question directly and concisely. Do not generate or
+                replace a complete NinjaScript file unless the user explicitly asks for
+                code. Existing project requirements and source are background context only.
+                """;
+        }
+
         try
         {
-            await projectMemoryStore.SeedIfEmptyAsync(
-                subscriberId,
-                projectId,
-                request.Task,
-                request.History,
-                context.RequestAborted);
+            if (route.StoreAsRequirement)
+            {
+                await projectMemoryStore.SeedIfEmptyAsync(
+                    subscriberId,
+                    projectId,
+                    request.Task,
+                    request.History,
+                    context.RequestAborted);
+            }
             var memoryTurns = await projectMemoryStore.GetLatestTurnsAsync(
                 subscriberId,
                 projectId,
@@ -235,35 +295,6 @@ public static class ChatEndpoints
                 projectId);
         }
 
-        string currentCode;
-        try
-        {
-            currentCode = await GetLatestProjectCode(
-                    connectionString,
-                    subscriberId,
-                    projectId,
-                    context.RequestAborted) ??
-                string.Empty;
-        }
-        catch (OperationCanceledException)
-            when (context.RequestAborted.IsCancellationRequested)
-        {
-            return;
-        }
-        catch (Exception exception)
-        {
-            logger.LogError(
-                exception,
-                "Could not load authoritative code for {ProjectId}.",
-                projectId);
-            currentCode = string.Empty;
-        }
-
-        if (string.IsNullOrWhiteSpace(currentCode))
-        {
-            currentCode = SqlProjectMemoryStore.ExtractLatestCode(
-                request.History);
-        }
         if (!string.IsNullOrWhiteSpace(currentCode))
         {
             systemPrompt += "\n\n" +
@@ -290,7 +321,9 @@ public static class ChatEndpoints
             });
         }
 
-        IReadOnlyList<ChatTurn> cleanHistory = [];
+        IReadOnlyList<ChatTurn> cleanHistory = route.Intent == "question"
+            ? BuildEphemeralQuestionHistory(request.History)
+            : [];
         var maximumOutputTokens = CalculateAffordableOutputTokens(
             configuration,
             request.Model,
@@ -375,26 +408,23 @@ public static class ChatEndpoints
             if (charge > 0)
                 await DeductBalance(connectionString, subscriberId, charge);
 
-            try
+            if (route.StoreAsRequirement)
             {
-                var responseText = assistantText.ToString();
-                await projectMemoryStore.AppendTurnAsync(
-                    new ProjectMemoryUpdate(
-                        subscriberId,
-                        projectId,
-                        request.Task,
-                        request.Prompt.Trim(),
-                        responseText,
-                        SqlProjectMemoryStore.ExtractLatestCode(
-                            [new ChatTurn("assistant", responseText)])),
-                    context.RequestAborted);
-            }
-            catch (Exception exception)
-            {
-                logger.LogError(
-                    exception,
-                    "Could not save project memory for {ProjectId}.",
-                    projectId);
+                try
+                {
+                    var responseText = assistantText.ToString();
+                    await projectMemoryStore.AppendTurnAsync(
+                        new ProjectMemoryUpdate(subscriberId, projectId, request.Task,
+                            request.Prompt.Trim(), responseText,
+                            SqlProjectMemoryStore.ExtractLatestCode(
+                                [new ChatTurn("assistant", responseText)])),
+                        context.RequestAborted);
+                }
+                catch (Exception exception)
+                {
+                    logger.LogError(exception,
+                        "Could not save project memory for {ProjectId}.", projectId);
+                }
             }
 
             var remainingBalance = await GetBalance(connectionString, subscriberId);
@@ -428,6 +458,30 @@ public static class ChatEndpoints
         }
 
         await Complete(context);
+    }
+
+    internal static string SelectRetrievalPrompt(
+        string originalPrompt,
+        string? buildPlanRetrievalPrompt,
+        bool isBuildPlanStep)
+    {
+        if (isBuildPlanStep && !string.IsNullOrWhiteSpace(buildPlanRetrievalPrompt))
+            return buildPlanRetrievalPrompt.Trim();
+        return originalPrompt.Trim();
+    }
+
+    internal static IReadOnlyList<ChatTurn> BuildEphemeralQuestionHistory(
+        IReadOnlyList<ChatTurn>? history)
+    {
+        if (history is null || history.Count == 0) return [];
+        return history.TakeLast(4)
+            .Select(turn => new ChatTurn(
+                turn.Role,
+                turn.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase)
+                    ? RequestRouterService.SummarizePreviousResponse(turn.Content)
+                    : RequestRouterService.BuildSafeRequestSummary(turn.Content)))
+            .Where(turn => !string.IsNullOrWhiteSpace(turn.Content))
+            .ToArray();
     }
 
     private static async Task<string?> GetLatestProjectCode(
