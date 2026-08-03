@@ -77,6 +77,27 @@ public sealed partial class NinjaTraderPreflightCompiler
             var options = _options.CurrentValue;
             var tempRoot = Path.GetFullPath(options.TempRoot);
             Directory.CreateDirectory(tempRoot);
+            var dotnetHome = Path.Combine(tempRoot, ".dotnet");
+            var nugetPackages = Path.Combine(
+                tempRoot,
+                ".nuget",
+                "packages");
+            var nugetHttpCache = Path.Combine(
+                tempRoot,
+                ".nuget",
+                "http-cache");
+            var processTemp = Path.Combine(tempRoot, ".temp");
+            foreach (var sharedDirectory in new[]
+            {
+                dotnetHome,
+                nugetPackages,
+                nugetHttpCache,
+                processTemp
+            })
+            {
+                Directory.CreateDirectory(sharedDirectory);
+            }
+
             buildDirectory = Path.Combine(
                 tempRoot,
                 Guid.NewGuid().ToString("N"));
@@ -115,11 +136,18 @@ public sealed partial class NinjaTraderPreflightCompiler
             startInfo.ArgumentList.Add("minimal");
             startInfo.ArgumentList.Add("--no-cache");
             startInfo.ArgumentList.Add(
-                "--property:RestoreIgnoreFailedSources=true");
-            startInfo.Environment["DOTNET_CLI_HOME"] =
-                Path.Combine(tempRoot, ".dotnet");
+                "-p:RestoreIgnoreFailedSources=true");
+            startInfo.ArgumentList.Add(
+                "-p:UseSharedCompilation=false");
+            startInfo.Environment["DOTNET_CLI_HOME"] = dotnetHome;
+            startInfo.Environment["NUGET_PACKAGES"] = nugetPackages;
+            startInfo.Environment["NUGET_HTTP_CACHE_PATH"] = nugetHttpCache;
+            startInfo.Environment["TEMP"] = processTemp;
+            startInfo.Environment["TMP"] = processTemp;
             startInfo.Environment["DOTNET_NOLOGO"] = "1";
             startInfo.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
+            startInfo.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
+            startInfo.Environment["MSBUILDDISABLENODEREUSE"] = "1";
 
             using var process = Process.Start(startInfo)
                 ?? throw new InvalidOperationException(
@@ -175,6 +203,12 @@ public sealed partial class NinjaTraderPreflightCompiler
                     timer.ElapsedMilliseconds);
             }
 
+            _logger.LogError(
+                "NinjaTrader Build Check MSBuild failed with exit code {ExitCode}. Output:{NewLine}{BuildOutput}",
+                process.ExitCode,
+                Environment.NewLine,
+                TruncateForLog(combinedOutput));
+
             var errors = ParseErrors(combinedOutput);
             errors.InsertRange(0, lifecycleErrors);
             if (errors.Count == 0)
@@ -191,6 +225,16 @@ public sealed partial class NinjaTraderPreflightCompiler
                 false,
                 errors,
                 timer.ElapsedMilliseconds);
+        }
+        catch (Exception exception)
+            when (exception is not OperationCanceledException ||
+                  !cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogError(
+                exception,
+                "NinjaTrader Build Check failed before MSBuild produced a result. Build root: {BuildRoot}",
+                _options.CurrentValue.TempRoot);
+            throw;
         }
         finally
         {
@@ -322,6 +366,17 @@ public sealed partial class NinjaTraderPreflightCompiler
 
     private static string CleanMessage(string message) =>
         ProjectSuffixPattern().Replace(message.Trim(), string.Empty).Trim();
+
+    private static string TruncateForLog(string output)
+    {
+        const int maximumCharacters = 16_000;
+        var value = output.Trim();
+        return value.Length <= maximumCharacters
+            ? value
+            : value[..maximumCharacters] +
+              Environment.NewLine +
+              "[MSBuild output truncated]";
+    }
 
     private static List<PreflightBuildError> FindLifecycleErrors(
         string source)
