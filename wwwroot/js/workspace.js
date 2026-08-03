@@ -234,10 +234,31 @@ document.getElementById("closePromptBuilderButton").addEventListener(
 
 document.getElementById("taskButtons").addEventListener("click", event => {
     const button = event.target.closest("[data-task]");
-    if (!button || generating)
+    if (!button || generating || preparingRequest)
         return;
 
-    activeTask = button.dataset.task;
+    const nextTask = button.dataset.task;
+    if (nextTask === activeTask)
+        return;
+
+    const activePlan = getBuildPlan();
+    const hasWorkspaceWork =
+        Boolean(activePlan) ||
+        Boolean(currentProjectId) ||
+        history.length > 0 ||
+        Boolean(promptInput.value.trim()) ||
+        Boolean(pendingImage) ||
+        pendingAnalyzerExports.length > 0;
+    if (hasWorkspaceWork) {
+        const warning = activePlan
+            ? `Switch to ${taskNames[nextTask]}? The active Build Plan and current task workspace will be closed. Saved projects and snapshots will remain available.`
+            : `Switch to ${taskNames[nextTask]}? The current task workspace will be closed. Saved projects and snapshots will remain available.`;
+        if (!window.confirm(warning))
+            return;
+    }
+
+    clearBuildPlan();
+    activeTask = nextTask;
     document.querySelectorAll(".task-button").forEach(item =>
         item.classList.toggle("active", item === button));
     document.getElementById("taskTitle").textContent = taskNames[activeTask];
@@ -642,6 +663,21 @@ function renderStructuredResponse(container, source) {
             "");
         appendResponseCodeActions(container, primaryCode);
     }
+}
+
+function isPreflightBuildReport(turn) {
+    return turn?.role === "assistant" &&
+        /^# NinjaTrader (?:Preflight Build|Build Check)\b/im.test(
+            turn.content || "");
+}
+
+function compactPreflightBuildHistory(turns) {
+    const latestBuildIndex = turns.findLastIndex(isPreflightBuildReport);
+    if (latestBuildIndex < 0)
+        return turns;
+
+    return turns.filter((turn, index) =>
+        !isPreflightBuildReport(turn) || index === latestBuildIndex);
 }
 
 function isBacktestReportSource(source) {
@@ -1463,6 +1499,9 @@ function renderPreflightBuildResult(result) {
           `${formatPreflightErrors(errors)}\n\n` +
           "The source was not executed. Repair these errors, then run the build check again.";
 
+    history = history.filter(turn => !isPreflightBuildReport(turn));
+    messages.querySelectorAll(".preflight-build-message")
+        .forEach(message => message.remove());
     history.push({ role: "assistant", content: report });
     const message = addMessage("assistant", "");
     message.classList.add(
@@ -3329,6 +3368,8 @@ async function saveCurrentProject() {
         .find(turn => turn.role === "assistant")?.content || "";
     const codeMatch = latestAssistant.match(/```(?:csharp|cs)?\s*([\s\S]*?)```/i);
 
+    history = compactPreflightBuildHistory(history);
+
     try {
         const response = await fetch("/api/projects", {
             method: "POST",
@@ -3792,7 +3833,8 @@ function applyProjectToWorkspace(project) {
     currentProjectId = project.projectId;
     currentProjectTitle = project.title;
     activeTask = taskNames[project.task] ? project.task : "build-strategy";
-    history = Array.isArray(project.messages) ? project.messages : [];
+    history = compactPreflightBuildHistory(
+        Array.isArray(project.messages) ? project.messages : []);
     promptInput.value = "";
     clearAnalyzerExports(false);
     updateClearInputButton();

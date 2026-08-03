@@ -3368,12 +3368,27 @@ html[data-theme="light"] .code-workspace-dialog {
 }
 
 .preflight-build-button.is-checking {
-    border-color: #41a770;
-    color: #d8ffea;
-    background: rgba(34, 113, 72, .2);
+    position: relative;
+    padding-left: 30px;
+    border-color: #56e39a;
+    color: #effff6;
+    background: linear-gradient(135deg, #1c6a45, #164d35);
+    font-weight: 700;
     cursor: progress;
     opacity: 1;
-    animation: build-check-glow 1.35s ease-in-out infinite;
+    animation: build-check-glow .95s ease-in-out infinite;
+}
+
+.preflight-build-button.is-checking::before {
+    position: absolute;
+    left: 10px;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, .38);
+    border-top-color: #fff;
+    border-radius: 50%;
+    content: "";
+    animation: build-check-spinner .7s linear infinite;
 }
 
 .preflight-build-button.needs-build-check {
@@ -3397,21 +3412,31 @@ html[data-theme="light"] .code-workspace-dialog {
 @keyframes build-check-glow {
     0%,
     100% {
-        box-shadow: 0 0 0 0 rgba(65, 167, 112, .16),
-            0 0 5px rgba(65, 167, 112, .2);
+        box-shadow: 0 0 0 2px rgba(86, 227, 154, .28),
+            0 0 12px rgba(65, 210, 136, .48);
     }
 
     50% {
-        box-shadow: 0 0 0 3px rgba(65, 167, 112, .12),
-            0 0 15px rgba(65, 167, 112, .55);
+        box-shadow: 0 0 0 5px rgba(86, 227, 154, .16),
+            0 0 28px rgba(65, 210, 136, .88);
     }
+}
+
+@keyframes build-check-spinner {
+    to { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
     .preflight-build-button.is-checking {
         animation: none;
-        box-shadow: 0 0 0 3px rgba(65, 167, 112, .12),
-            0 0 10px rgba(65, 167, 112, .4);
+        box-shadow: 0 0 0 3px rgba(86, 227, 154, .22),
+            0 0 16px rgba(65, 210, 136, .58);
+    }
+
+    .preflight-build-button.is-checking::before {
+        border-color: #bff8d8;
+        background: #bff8d8;
+        animation: none;
     }
 }
 

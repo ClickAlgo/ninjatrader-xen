@@ -158,6 +158,8 @@ validated independently.
 - [x] Approved answers become a persistent, staged Build Plan
 - [x] Active Build Plans can be exited without deleting project history,
   generated source or snapshots
+- [x] Task changes warn when workspace work exists and always clear the active
+  Build Plan before opening the new task
 - [x] Simple contextual modifications bypass unnecessary replanning
 - [x] Contradictory, unsafe or source-deficient repair requests may still ask for clarification
 - [x] Oversized prompts are redirected into shorter build-test-build steps
@@ -197,6 +199,8 @@ validated independently.
 - [x] Isolated compilation against installed platform assemblies
 - [x] Structured, grouped and readable compiler diagnostics
 - [x] Manual Build Check available on generated source
+- [x] Prominent accessible Build Check progress state with disabled action,
+  working label, spinner and reduced-motion treatment
 - [x] Automatic Build Check after completed Build Plan steps
 - [x] Automatic Build Check after AI repairs that return complete source
 - [x] Incomplete repair responses are saved with a clear explanation that no build ran

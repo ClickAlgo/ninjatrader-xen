@@ -190,6 +190,32 @@ public sealed class PromptBuilderRetrievalContextTests
     }
 
     [Fact]
+    public void Workspace_TaskChangeWarnsAndClearsActiveBuildPlan()
+    {
+        var script = ReadWorkspaceScript();
+        var handlerStart = script.IndexOf(
+            "document.getElementById(\"taskButtons\").addEventListener",
+            StringComparison.Ordinal);
+        var handlerEnd = script.IndexOf(
+            "form.addEventListener(\"submit\"",
+            handlerStart,
+            StringComparison.Ordinal);
+        var handler = script[handlerStart..handlerEnd];
+
+        Assert.Contains("const activePlan = getBuildPlan();", handler);
+        Assert.Contains("The active Build Plan", handler);
+        Assert.Contains("window.confirm(warning)", handler);
+        Assert.Contains("clearBuildPlan();", handler);
+        Assert.True(
+            handler.IndexOf("window.confirm(warning)", StringComparison.Ordinal) <
+            handler.IndexOf("clearBuildPlan();", StringComparison.Ordinal));
+        Assert.True(
+            handler.IndexOf("clearBuildPlan();", StringComparison.Ordinal) <
+            handler.IndexOf("activeTask = nextTask;", StringComparison.Ordinal));
+        Assert.Contains("Saved projects and snapshots", handler);
+    }
+
+    [Fact]
     public void Workspace_RedirectsMismatchedExistingNinjaScriptBeforeChat()
     {
         var script = ReadWorkspaceScript();
