@@ -244,6 +244,68 @@
     border-top: 1px solid var(--border);
 }
 
+.landing-video-section {
+    padding-top: 88px;
+    padding-bottom: 104px;
+}
+
+.landing-video-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+    gap: 72px;
+    align-items: end;
+    margin-bottom: 42px;
+}
+
+.landing-video-heading h2 {
+    max-width: 720px;
+    margin: 0;
+    font-size: clamp(2.4rem, 5vw, 4.5rem);
+    line-height: 1.02;
+    letter-spacing: -.055em;
+}
+
+.landing-video-intro {
+    padding-bottom: 5px;
+}
+
+.landing-video-intro p {
+    max-width: 520px;
+    margin: 0 0 22px;
+    color: var(--muted);
+    line-height: 1.75;
+}
+
+.landing-video-frame {
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border: 1px solid #454545;
+    border-radius: 10px;
+    background: #080808;
+    box-shadow: 0 32px 80px rgba(0, 0, 0, .46), 0 0 0 1px rgba(240, 68, 22, .08);
+}
+
+.landing-video-frame::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+    pointer-events: none;
+}
+
+.landing-video-frame iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
 .section-heading {
     max-width: 760px;
     margin-bottom: 42px;
@@ -509,6 +571,7 @@
     }
 
     .landing-card-grid,
+    .landing-video-heading,
     .prompt-builder-feature,
     .workflow-section,
     .model-section,
@@ -517,9 +580,19 @@
     }
 
     .workflow-section,
+    .landing-video-heading,
     .prompt-builder-feature,
     .model-section {
         gap: 28px;
+    }
+
+    .landing-video-section {
+        padding-top: 64px;
+        padding-bottom: 72px;
+    }
+
+    .landing-video-heading {
+        margin-bottom: 30px;
     }
 
     .landing-cta {
@@ -1042,6 +1115,24 @@ tbody tr:last-child td {
     color: #b8c8bd;
     font-size: 12px;
     line-height: 1.6;
+}
+
+.trial-welcome.trial-unavailable {
+    border-color: rgba(214, 157, 45, .62);
+    background: rgba(181, 119, 24, .11);
+}
+
+.trial-welcome.trial-unavailable p {
+    color: #d2c3a8;
+}
+
+.trial-welcome.mobile-workspace-notice {
+    border-color: rgba(214, 157, 45, .62);
+    background: rgba(181, 119, 24, .11);
+}
+
+.trial-welcome.mobile-workspace-notice p {
+    color: #d2c3a8;
 }
 
 .trial-welcome-close {
@@ -3373,7 +3464,7 @@ html[data-theme="light"] .code-workspace-dialog {
     border-color: #56e39a;
     color: #effff6;
     background: linear-gradient(135deg, #1c6a45, #164d35);
-    font-weight: 700;
+    font-weight: 500;
     cursor: progress;
     opacity: 1;
     animation: build-check-glow .95s ease-in-out infinite;

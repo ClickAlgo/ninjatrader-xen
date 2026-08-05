@@ -39,6 +39,7 @@ let preflightBuilding = false;
 
 const lowCreditThresholdGbp = 1;
 const buildPlanStorageKey = "nx_active_build_plan_v1";
+const mobileWorkspaceNoticeKey = "nx_mobile_workspace_notice_dismissed";
 const defaultModel = "gpt-5.3-codex";
 const preflightRepairPromptPrefix =
     "Repair the latest complete NinjaScript source so it passes";
@@ -130,6 +131,7 @@ cancelButton.addEventListener("click", () => {
 });
 loadBalance();
 showTrialWelcome();
+showMobileWorkspaceNotice();
 renderActiveBuildPlan();
 updateTaskSpecificUi();
 updateClearInputButton();
@@ -469,12 +471,15 @@ form.addEventListener("submit", async event => {
         const generatedCode = shouldAutomaticallyBuild
             ? extractLatestCodeBlock(assistantText)
             : "";
+        const automaticBuildButton = generatedCode
+            ? assistantMessage.querySelector(".preflight-build-button")
+            : null;
         if (buildPlanStepReady && !generatedCode)
             setBuildPlanStepStatus("awaiting-clarification");
         const automaticBuildResult = generatedCode
             ? await runPreflightBuild(
                 generatedCode,
-                null,
+                automaticBuildButton,
                 { automatic: true })
             : undefined;
         if (!generatedCode || automaticBuildResult === null) {
@@ -602,6 +607,78 @@ function showTrialWelcome() {
         // Ignore an invalid one-time welcome payload.
     }
 }
+
+function showNoTrialCreditNotice(subscriberId) {
+    const seenKey = `nx_no_trial_credit_notice_${subscriberId}`;
+    if (localStorage.getItem(seenKey) === "1")
+        return;
+
+    const banner = document.createElement("aside");
+    banner.className = "trial-welcome trial-unavailable";
+
+    const copy = document.createElement("div");
+    const heading = document.createElement("strong");
+    heading.textContent = "Welcome to Xen";
+    const detail = document.createElement("p");
+    detail.textContent =
+        "Free trial credit is not available for this account. " +
+        "You can still use Xen by topping up your balance from £1.";
+    copy.append(heading, detail);
+
+    const dismiss = document.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "trial-welcome-close";
+    dismiss.setAttribute("aria-label", "Dismiss welcome message");
+    dismiss.textContent = "×";
+    dismiss.addEventListener("click", () => banner.remove());
+
+    localStorage.setItem(seenKey, "1");
+    banner.append(copy, dismiss);
+    messages.prepend(banner);
+}
+
+function isLikelyMobileWorkspace() {
+    const hasCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
+    const narrowViewport = window.matchMedia("(max-width: 820px)").matches;
+    const shortScreenEdge = Math.min(screen.width, screen.height);
+
+    return hasCoarsePointer && (narrowViewport || shortScreenEdge <= 820);
+}
+
+function showMobileWorkspaceNotice() {
+    if (!isLikelyMobileWorkspace() ||
+        localStorage.getItem(mobileWorkspaceNoticeKey) === "1" ||
+        document.querySelector(".mobile-workspace-notice")) {
+        return;
+    }
+
+    const banner = document.createElement("aside");
+    banner.className = "trial-welcome mobile-workspace-notice";
+
+    const copy = document.createElement("div");
+    const heading = document.createElement("strong");
+    heading.textContent = "Desktop recommended";
+    const detail = document.createElement("p");
+    detail.textContent =
+        "Xen works best on a desktop or laptop. Some coding, project and " +
+        "Build Plan tools may be difficult to use on a smaller screen.";
+    copy.append(heading, detail);
+
+    const dismiss = document.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "trial-welcome-close";
+    dismiss.setAttribute("aria-label", "Dismiss desktop recommendation");
+    dismiss.textContent = "×";
+    dismiss.addEventListener("click", () => {
+        localStorage.setItem(mobileWorkspaceNoticeKey, "1");
+        banner.remove();
+    });
+
+    banner.append(copy, dismiss);
+    messages.prepend(banner);
+}
+
+window.addEventListener("resize", showMobileWorkspaceNotice);
 
 function appendRagDebug(message, debug) {
     const element = document.createElement("div");
@@ -3925,6 +4002,8 @@ async function loadBalance() {
             return;
         const result = await response.json();
         updateBalance(result.balanceGbp);
+        if (Number(result.balanceGbp) <= 0)
+            showNoTrialCreditNotice(result.subscriberId);
     } catch {
         document.getElementById("workspaceBalance").textContent = "Credit unavailable";
     }
