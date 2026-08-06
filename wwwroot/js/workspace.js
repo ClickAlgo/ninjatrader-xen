@@ -52,7 +52,6 @@ const lowCostModels = new Set([
 ]);
 const imageUnsupportedModels = new Set([
     "gpt-5.3-codex",
-    "gpt-5.6-luna",
     "deepseek-v4-pro",
     "kimi-k2.7-code"
 ]);
@@ -1834,7 +1833,7 @@ function clearComposerInput() {
     promptInput.focus();
 }
 
-function updateTaskSpecificUi() {
+function updateTaskSpecificUi(preservePendingImage = false) {
     const uploadTasks = {
         "convert-strategy": {
             button: "Upload source file",
@@ -1873,10 +1872,12 @@ function updateTaskSpecificUi() {
     sendButton.querySelector(".send-label").textContent =
         activeTask === "analyse-backtest" ? "Analyse results" : "Send";
     renderAnalyzerAttachments();
-    pendingImage = null;
-    imageFileInput.value = "";
-    imagePreview.hidden = true;
-    imagePreviewContent.removeAttribute("src");
+    if (!preservePendingImage) {
+        pendingImage = null;
+        imageFileInput.value = "";
+        imagePreview.hidden = true;
+        imagePreviewContent.removeAttribute("src");
+    }
     updateImageUploadUi();
 }
 
@@ -2268,11 +2269,19 @@ async function reviewBuildPrompt(prompt) {
         return prompt;
     }
 
+    // Prompt Builder defines a new build. Once a project has started, all
+    // later requests modify the authoritative implementation directly.
+    if (currentProjectId || history.length > 0 || getLatestGeneratedCode()) {
+        promptReviewCompleted = true;
+        return prompt;
+    }
+
     setComposerReviewState(true, "Reviewing your request...");
     try {
+        const planningPrompt = buildPromptBuilderContext(prompt);
         const response = await promptBuilderFetch("/api/prompt-builder/check", {
             task: activeTask,
-            prompt,
+            prompt: planningPrompt,
             hasCurrentCode: Boolean(getLatestGeneratedCode()),
             previousAssistantResponse: getLatestHistoryContent("assistant")
         });
@@ -2323,29 +2332,33 @@ function showPromptReview(reason, required = false) {
     ];
     if (!required)
         actions.splice(1, 0,
-            ["Build in Xen anyway", "build", "button"]);
+            [pendingImage ? "Build directly from image" : "Build in Xen anyway",
+                "build", "button"]);
     setPromptBuilderActions(actions);
     openPromptBuilder();
     return waitForPromptBuilderDecision();
 }
 
 async function runPromptBuilder(prompt) {
+    const planningPrompt = buildPromptBuilderContext(prompt);
     document.getElementById("promptBuilderTitle").textContent =
         "Clarify your build request";
-    promptBuilderReason.textContent =
-        "Answer the relevant questions. Leave an answer blank when you want Xen to use a sensible configurable default.";
     showPromptBuilderWait("Preparing clarification questions...");
 
     try {
         const result = await promptBuilderFetch("/api/prompt-builder/questions", {
             task: activeTask,
-            prompt
+            prompt: planningPrompt
         });
         renderPromptQuestions(result.questions);
+        promptBuilderReason.textContent = pendingImage
+            ? "Your reference image will stay attached. Add requirements for more control, or build directly from the image and let Xen infer the indicator."
+            : "Answer the relevant questions. Leave an answer blank when you want Xen to use a sensible configurable default.";
         promptBuilderStatus.textContent = "";
         setPromptBuilderActions([
             ["Create Build Plan", "compose", "button primary"],
-            ["Build original request", "build", "button"],
+            [pendingImage ? "Build directly from image" : "Build original request",
+                "build", "button"],
             ["Edit request", "edit", "button"]
         ]);
         addBaselineSuggestionAction(prompt);
@@ -2368,9 +2381,10 @@ async function runPromptBuilder(prompt) {
         showPromptBuilderWait("Creating your Build Plan. This can take up to a minute...");
         const planResult = await promptBuilderFetch("/api/prompt-builder/compose", {
             task: activeTask,
-            prompt,
+            prompt: planningPrompt,
             answers
         });
+        ensurePlanUsesReferenceImage(planResult);
         const plan = saveBuildPlan(planResult, activeTask, prompt);
         renderActiveBuildPlan();
         const action = await showBuildPlan(plan);
@@ -2387,7 +2401,8 @@ async function runPromptBuilder(prompt) {
             error.message || "Prompt Builder is temporarily unavailable.";
         promptBuilderStatus.classList.add("error");
         setPromptBuilderActions([
-            ["Build original request", "build", "button primary"],
+            [pendingImage ? "Build directly from image" : "Build original request",
+                "build", "button primary"],
             ["Edit request", "edit", "button"]
         ]);
         const fallback = await waitForPromptBuilderDecision();
@@ -2419,7 +2434,7 @@ function addBaselineSuggestionAction(prompt) {
             const result = await promptBuilderFetch(
                 "/api/prompt-builder/suggestions", {
                     task: activeTask,
-                    prompt,
+                    prompt: buildPromptBuilderContext(prompt),
                     questions: fields.map(field => field.dataset.question)
                 });
             const answers = Array.isArray(result.answers) ? result.answers : [];
@@ -2454,6 +2469,27 @@ function addBaselineSuggestionAction(prompt) {
     });
     row.appendChild(button);
     promptBuilderBody.prepend(row);
+}
+
+function buildPromptBuilderContext(prompt) {
+    if (!pendingImage)
+        return prompt;
+
+    return `${prompt}\n\nReference image context: A reference image is attached to this build request. The coding model must inspect it and use it as the visual specification for the indicator. Prompt Builder should ask only for requirements that cannot be determined safely from the image.`;
+}
+
+function ensurePlanUsesReferenceImage(planResult) {
+    if (!pendingImage || !Array.isArray(planResult?.prompts) ||
+        !planResult.prompts.length)
+        return;
+
+    const firstPrompt = planResult.prompts[0];
+    if (!firstPrompt?.prompt ||
+        /reference image|attached image/i.test(firstPrompt.prompt))
+        return;
+
+    firstPrompt.prompt =
+        `Inspect and use the attached reference image as the visual specification.\n\n${firstPrompt.prompt}`;
 }
 
 function saveBuildPlan(result, task, originalPrompt) {
@@ -3045,7 +3081,7 @@ function loadBuildPlanPrompt(index) {
         item.classList.toggle("active", item.dataset.task === activeTask));
     document.getElementById("taskTitle").textContent = taskNames[activeTask];
     promptInput.placeholder = taskPlaceholders[activeTask];
-    updateTaskSpecificUi();
+    updateTaskSpecificUi(true);
 
     plan.currentIndex = index;
     plan.stepStatus = "loaded";
@@ -3306,8 +3342,9 @@ function createReviewSummary() {
     const title = document.createElement("strong");
     title.textContent = "Would you like Prompt Builder to plan it first?";
     const detail = document.createElement("p");
-    detail.textContent =
-        "It will ask only the important missing requirements, then create an ordered sequence of small, testable prompts.";
+    detail.textContent = pendingImage
+        ? "Your image will remain attached. Use Prompt Builder to add requirements for more control, or build directly from the image and let Xen infer the indicator."
+        : "It will ask only the important missing requirements, then create an ordered sequence of small, testable prompts.";
     summary.append(title, detail);
     return summary;
 }
@@ -3440,10 +3477,10 @@ async function saveCurrentProject() {
     if (!currentProjectId || history.length < 2)
         return false;
 
-    const latestAssistant = [...history]
-        .reverse()
-        .find(turn => turn.role === "assistant")?.content || "";
-    const codeMatch = latestAssistant.match(/```(?:csharp|cs)?\s*([\s\S]*?)```/i);
+    // Build Check and requirements reports are assistant turns without code.
+    // Resolve the newest source across the conversation so saving a report
+    // still snapshots the code response that immediately preceded it.
+    const latestCode = getLatestGeneratedCode();
 
     history = compactPreflightBuildHistory(history);
 
@@ -3460,7 +3497,7 @@ async function saveCurrentProject() {
                 task: activeTask,
                 model: modelSelect.value,
                 messages: history,
-                latestCode: codeMatch ? codeMatch[1].trim() : null
+                latestCode: latestCode || null
             })
         });
 

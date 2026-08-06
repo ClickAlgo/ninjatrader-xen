@@ -516,23 +516,32 @@
     font-size: 11px;
 }
 
-.landing-footer div {
+.landing-footer-brand {
     display: flex;
     gap: 8px;
     color: var(--text);
+    white-space: nowrap;
 }
 
-.landing-footer div span {
+.landing-footer-brand span {
     color: var(--primary-bright);
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 800;
 }
 
-.landing-footer p {
-    max-width: 640px;
+.landing-footer-copy {
+    max-width: 760px;
+}
+
+.landing-footer-copy p {
     margin: 0;
     text-align: right;
     line-height: 1.6;
+    font-size: 12px;
+}
+
+.landing-footer-copy p + p {
+    margin-top: 10px;
 }
 
 @media (max-width: 1000px) {
@@ -605,7 +614,7 @@
         flex-direction: column;
     }
 
-    .landing-footer p {
+    .landing-footer-copy p {
         text-align: left;
     }
 }

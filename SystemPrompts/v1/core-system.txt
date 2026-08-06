@@ -44,7 +44,7 @@ NINJASCRIPT BASELINE
 - Create indicators and data-dependent resources in State.DataLoaded.
 - Guard CurrentBar or CurrentBars before barsAgo access.
 - Use NinjaScriptProperty, Display and Range appropriately for public inputs.
-- Keep the class name a valid descriptive PascalCase C# identifier.
+- Keep the C# class name and source filename as a descriptive PascalCase identifier. In State.SetDefaults, set Name to a readable user-facing title with spaces between words. For example, class SmartMoneyStructure should use Name = "Smart Money Structure";.
 - Include every using directive required by referenced types.
 - Avoid look-ahead bias and unavailable-bar access.
 - Prefer simple, readable and maintainable NinjaScript.

@@ -94,6 +94,8 @@ public static class PreflightBuildEndpoints
         if (string.IsNullOrWhiteSpace(downloadName))
             downloadName = className;
 
+        downloadName = ToReadableScriptName(downloadName);
+
         using var output = new MemoryStream();
         using (var archive = new ZipArchive(
                    output,
@@ -121,6 +123,20 @@ public static class PreflightBuildEndpoints
             output.ToArray(),
             "application/zip",
             $"{downloadName}-Addon.zip");
+    }
+
+    private static string ToReadableScriptName(string className)
+    {
+        var name = Regex.Replace(
+            className,
+            "([a-z0-9])([A-Z])",
+            "$1 $2");
+        name = Regex.Replace(
+            name,
+            "([A-Z]+)([A-Z][a-z])",
+            "$1 $2");
+
+        return Regex.Replace(name, @"\s+", " ").Trim();
     }
 
     private static void WriteArchiveEntry(

@@ -23,6 +23,9 @@ public sealed class PromptBuilderService(
         string? previousAssistantResponse,
         CancellationToken cancellationToken)
     {
+        if (hasCurrentCode)
+            return new(false, "", false);
+
         var complexity = TradingRequestComplexityPolicy.Evaluate(task, prompt);
         if (complexity.Rejected)
         {

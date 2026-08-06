@@ -17,7 +17,8 @@ public sealed class OpenAiStreamingClient(
         model.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase);
 
     public bool SupportsImages(string model) =>
-        model.Equals("gpt-5.6-sol", StringComparison.OrdinalIgnoreCase);
+        model.Equals("gpt-5.6-sol", StringComparison.OrdinalIgnoreCase) ||
+        model.Equals("gpt-5.6-luna", StringComparison.OrdinalIgnoreCase);
 
     public async IAsyncEnumerable<AiStreamEvent> StreamAsync(
         string model,

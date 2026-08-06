@@ -30,7 +30,7 @@ public sealed class PromptBuilderRetrievalContextTests
     }
 
     [Fact]
-    public void Workspace_ReviewsEveryBuildMessageNotOnlyEmptyProjects()
+    public void Workspace_UsesPromptBuilderOnlyForTheFirstEmptyProjectRequest()
     {
         var script = ReadWorkspaceScript();
         var start = script.IndexOf(
@@ -43,14 +43,42 @@ public sealed class PromptBuilderRetrievalContextTests
         var reviewFunction = script[start..end];
 
         Assert.Contains("/api/prompt-builder/check", reviewFunction);
-        Assert.DoesNotContain("currentProjectId ||", reviewFunction);
-        Assert.DoesNotContain("history.length > 0", reviewFunction);
+        Assert.Contains(
+            "currentProjectId || history.length > 0 || getLatestGeneratedCode()",
+            reviewFunction);
+        Assert.True(
+            reviewFunction.IndexOf(
+                "currentProjectId || history.length > 0",
+                StringComparison.Ordinal) <
+            reviewFunction.IndexOf(
+                "/api/prompt-builder/check",
+                StringComparison.Ordinal));
         Assert.DoesNotContain("promptQualityChecked", script);
         Assert.Contains("promptReviewCompleted: completedPromptReview", script);
         Assert.Contains("hasCurrentCode: Boolean(getLatestGeneratedCode())", script);
         Assert.Contains(
             "previousAssistantResponse: getLatestHistoryContent(\"assistant\")",
             script);
+    }
+
+    [Fact]
+    public void PromptBuilderService_RejectsCurrentCodeBeforeComplexityRouting()
+    {
+        var root = GetProjectRoot();
+        var service = File.ReadAllText(Path.Combine(
+            root,
+            "Services",
+            "PromptBuilderService.cs"));
+        var currentCodeGuard = service.IndexOf(
+            "if (hasCurrentCode)",
+            StringComparison.Ordinal);
+        var complexityCheck = service.IndexOf(
+            "TradingRequestComplexityPolicy.Evaluate",
+            StringComparison.Ordinal);
+
+        Assert.True(currentCodeGuard >= 0);
+        Assert.True(currentCodeGuard < complexityCheck);
+        Assert.Contains("return new(false, \"\", false);", service);
     }
 
     [Fact]
@@ -132,6 +160,24 @@ public sealed class PromptBuilderRetrievalContextTests
             "result.success ? \"compiled\" : \"build-failed\"",
             script);
         Assert.Contains("Continue anyway to Prompt", script);
+    }
+
+    [Fact]
+    public void Workspace_SnapshotsCodeWhenAutomaticBuildReportIsNewest()
+    {
+        var script = ReadWorkspaceScript();
+        var saveStart = script.IndexOf(
+            "async function saveCurrentProject()",
+            StringComparison.Ordinal);
+        var saveEnd = script.IndexOf(
+            "async function openCodeWorkspace()",
+            saveStart,
+            StringComparison.Ordinal);
+        var saveFunction = script[saveStart..saveEnd];
+
+        Assert.Contains("const latestCode = getLatestGeneratedCode();", saveFunction);
+        Assert.Contains("latestCode: latestCode || null", saveFunction);
+        Assert.DoesNotContain("latestAssistant", saveFunction);
     }
 
     [Fact]
