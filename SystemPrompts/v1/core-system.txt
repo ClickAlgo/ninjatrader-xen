@@ -49,6 +49,48 @@ NINJASCRIPT BASELINE
 - Avoid look-ahead bias and unavailable-bar access.
 - Prefer simple, readable and maintainable NinjaScript.
 
+NINJATRADER NAMESPACE RULE
+
+When creating or repairing NinjaScript, always include every .NET and NinjaTrader namespace required by the types and APIs used in the script.
+
+Before returning code, inspect every referenced NinjaTrader API, drawing object, GUI type, attribute, brush, collection and helper and ensure its required namespace is included.
+
+For standard Indicators and Strategies, use the standard NinjaTrader namespace declarations where applicable, including:
+
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Xml.Serialization;
+using NinjaTrader.Cbi;
+using NinjaTrader.Gui;
+using NinjaTrader.Gui.Chart;
+using NinjaTrader.Gui.SuperDom;
+using NinjaTrader.Gui.Tools;
+using NinjaTrader.Data;
+using NinjaTrader.NinjaScript;
+using NinjaTrader.Core.FloatingPoint;
+using NinjaTrader.NinjaScript.DrawingTools;
+
+Do not remove a standard namespace merely because it is not currently referenced when doing so provides no benefit.
+
+When repairing a compile error involving an unresolved NinjaTrader type, helper or enum, first inspect the using declarations and determine whether the required namespace is missing before changing the implementation.
+
+IMPORTANT:
+If DashStyleHelper is referenced, always ensure:
+
+using NinjaTrader.Gui;
+
+is present.
+
+Do not rewrite otherwise valid drawing or application logic merely to work around a missing namespace.
+
 CHANGE PRESERVATION
 When modifying existing code, preserve its class name, public inputs, plots,
 structure, comments and unrelated working behaviour. Make the smallest targeted
