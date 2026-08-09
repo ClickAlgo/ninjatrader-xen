@@ -2709,12 +2709,19 @@ function renderActiveBuildPlan() {
 function getLatestGeneratedCode() {
     for (let index = history.length - 1; index >= 0; index -= 1) {
         const turn = history[index];
-        if (turn.role !== "assistant")
-            continue;
-        const blocks = [...turn.content.matchAll(
-            /```(?:csharp|cs)?\s*([\s\S]*?)```/gi)];
-        if (blocks.length)
-            return blocks.at(-1)[1].trim();
+        if (turn.role === "assistant") {
+            const blocks = [...turn.content.matchAll(
+                /```(?:csharp|cs)?\s*([\s\S]*?)```/gi)];
+            if (blocks.length)
+                return blocks.at(-1)[1].trim();
+        }
+
+        if (turn.role === "user") {
+            const uploadedSource = (turn.content || "").match(
+                /^\s*Source file:\s*[^\r\n]+\.(?:cs|txt)\s*\r?\n\s*\r?\n([\s\S]+)$/i);
+            if (uploadedSource)
+                return uploadedSource[1].trim();
+        }
     }
     return "";
 }

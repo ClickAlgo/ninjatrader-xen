@@ -88,6 +88,30 @@ public sealed class ProjectMemoryTests
     }
 
     [Fact]
+    public void ExtractLatestCode_ReturnsUploadedExistingStrategySource()
+    {
+        var history = new[]
+        {
+            new ChatTurn(
+                "user",
+                "Source file: EmaTrendStrategy.cs\n\n" +
+                "namespace NinjaTrader.NinjaScript.Strategies\n" +
+                "{\n    public class EmaTrendStrategy : Strategy { }\n}"),
+            new ChatTurn(
+                "assistant",
+                "### Strategy received\n\nWhat should be changed?")
+        };
+
+        var code = SqlProjectMemoryStore.ExtractLatestCode(history);
+
+        Assert.StartsWith(
+            "namespace NinjaTrader.NinjaScript.Strategies",
+            code);
+        Assert.Contains("class EmaTrendStrategy : Strategy", code);
+        Assert.DoesNotContain("Source file:", code);
+    }
+
+    [Fact]
     public void CurrentImplementationBlock_DeclaresCodeAuthoritative()
     {
         var block = PromptContextBuilder.BuildCurrentImplementationBlock(

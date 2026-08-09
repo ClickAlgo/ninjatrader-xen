@@ -195,6 +195,11 @@ public static class ChatEndpoints
         }
         if (string.IsNullOrWhiteSpace(currentCode))
             currentCode = SqlProjectMemoryStore.ExtractLatestCode(request.History);
+        if (string.IsNullOrWhiteSpace(currentCode))
+        {
+            currentCode = SqlProjectMemoryStore.ExtractLatestCode(
+                [new ChatTurn("user", request.Prompt)]);
+        }
 
         var previousAssistantResponse = request.History?
             .LastOrDefault(turn => turn.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase))?.Content;
@@ -413,11 +418,14 @@ public static class ChatEndpoints
                 try
                 {
                     var responseText = assistantText.ToString();
+                    var responseCode = SqlProjectMemoryStore.ExtractLatestCode(
+                        [new ChatTurn("assistant", responseText)]);
                     await projectMemoryStore.AppendTurnAsync(
                         new ProjectMemoryUpdate(subscriberId, projectId, request.Task,
                             request.Prompt.Trim(), responseText,
-                            SqlProjectMemoryStore.ExtractLatestCode(
-                                [new ChatTurn("assistant", responseText)])),
+                            string.IsNullOrWhiteSpace(responseCode)
+                                ? currentCode
+                                : responseCode),
                         context.RequestAborted);
                 }
                 catch (Exception exception)

@@ -225,6 +225,17 @@ public sealed class SqlProjectMemoryStore(
                 RegexOptions.IgnoreCase);
             if (matches.Count > 0)
                 return matches[matches.Count - 1].Groups[1].Value.Trim();
+
+            if (history[index].Role.Equals(
+                    "user",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                var uploadedSource = Regex.Match(
+                    history[index].Content ?? string.Empty,
+                    @"(?is)^\s*Source file:\s*[^\r\n]+\.(?:cs|txt)\s*\r?\n\s*\r?\n([\s\S]+)$");
+                if (uploadedSource.Success)
+                    return uploadedSource.Groups[1].Value.Trim();
+            }
         }
 
         return string.Empty;

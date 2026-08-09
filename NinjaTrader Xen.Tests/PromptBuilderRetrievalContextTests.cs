@@ -181,6 +181,24 @@ public sealed class PromptBuilderRetrievalContextTests
     }
 
     [Fact]
+    public void Workspace_TreatsUploadedSourceAsCurrentProjectCode()
+    {
+        var script = ReadWorkspaceScript();
+        var functionStart = script.IndexOf(
+            "function getLatestGeneratedCode()",
+            StringComparison.Ordinal);
+        var functionEnd = script.IndexOf(
+            "function extractLatestCodeBlock(text)",
+            functionStart,
+            StringComparison.Ordinal);
+        var function = script[functionStart..functionEnd];
+
+        Assert.Contains("turn.role === \"user\"", function);
+        Assert.Contains("Source file:", function);
+        Assert.Contains("uploadedSource[1].trim()", function);
+    }
+
+    [Fact]
     public void Workspace_AutomaticallyBuildChecksGeneratedRepairs()
     {
         var script = ReadWorkspaceScript();
