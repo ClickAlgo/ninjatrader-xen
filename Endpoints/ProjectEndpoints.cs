@@ -589,6 +589,10 @@ public static class ProjectEndpoints
         try
         {
             await using var command = new SqlCommand("""
+                DELETE FROM dbo.ExistingCodeProjectStates
+                WHERE ConversationId = @ProjectId
+                  AND SubscriberId = @SubscriberId;
+
                 DELETE FROM dbo.ProjectMemoryTurns
                 WHERE ConversationId = @ProjectId
                   AND SubscriberId = @SubscriberId;

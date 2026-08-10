@@ -121,4 +121,51 @@ public sealed class ProjectMemoryTests
         Assert.Contains("class CurrentStrategy {}", block);
         Assert.Contains("authoritative current implementation", block);
     }
+
+    [Theory]
+    [InlineData("existing-strategy", true)]
+    [InlineData("existing-indicator", true)]
+    [InlineData("build-strategy", false)]
+    [InlineData("build-indicator", false)]
+    [InlineData("convert-strategy", false)]
+    [InlineData("convert-indicator", false)]
+    [InlineData("analyse-backtest", false)]
+    public void ExistingCodeState_IsIsolatedToExistingTasks(string task, bool expected)
+    {
+        Assert.Equal(expected, ExistingCodeContext.IsExistingCodeTask(task));
+    }
+
+    [Fact]
+    public void ExistingCodeContext_CarriesAllSourcesDecisionsAndWorkingVersion()
+    {
+        var state = new ExistingCodeState(
+            [
+                new("one", "BaseIndicator.cs", "current-source", "class BaseIndicator : Indicator {}"),
+                new("two", "Helper.cs", "additional-source", "class Helper {}")
+            ],
+            [
+                new("Review both files and define requirements.", "Requirement needs clarification."),
+                new("Use a 14 period default.", "The requirement is confirmed.")
+            ],
+            "class MergedIndicator : Indicator {}");
+
+        var context = ExistingCodeContext.Build(state);
+
+        Assert.Contains("BaseIndicator.cs (current-source)", context);
+        Assert.Contains("Helper.cs (additional-source)", context);
+        Assert.Contains("Use a 14 period default.", context);
+        Assert.Contains("The requirement is confirmed.", context);
+        Assert.Contains("class MergedIndicator : Indicator {}", context);
+        Assert.Contains("Do not ask for source already listed here", context);
+    }
+
+    [Fact]
+    public void ExistingCodeDecisionCleaning_RemovesCodeButRetainsClarification()
+    {
+        var cleaned = SqlProjectMemoryStore.CleanUserMemoryForExistingCode(
+            "Use a 14 period default.\n```csharp\nclass PrivateIndicator {}\n```");
+
+        Assert.Contains("Use a 14 period default.", cleaned);
+        Assert.DoesNotContain("PrivateIndicator", cleaned);
+    }
 }

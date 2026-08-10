@@ -157,6 +157,8 @@ builder.Services.AddSingleton<RequirementsValidationService>();
 builder.Services.AddSingleton<NinjaTraderPreflightCompiler>();
 builder.Services.AddScoped<NinjaTrader_Xen.Memory.IProjectMemoryStore,
     NinjaTrader_Xen.Memory.SqlProjectMemoryStore>();
+builder.Services.AddScoped<NinjaTrader_Xen.Memory.IExistingCodeStateStore,
+    NinjaTrader_Xen.Memory.SqlExistingCodeStateStore>();
 
 var app = builder.Build();
 
@@ -180,6 +182,7 @@ app.MapAuthEndpoints();
 app.MapAccountEndpoints();
 app.MapChatEndpoints();
 app.MapProjectEndpoints();
+app.MapExistingCodeEndpoints();
 app.MapStripeEndpoints();
 app.MapPromptBuilderEndpoints();
 app.MapFeedbackEndpoints();

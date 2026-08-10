@@ -58,6 +58,7 @@ public static class ChatEndpoints
         NinjaTraderKnowledgeRetriever knowledgeRetriever,
         RequestRoutingCoordinator routingCoordinator,
         IProjectMemoryStore projectMemoryStore,
+        IExistingCodeStateStore existingCodeStateStore,
         ILoggerFactory loggerFactory)
     {
         context.Response.ContentType = "text/event-stream";
@@ -178,6 +179,20 @@ public static class ChatEndpoints
 
         var projectId = request.ProjectId.Value;
         var logger = loggerFactory.CreateLogger("ProjectMemory");
+        ExistingCodeState? existingCodeState = null;
+        if (ExistingCodeContext.IsExistingCodeTask(request.Task))
+        {
+            try
+            {
+                existingCodeState = await existingCodeStateStore.GetAsync(
+                    subscriberId, projectId, context.RequestAborted);
+            }
+            catch (Exception exception)
+            {
+                logger.LogError(exception,
+                    "Could not load existing-code state for {ProjectId}.", projectId);
+            }
+        }
         string currentCode;
         try
         {
@@ -199,6 +214,18 @@ public static class ChatEndpoints
         {
             currentCode = SqlProjectMemoryStore.ExtractLatestCode(
                 [new ChatTurn("user", request.Prompt)]);
+        }
+        if (!string.IsNullOrWhiteSpace(existingCodeState?.WorkingCode))
+            currentCode = existingCodeState.WorkingCode;
+        else if (existingCodeState?.Sources.Count > 0)
+            currentCode = existingCodeState.Sources[0].Code;
+        if (ExistingCodeContext.IsExistingCodeTask(request.Task) &&
+            existingCodeState is null && !string.IsNullOrWhiteSpace(currentCode))
+        {
+            existingCodeState = new ExistingCodeState(
+                [new ExistingCodeSource(Guid.NewGuid().ToString("N"),
+                    request.Task == "existing-strategy" ? "Strategy.cs" : "Indicator.cs",
+                    "current-source", currentCode)], []);
         }
 
         var previousAssistantResponse = request.History?
@@ -300,12 +327,14 @@ public static class ChatEndpoints
                 projectId);
         }
 
-        if (!string.IsNullOrWhiteSpace(currentCode))
+        if (!string.IsNullOrWhiteSpace(currentCode) && existingCodeState is null)
         {
             systemPrompt += "\n\n" +
                 PromptContextBuilder.BuildCurrentImplementationBlock(
                     currentCode);
         }
+        if (existingCodeState is not null)
+            systemPrompt += "\n\n" + ExistingCodeContext.Build(existingCodeState);
 
         if (knowledgeRetriever.Options.ShowDebug &&
             rag?.Best is not null)
@@ -432,6 +461,37 @@ public static class ChatEndpoints
                 {
                     logger.LogError(exception,
                         "Could not save project memory for {ProjectId}.", projectId);
+                }
+            }
+
+            if (ExistingCodeContext.IsExistingCodeTask(request.Task) &&
+                existingCodeState is not null)
+            {
+                try
+                {
+                    var responseText = assistantText.ToString();
+                    var responseCode = SqlProjectMemoryStore.ExtractLatestCode(
+                        [new ChatTurn("assistant", responseText)]);
+                    var decisions = existingCodeState.Decisions
+                        .Append(new ExistingCodeDecision(
+                            SqlProjectMemoryStore.CleanUserMemoryForExistingCode(request.Prompt),
+                            SqlProjectMemoryStore.CleanAssistantMemoryForExistingCode(responseText)))
+                        .TakeLast(30)
+                        .ToArray();
+                    existingCodeState = existingCodeState with
+                    {
+                        Decisions = decisions,
+                        WorkingCode = string.IsNullOrWhiteSpace(responseCode)
+                            ? existingCodeState.WorkingCode
+                            : responseCode
+                    };
+                    await existingCodeStateStore.SaveAsync(subscriberId, projectId,
+                        request.Task, existingCodeState, context.RequestAborted);
+                }
+                catch (Exception exception)
+                {
+                    logger.LogError(exception,
+                        "Could not update existing-code state for {ProjectId}.", projectId);
                 }
             }
 

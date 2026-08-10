@@ -91,7 +91,7 @@
                     <span id="themeToggleLabel">Light theme</span>
                 </button>
             </div>
-            <div class="workspace-build-version">Build v1.0.3-beta</div>
+            <div class="workspace-build-version">Build v1.0.4-beta</div>
         </aside>
 
         <section class="chat-panel">
@@ -136,6 +136,7 @@
                     <button id="sourceFileButton" class="button source-file-button"
                         type="button">Upload source file</button>
                     <span id="sourceFileStatus">or paste the complete strategy source below</span>
+                    <div id="existingCodeAttachments" class="existing-code-attachments" hidden></div>
                     <a id="analyzerExportGuide" class="analyzer-export-guide"
                         href="https://help.clickalgo.com/ninjatrader-xen/strategy-analyzer/"
                         target="_blank" rel="noopener noreferrer" hidden>How to export results</a>
@@ -178,6 +179,51 @@
             </form>
         </section>
     </main>
+
+    <div id="existingCodeModal" class="projects-modal" hidden>
+        <section class="prompt-builder-dialog" role="dialog" aria-modal="true"
+            aria-labelledby="existingCodeTitle">
+            <header class="projects-dialog-header">
+                <div>
+                    <p class="eyebrow">PROJECT SOURCE</p>
+                    <h2 id="existingCodeTitle">Add source code</h2>
+                </div>
+                <button id="closeExistingCodeButton" class="dialog-close"
+                    type="button" aria-label="Close">&times;</button>
+            </header>
+            <form id="existingCodeForm" class="feedback-form">
+                <label class="feedback-field">
+                    <span>File name</span>
+                    <input id="existingCodeFileName" maxlength="160"
+                        placeholder="MyIndicator.cs" required>
+                </label>
+                <label class="feedback-field">
+                    <span>How this source is used</span>
+                    <select id="existingCodeRole">
+                        <option id="existingCodeCurrentRole" value="current-source">Current codebase</option>
+                        <option value="additional-source">Merge functionality into current source</option>
+                        <option value="reference-source">Use only as an example</option>
+                    </select>
+                </label>
+                <label class="feedback-field">
+                    <span>NinjaScript source</span>
+                    <textarea id="existingCodeText" rows="14" maxlength="500000"
+                        placeholder="Paste the complete NinjaScript source here" required></textarea>
+                </label>
+                <button id="uploadExistingCodeButton" class="button" type="button">
+                    Load a .cs file
+                </button>
+                <a class="existing-code-help-link"
+                    href="https://help.clickalgo.com/ninjatrader-xen/existing-code/"
+                    target="_blank" rel="noopener noreferrer">Need help adding existing code?</a>
+                <p id="existingCodeStatus" class="feedback-status" role="status"></p>
+                <footer class="feedback-actions">
+                    <button id="cancelExistingCodeButton" class="button" type="button">Cancel</button>
+                    <button class="button primary" type="submit">Add source</button>
+                </footer>
+            </form>
+        </section>
+    </div>
 
     <div id="projectsModal" class="projects-modal" hidden>
         <section class="projects-dialog" role="dialog" aria-modal="true" aria-labelledby="projectsTitle">

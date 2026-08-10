@@ -4313,3 +4313,75 @@ html[data-theme="light"] .feedback-invitation-copy strong {
         flex-direction: column;
     }
 }
+
+.existing-code-attachments {
+    display: flex;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.existing-code-attachment {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 7px;
+    border: 1px solid #454545;
+    border-radius: 6px;
+    color: var(--muted);
+    background: #1d1d1d;
+    font-size: 11px;
+}
+
+.existing-code-attachment-remove {
+    display: inline-grid;
+    width: 18px;
+    height: 18px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    color: #aaa;
+    background: transparent;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.existing-code-attachment-remove:hover:not(:disabled) {
+    color: #fff;
+    background: #3a3a3a;
+}
+
+.existing-code-attachment::before {
+    content: "\1F4CE";
+    color: #aaa;
+    font-size: 12px;
+}
+
+.existing-code-review-button {
+    min-height: 32px;
+    padding: 0 13px;
+    border-color: var(--primary);
+    color: #fff;
+    background: var(--primary);
+    font-size: 11px;
+    box-shadow: 0 3px 10px rgba(240, 68, 22, .22);
+}
+
+.existing-code-review-button:hover:not(:disabled) {
+    border-color: var(--primary-bright);
+    background: var(--primary-bright);
+}
+
+.existing-code-help-link {
+    width: fit-content;
+    color: var(--primary-bright);
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.existing-code-help-link:hover {
+    text-decoration: underline;
+}

@@ -289,6 +289,16 @@ public sealed class SqlProjectMemoryStore(
     internal static string CleanUserMemory(string value) =>
         CleanForMemory(value, 350, replaceCode: true);
 
+    internal static string CleanUserMemoryForExistingCode(string value) =>
+        CleanForMemory(value, 4_000, replaceCode: true);
+
+    internal static string CleanAssistantMemoryForExistingCode(string value)
+    {
+        var text = Regex.Replace(value ?? string.Empty,
+            @"```[\s\S]*?```", "[generated code retained as working version]");
+        return CleanForMemory(text, 4_000, replaceCode: false);
+    }
+
     internal static string CleanAssistantMemory(string value)
     {
         var text = Regex.Replace(

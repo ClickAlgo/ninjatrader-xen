@@ -34,6 +34,7 @@ let promptBuilderBypassed = false;
 let promptReviewCompleted = false;
 let pendingImage = null;
 let pendingAnalyzerExports = [];
+let existingCodeState = { sources: [], decisions: [], workingCode: null };
 let acceptedModelSelection = "";
 let preflightBuilding = false;
 
@@ -86,6 +87,13 @@ const sourceImport = document.getElementById("sourceImport");
 const sourceFileInput = document.getElementById("sourceFileInput");
 const sourceFileButton = document.getElementById("sourceFileButton");
 const sourceFileStatus = document.getElementById("sourceFileStatus");
+const existingCodeAttachments = document.getElementById("existingCodeAttachments");
+const existingCodeModal = document.getElementById("existingCodeModal");
+const existingCodeForm = document.getElementById("existingCodeForm");
+const existingCodeText = document.getElementById("existingCodeText");
+const existingCodeFileName = document.getElementById("existingCodeFileName");
+const existingCodeRole = document.getElementById("existingCodeRole");
+const existingCodeStatus = document.getElementById("existingCodeStatus");
 const analyzerExportGuide = document.getElementById("analyzerExportGuide");
 const analyzerAttachments =
     document.getElementById("analyzerAttachments");
@@ -134,8 +142,20 @@ showMobileWorkspaceNotice();
 renderActiveBuildPlan();
 updateTaskSpecificUi();
 updateClearInputButton();
-sourceFileButton.addEventListener("click", () => sourceFileInput.click());
+sourceFileButton.addEventListener("click", () => {
+    if (isExistingCodeTask())
+        openExistingCodeModal();
+    else
+        sourceFileInput.click();
+});
 sourceFileInput.addEventListener("change", importSourceFile);
+existingCodeForm.addEventListener("submit", saveExistingCodeAttachment);
+document.getElementById("closeExistingCodeButton").addEventListener("click", closeExistingCodeModal);
+document.getElementById("cancelExistingCodeButton").addEventListener("click", closeExistingCodeModal);
+document.getElementById("uploadExistingCodeButton").addEventListener("click", () => sourceFileInput.click());
+existingCodeModal.addEventListener("click", event => {
+    if (event.target === existingCodeModal) closeExistingCodeModal();
+});
 imageFileButton.addEventListener("click", () => imageFileInput.click());
 imageFileInput.addEventListener("change", importReferenceImage);
 removeImageButton.addEventListener("click", clearPendingImage);
@@ -283,6 +303,21 @@ form.addEventListener("submit", async event => {
     let prompt = promptInput.value.trim();
     if (!prompt)
         return;
+    if (isExistingCodeTask() && looksLikeCompleteNinjaScript(prompt)) {
+        existingCodeText.value = prompt;
+        existingCodeFileName.value = activeTask === "existing-strategy"
+            ? "Strategy.cs" : "Indicator.cs";
+        existingCodeStatus.textContent =
+            "Full source is saved separately so it cannot be lost from chat history.";
+        existingCodeModal.hidden = false;
+        document.body.classList.add("modal-open");
+        return;
+    }
+    if (isExistingCodeTask() && !hasCurrentExistingSource()) {
+        status.textContent = "Add the current source code before sending requirements";
+        openExistingCodeModal();
+        return;
+    }
     if (redirectMismatchedExistingSource(prompt))
         return;
     const shouldInviteFeedback = isClearlyFrustrated(prompt);
@@ -537,6 +572,7 @@ form.addEventListener("submit", async event => {
         currentController = null;
         applyCreditAvailability();
         updateImageUploadUi();
+        renderExistingCodeAttachments();
         if (!promptInput.disabled)
             promptInput.focus();
     }
@@ -726,7 +762,8 @@ function renderStructuredResponse(container, source) {
         appendProse(container, source.slice(cursor, match.index));
         const code = match[1].trim();
         appendCodeBlock(container, code);
-        generatedCode.push(code);
+        if (looksLikeCompleteNinjaScript(code))
+            generatedCode.push(code);
         cursor = match.index + match[0].length;
     }
 
@@ -1791,6 +1828,8 @@ function startNewProject(resetTask = true) {
     currentProjectId = null;
     currentProjectTitle = "";
     history = [];
+    existingCodeState = { sources: [], decisions: [], workingCode: null };
+    renderExistingCodeAttachments();
     promptInput.value = "";
     clearAnalyzerExports(false);
     updateClearInputButton();
@@ -1846,13 +1885,13 @@ function updateTaskSpecificUi(preservePendingImage = false) {
             accept: ".cs,.txt,.mq4,.mq5,.pine,text/plain"
         },
         "existing-strategy": {
-            button: "Upload strategy file",
-            status: "or paste the complete NinjaScript Strategy below",
+            button: "Add source code",
+            status: "",
             accept: ".cs,.txt,text/plain"
         },
         "existing-indicator": {
-            button: "Upload indicator file",
-            status: "or paste the complete NinjaScript Indicator below",
+            button: "Add source code",
+            status: "",
             accept: ".cs,.txt,text/plain"
         },
         "analyse-backtest": {
@@ -1868,6 +1907,7 @@ function updateTaskSpecificUi(preservePendingImage = false) {
     sourceFileInput.multiple = activeTask === "analyse-backtest";
     sourceFileButton.textContent = options?.button || "Upload source file";
     sourceFileStatus.textContent = options?.status || "";
+    renderExistingCodeAttachments();
     analyzerExportGuide.hidden = activeTask !== "analyse-backtest";
     sendButton.querySelector(".send-label").textContent =
         activeTask === "analyse-backtest" ? "Analyse results" : "Send";
@@ -2035,6 +2075,15 @@ async function importSourceFile() {
             return;
         }
 
+        if (isExistingCodeTask()) {
+            existingCodeFileName.value = file.name;
+            existingCodeText.value = source;
+            existingCodeRole.value = hasCurrentExistingSource()
+                ? "additional-source" : "current-source";
+            openExistingCodeModal();
+            return;
+        }
+
         let request = `Source file: ${file.name}\n\n${source}`;
         if (isStrategyConversion) {
             request =
@@ -2067,6 +2116,186 @@ async function importSourceFile() {
     } finally {
         sourceFileInput.value = "";
     }
+}
+
+function isExistingCodeTask(task = activeTask) {
+    return task === "existing-strategy" || task === "existing-indicator";
+}
+
+function hasCurrentExistingSource() {
+    return existingCodeState.sources.some(source => source.role === "current-source");
+}
+
+function looksLikeCompleteNinjaScript(value) {
+    return /\bclass\s+[A-Za-z_][A-Za-z0-9_]*[\s\S]{0,300}:\s*(?:[\w.]+\.)?(?:Strategy|Indicator)\b/.test(value) &&
+        /\bOnStateChange\s*\(/.test(value);
+}
+
+function openExistingCodeModal() {
+    if (!isExistingCodeTask()) return;
+    existingCodeStatus.textContent = "";
+    if (!existingCodeFileName.value)
+        existingCodeFileName.value = activeTask === "existing-strategy"
+            ? "Strategy.cs" : "Indicator.cs";
+    document.getElementById("existingCodeCurrentRole").textContent =
+        hasCurrentExistingSource() ? "Replace current source" : "Current codebase";
+    existingCodeRole.value = hasCurrentExistingSource()
+        ? "additional-source" : "current-source";
+    existingCodeModal.hidden = false;
+    document.body.classList.add("modal-open");
+    window.setTimeout(() => existingCodeText.focus(), 0);
+}
+
+function closeExistingCodeModal() {
+    existingCodeModal.hidden = true;
+    document.body.classList.remove("modal-open");
+    existingCodeStatus.textContent = "";
+}
+
+async function saveExistingCodeAttachment(event) {
+    event.preventDefault();
+    const code = existingCodeText.value.trim();
+    const fileName = existingCodeFileName.value.trim();
+    if (!code || !fileName) return;
+    if (!currentProjectId) {
+        currentProjectId = crypto.randomUUID();
+        currentProjectTitle = `Existing ${activeTask === "existing-strategy" ? "strategy" : "indicator"}`;
+        updateProjectTitle();
+    }
+    const source = {
+        id: crypto.randomUUID().replaceAll("-", ""),
+        fileName,
+        role: existingCodeRole.value,
+        code
+    };
+    const sources = [...existingCodeState.sources];
+    if (source.role !== "current-source" && sources.length >= 4) {
+        existingCodeStatus.textContent =
+            "A project can contain no more than four source files. Remove one before adding another.";
+        return;
+    }
+    if (source.role === "current-source") {
+        const index = sources.findIndex(item => item.role === "current-source");
+        if (index >= 0) sources[index] = source;
+        else sources.unshift(source);
+    } else {
+        sources.push(source);
+    }
+    existingCodeStatus.textContent = "Saving source with this project...";
+    const response = await fetch(`/api/projects/${currentProjectId}/existing-code`, {
+        method: "PUT",
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ task: activeTask, sources })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        existingCodeStatus.textContent = payload.message || "Source could not be saved.";
+        return;
+    }
+    existingCodeState = payload;
+    promptInput.value = stripCompleteSourceFromPrompt(promptInput.value);
+    existingCodeText.value = "";
+    renderExistingCodeAttachments();
+    closeExistingCodeModal();
+    status.textContent = `${sources.length} source file${sources.length === 1 ? "" : "s"} retained`;
+    promptInput.focus();
+}
+
+function stripCompleteSourceFromPrompt(value) {
+    return looksLikeCompleteNinjaScript(value) ? "" : value;
+}
+
+function renderExistingCodeAttachments() {
+    existingCodeAttachments.replaceChildren();
+    const visible = isExistingCodeTask() && existingCodeState.sources.length > 0;
+    existingCodeAttachments.hidden = !visible;
+    if (!visible) return;
+    for (const source of existingCodeState.sources) {
+        const item = document.createElement("span");
+        item.className = "existing-code-attachment";
+        const roleLabel = source.role === "additional-source"
+            ? "additional source"
+            : source.role === "reference-source"
+                ? "reference source"
+                : "current source";
+        const label = document.createElement("span");
+        label.textContent = `${source.fileName} · ${roleLabel}`;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "existing-code-attachment-remove";
+        remove.setAttribute("aria-label", `Remove ${source.fileName}`);
+        remove.title = `Remove ${source.fileName}`;
+        remove.textContent = "×";
+        remove.disabled = generating;
+        remove.addEventListener("click", () => removeExistingCodeAttachment(source.id));
+        item.append(label, remove);
+        existingCodeAttachments.appendChild(item);
+    }
+    if (!hasCurrentExistingSource()) return;
+    const review = document.createElement("button");
+    review.type = "button";
+    review.className = "button existing-code-review-button";
+    review.textContent = activeTask === "existing-strategy"
+        ? "Review strategy" : "Review indicator";
+    review.disabled = generating;
+    review.addEventListener("click", submitExistingCodeReview);
+    existingCodeAttachments.appendChild(review);
+}
+
+async function removeExistingCodeAttachment(sourceId) {
+    if (generating || !currentProjectId) return;
+    const sources = existingCodeState.sources.filter(source => source.id !== sourceId);
+    status.textContent = "Removing source...";
+    const response = await fetch(`/api/projects/${currentProjectId}/existing-code`, {
+        method: "PUT",
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ task: activeTask, sources })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        status.textContent = payload.message || "Source could not be removed";
+        return;
+    }
+    existingCodeState = payload;
+    renderExistingCodeAttachments();
+    status.textContent = sources.length
+        ? `${sources.length} source file${sources.length === 1 ? "" : "s"} retained`
+        : "Source removed · add current source before sending requirements";
+}
+
+function submitExistingCodeReview(event) {
+    if (generating || preparingRequest || !isExistingCodeTask() ||
+        !hasCurrentExistingSource())
+        return;
+    event.currentTarget.disabled = true;
+    const scriptType = activeTask === "existing-strategy"
+        ? "strategy" : "indicator";
+    promptInput.value =
+        `Review all attached NinjaScript source files for this ${scriptType}. ` +
+        "Explain the current behaviour, identify defects or risks, and list " +
+        "any requirements or decisions that need clarification. Do not modify " +
+        "or generate code yet.";
+    updateClearInputButton();
+    form.requestSubmit();
+}
+
+async function loadExistingCodeState() {
+    existingCodeState = { sources: [], decisions: [], workingCode: null };
+    if (!isExistingCodeTask() || !currentProjectId) {
+        renderExistingCodeAttachments();
+        return;
+    }
+    const response = await fetch(`/api/projects/${currentProjectId}/existing-code`, {
+        headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (response.ok) existingCodeState = await response.json();
+    renderExistingCodeAttachments();
 }
 
 async function importAnalyzerCsvFiles(files) {
@@ -3942,6 +4171,7 @@ async function loadProject(projectId) {
 
         const project = await response.json();
         applyProjectToWorkspace(project);
+        await loadExistingCodeState();
         status.textContent = "Project loaded";
         closeProjects();
         scrollMessagesToBottom();
