@@ -5,6 +5,24 @@ namespace NinjaTrader_Xen.Tests;
 public sealed class NinjaTraderKnowledgeRetrieverTests
 {
     [Fact]
+    public void RagRecordEmbeddingText_UsesOnlyTitleDescriptionAndTags()
+    {
+        var embeddingText = RagRecordEmbeddingText.Build(
+            "Add a Custom Button to a Chart",
+            "Adds a button using ChartControl.Dispatcher.",
+            "chart button, WPF, ChartControl");
+
+        Assert.Equal(
+            "Title: Add a Custom Button to a Chart\n" +
+            "Description: Adds a button using ChartControl.Dispatcher.\n" +
+            "Tags: chart button, WPF, ChartControl",
+            embeddingText);
+        Assert.DoesNotContain("public class", embeddingText);
+        Assert.DoesNotContain("CustomButton.cs", embeddingText);
+        Assert.DoesNotContain("Indicator", embeddingText);
+    }
+
+    [Fact]
     public void BuildQueries_ExtractsCompoundIndicatorNamesAndKeepsOriginalFallback()
     {
         const string prompt = "Build an Aroon and EMA strategy";

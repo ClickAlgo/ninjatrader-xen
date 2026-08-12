@@ -87,6 +87,10 @@ platform-specific Xen products rather than rebuilt independently:
 - RAG query decomposition, category routing, deduplication, context budgets and debug diagnostics
 - Compressed durable project memory containing requirements and authoritative code,
   while excluding ordinary questions and transient repair discussion
+- Existing-code continuity for strategies and indicators: uploaded source remains
+  the authoritative implementation across acknowledgement, clarification,
+  follow-up modification, project save/reload and model changes, without asking
+  the user to paste or upload it again
 - Prompt Builder, clarification workflow and staged Build Plans that retrieve examples
   only when an actionable coding step is ready
 - Project history, source snapshots, requirements verification, build/compile checks
@@ -140,6 +144,9 @@ validated independently.
 - [x] Structural source-type validation redirects Strategy/Indicator files to
   the matching existing-code task before RAG or model execution
 - [x] Code-aware rendering for user source and model source
+- [x] Existing Strategy and Existing Indicator uploads become the authoritative
+  current source; after acknowledging receipt, simple follow-up changes reuse the
+  upload without requesting it again
 - [x] Copy source, download source and platform-native package download
 - [x] Generation progress, cancellation, clear input and clear task controls
 - [x] Projects, rename/delete/restore actions and source snapshots
@@ -186,6 +193,8 @@ validated independently.
 - [x] Subsequent modifications update the same project and preserve revisions
 - [x] Compressed database conversation memory for long-running projects
 - [x] Authoritative current source and durable requirements preserved during compression
+- [x] Uploaded existing source persists across acknowledgement and clarification
+  turns, subsequent modifications, project saves/reloads and model changes
 - [x] Questions, analysis chatter and transient repair discussion excluded from
   durable requirements
 - [x] Build diagnostics and repair results retained with the project
@@ -252,13 +261,21 @@ validated independently.
 
 1. Prove platform scoping, authentication, credits and an isolated deployment.
 2. Define platform tasks, lifecycle rules, system prompts and RAG categories.
-3. Add provider routing, request classification and durable memory.
+3. Add provider routing, request classification and durable memory. Prove that
+   uploaded Existing Strategy and Existing Indicator source remains authoritative
+   through acknowledgement, follow-up modification, save/reload and model changes.
 4. Add Prompt Builder and Build Plans before expanding complex generation.
 5. Curate and test platform examples, retrieval allocation and context budgets.
 6. Add projects, snapshots, source downloads and native packaging.
 7. Prove assembly/API compilation in isolation, then add controlled repair.
 8. Add requirements verification and platform backtest-result analysis.
 9. Add regression coverage, logging, documentation and launch monitoring.
+
+For TradingView Xen, apply this contract to uploaded `.pine` source for both
+Pine Script strategies and indicators. Regression coverage must exercise the
+complete sequence: upload source, acknowledge receipt, request a simple change,
+return the complete revised source without another source request, save the
+project, reopen it and successfully perform another modification.
 
 ## Next development priorities
 
