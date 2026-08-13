@@ -1459,24 +1459,19 @@ function appendResponseCodeActions(container, code) {
         addonNotice.textContent = "";
         runPreflightBuild(code, buildButton);
     });
-    addonButton.addEventListener("click", () => {
+    addonButton.addEventListener("click", async () => {
+        addonNotice.hidden = true;
+        addonNotice.textContent = "";
         if (hasSuccessfulBuildForCode(code)) {
-            addonNotice.hidden = true;
-            addonNotice.textContent = "";
-            downloadNinjaTraderAddon(code, addonButton);
+            await downloadNinjaTraderAddon(code, addonButton);
             return;
         }
 
-        addonNotice.textContent =
-            "Run Build Check successfully before downloading the Add-On.";
-        addonNotice.hidden = false;
-        buildButton.classList.remove("needs-build-check");
-        void buildButton.offsetWidth;
-        buildButton.classList.add("needs-build-check");
-        buildButton.focus();
-        window.setTimeout(
-            () => buildButton.classList.remove("needs-build-check"),
-            1800);
+        addonButton.disabled = true;
+        const result = await runPreflightBuild(code, buildButton);
+        addonButton.disabled = false;
+        if (result?.success)
+            await downloadNinjaTraderAddon(code, addonButton);
     });
 
     const verifyButton = document.createElement("button");
@@ -1876,12 +1871,12 @@ function updateTaskSpecificUi(preservePendingImage = false) {
     const uploadTasks = {
         "convert-strategy": {
             button: "Upload source file",
-            status: "or paste the complete strategy source below",
+            status: "One source file · add conversion instructions below",
             accept: ".cs,.txt,.mq4,.mq5,.pine,text/plain"
         },
         "convert-indicator": {
             button: "Upload source file",
-            status: "or paste the complete indicator source below",
+            status: "One source file · add conversion instructions below",
             accept: ".cs,.txt,.mq4,.mq5,.pine,text/plain"
         },
         "existing-strategy": {
@@ -2083,34 +2078,11 @@ async function importSourceFile() {
             openExistingCodeModal();
             return;
         }
-
-        let request = `Source file: ${file.name}\n\n${source}`;
-        if (isStrategyConversion) {
-            request =
-                "Convert the following automated trading strategy into a complete " +
-                "NinjaTrader 8 NinjaScript Strategy. Preserve its trading logic, " +
-                "configurable inputs and risk behaviour.\n\n" + request;
-        } else if (isIndicatorConversion) {
-            request =
-                "Convert the following indicator into a complete NinjaTrader 8 " +
-                "NinjaScript Indicator. Preserve its calculations, plots, visual " +
-                "behaviour and configurable inputs.\n\n" + request;
-        }
-
-        if (request.length > promptInput.maxLength) {
-            sourceFileStatus.textContent =
-                "The source is too long for one request. Remove comments or paste a smaller strategy.";
+        if (isConversion) {
+            await saveConversionSourceAttachment(file.name, source);
             return;
         }
 
-        promptInput.value = request;
-        updateClearInputButton();
-        if (redirectMismatchedExistingSource(request, file.name))
-            return;
-        sourceFileStatus.textContent =
-            `${file.name} loaded · review it, then press Send`;
-        promptInput.focus();
-        promptInput.setSelectionRange(0, 0);
     } catch {
         sourceFileStatus.textContent = "Xen could not read this source file.";
     } finally {
@@ -2120,6 +2092,11 @@ async function importSourceFile() {
 
 function isExistingCodeTask(task = activeTask) {
     return task === "existing-strategy" || task === "existing-indicator";
+}
+
+function isSourceAttachmentTask(task = activeTask) {
+    return isExistingCodeTask(task) ||
+        task === "convert-strategy" || task === "convert-indicator";
 }
 
 function hasCurrentExistingSource() {
@@ -2152,6 +2129,38 @@ function closeExistingCodeModal() {
     existingCodeStatus.textContent = "";
 }
 
+async function saveConversionSourceAttachment(fileName, code) {
+    if (!currentProjectId) {
+        currentProjectId = crypto.randomUUID();
+        currentProjectTitle = taskNames[activeTask];
+        updateProjectTitle();
+    }
+    const source = {
+        id: crypto.randomUUID().replaceAll("-", ""),
+        fileName,
+        role: "current-source",
+        code
+    };
+    sourceFileStatus.textContent = "Saving source attachment...";
+    const response = await fetch(`/api/projects/${currentProjectId}/existing-code`, {
+        method: "PUT",
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ task: activeTask, sources: [source] })
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        sourceFileStatus.textContent = payload.message || "Source could not be saved.";
+        return;
+    }
+    existingCodeState = payload;
+    renderExistingCodeAttachments();
+    sourceFileStatus.textContent = "Source attached · add conversion instructions below";
+    promptInput.focus();
+}
+
 async function saveExistingCodeAttachment(event) {
     event.preventDefault();
     const code = existingCodeText.value.trim();
@@ -2159,7 +2168,7 @@ async function saveExistingCodeAttachment(event) {
     if (!code || !fileName) return;
     if (!currentProjectId) {
         currentProjectId = crypto.randomUUID();
-        currentProjectTitle = `Existing ${activeTask === "existing-strategy" ? "strategy" : "indicator"}`;
+        currentProjectTitle = taskNames[activeTask];
         updateProjectTitle();
     }
     const source = {
@@ -2210,7 +2219,7 @@ function stripCompleteSourceFromPrompt(value) {
 
 function renderExistingCodeAttachments() {
     existingCodeAttachments.replaceChildren();
-    const visible = isExistingCodeTask() && existingCodeState.sources.length > 0;
+    const visible = isSourceAttachmentTask() && existingCodeState.sources.length > 0;
     existingCodeAttachments.hidden = !visible;
     if (!visible) return;
     for (const source of existingCodeState.sources) {
@@ -2222,7 +2231,9 @@ function renderExistingCodeAttachments() {
                 ? "reference source"
                 : "current source";
         const label = document.createElement("span");
-        label.textContent = `${source.fileName} · ${roleLabel}`;
+        label.textContent = isExistingCodeTask()
+            ? `${source.fileName} · ${roleLabel}`
+            : source.fileName;
         const remove = document.createElement("button");
         remove.type = "button";
         remove.className = "existing-code-attachment-remove";
@@ -2234,7 +2245,7 @@ function renderExistingCodeAttachments() {
         item.append(label, remove);
         existingCodeAttachments.appendChild(item);
     }
-    if (!hasCurrentExistingSource()) return;
+    if (!hasCurrentExistingSource() || !isExistingCodeTask()) return;
     const review = document.createElement("button");
     review.type = "button";
     review.className = "button existing-code-review-button";
@@ -2266,7 +2277,9 @@ async function removeExistingCodeAttachment(sourceId) {
     renderExistingCodeAttachments();
     status.textContent = sources.length
         ? `${sources.length} source file${sources.length === 1 ? "" : "s"} retained`
-        : "Source removed · add current source before sending requirements";
+        : isExistingCodeTask()
+            ? "Source removed · add current source before sending requirements"
+            : "Source removed · upload one source file to convert";
 }
 
 function submitExistingCodeReview(event) {
@@ -2287,7 +2300,7 @@ function submitExistingCodeReview(event) {
 
 async function loadExistingCodeState() {
     existingCodeState = { sources: [], decisions: [], workingCode: null };
-    if (!isExistingCodeTask() || !currentProjectId) {
+    if (!isSourceAttachmentTask() || !currentProjectId) {
         renderExistingCodeAttachments();
         return;
     }

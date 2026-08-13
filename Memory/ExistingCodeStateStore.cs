@@ -35,7 +35,7 @@ public sealed class SqlExistingCodeStateStore(IConfiguration configuration)
         ExistingCodeState state, CancellationToken cancellationToken)
     {
         if (!ExistingCodeContext.IsExistingCodeTask(task))
-            throw new InvalidOperationException("Existing-code state is available only for existing-code tasks.");
+            throw new InvalidOperationException("Source state is available only for supported source-code tasks.");
         var json = JsonSerializer.Serialize(state,
             new JsonSerializerOptions(JsonSerializerDefaults.Web));
         await using var connection = await Open(cancellationToken);
@@ -73,7 +73,8 @@ public sealed class SqlExistingCodeStateStore(IConfiguration configuration)
 public static class ExistingCodeContext
 {
     public static bool IsExistingCodeTask(string? task) => task is
-        "existing-strategy" or "existing-indicator";
+        "existing-strategy" or "existing-indicator" or
+        "convert-strategy" or "convert-indicator";
 
     public static string Build(ExistingCodeState state)
     {

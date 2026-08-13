@@ -127,8 +127,8 @@ public sealed class ProjectMemoryTests
     [InlineData("existing-indicator", true)]
     [InlineData("build-strategy", false)]
     [InlineData("build-indicator", false)]
-    [InlineData("convert-strategy", false)]
-    [InlineData("convert-indicator", false)]
+    [InlineData("convert-strategy", true)]
+    [InlineData("convert-indicator", true)]
     [InlineData("analyse-backtest", false)]
     public void ExistingCodeState_IsIsolatedToExistingTasks(string task, bool expected)
     {

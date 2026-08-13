@@ -56,6 +56,26 @@ public sealed class BuildCheckHistoryTests
             saveFunction);
     }
 
+    [Fact]
+    public void AddOnDownload_RunsBuildCheckAndContinuesOnSuccess()
+    {
+        var script = ReadWorkspaceScript();
+        var start = script.IndexOf(
+            "addonButton.addEventListener(\"click\"",
+            StringComparison.Ordinal);
+        var end = script.IndexOf(
+            "const verifyButton",
+            start,
+            StringComparison.Ordinal);
+        var clickHandler = script[start..end];
+
+        Assert.Contains("await runPreflightBuild(code, buildButton)", clickHandler);
+        Assert.Contains("if (result?.success)", clickHandler);
+        Assert.Contains("await downloadNinjaTraderAddon(code, addonButton)", clickHandler);
+        Assert.DoesNotContain("addonButton.textContent = \"Checking build...\"", clickHandler);
+        Assert.DoesNotContain("Run Build Check successfully", clickHandler);
+    }
+
     private static string ReadWorkspaceScript()
     {
         var root = GetProjectRoot();

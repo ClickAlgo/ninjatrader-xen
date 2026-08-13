@@ -31,7 +31,10 @@ public static class ExistingCodeEndpoints
         if (!TryGetSubscriberId(context, out var subscriberId))
             return Results.Unauthorized();
         if (!ExistingCodeContext.IsExistingCodeTask(request.Task))
-            return Results.BadRequest(new { message = "Source state is limited to existing-code tasks." });
+            return Results.BadRequest(new { message = "Source state is limited to supported source-code tasks." });
+        if (request.Task is "convert-strategy" or "convert-indicator" &&
+            request.Sources.Count > 1)
+            return Results.BadRequest(new { message = "Conversion tasks allow one source file." });
         if (request.Sources.Count > 4)
             return Results.BadRequest(new { message = "Add no more than four source files." });
         if (request.Sources.Count(source => source.Role == "current-source") > 1)

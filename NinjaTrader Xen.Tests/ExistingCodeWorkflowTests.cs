@@ -35,23 +35,27 @@ public sealed class ExistingCodeWorkflowTests
     }
 
     [Fact]
-    public void ExistingCodeUiGateNamesOnlyTheTwoExistingTasks()
+    public void SourceAttachmentUiGateIncludesExistingAndConvertTasks()
     {
         var script = File.ReadAllText(Path.Combine(Root, "wwwroot", "js", "workspace.js"));
-        const string expected = "return task === \"existing-strategy\" || task === \"existing-indicator\";";
 
-        Assert.Contains(expected, script);
+        Assert.Contains("function isSourceAttachmentTask", script);
+        Assert.Contains("task === \"convert-strategy\" || task === \"convert-indicator\"", script);
+        Assert.Contains("saveConversionSourceAttachment(file.name, source)", script);
+        Assert.Contains("sources: [source]", script);
+        Assert.Contains("One source file · add conversion instructions below", script);
+        Assert.DoesNotContain("promptInput.value = request;", script);
     }
 
     [Fact]
-    public void DatabaseConstraintLimitsStateToExistingTasks()
+    public void DatabaseConstraintMigrationAddsConvertTasks()
     {
         var migration = File.ReadAllText(Path.Combine(
-            Root, "Database", "002-existing-code-project-state.sql"));
+            Root, "Database", "003-convert-source-project-state.sql"));
 
-        Assert.Contains("CHECK (Task IN (N'existing-strategy', N'existing-indicator'))", migration);
+        Assert.Contains("N'convert-strategy'", migration);
+        Assert.Contains("N'convert-indicator'", migration);
         Assert.DoesNotContain("build-strategy", migration);
-        Assert.DoesNotContain("convert-strategy", migration);
     }
 
     [Fact]
@@ -62,6 +66,7 @@ public sealed class ExistingCodeWorkflowTests
 
         Assert.Contains("request.Sources.Count > 4", endpoint);
         Assert.Contains("no more than four source files", endpoint);
+        Assert.Contains("Conversion tasks allow one source file", endpoint);
     }
 
     [Fact]

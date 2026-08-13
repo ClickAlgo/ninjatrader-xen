@@ -224,7 +224,8 @@ public static class ChatEndpoints
         {
             existingCodeState = new ExistingCodeState(
                 [new ExistingCodeSource(Guid.NewGuid().ToString("N"),
-                    request.Task == "existing-strategy" ? "Strategy.cs" : "Indicator.cs",
+                    request.Task.Contains("strategy", StringComparison.Ordinal)
+                        ? "Strategy.cs" : "Indicator.cs",
                     "current-source", currentCode)], []);
         }
 
