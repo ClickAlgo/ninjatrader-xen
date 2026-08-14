@@ -3108,6 +3108,17 @@ html[data-theme="light"] .analyzer-export-guide:focus-visible {
     gap: 12px;
 }
 
+.backtest-report-introduction {
+    margin: 0;
+    padding: 11px 14px;
+    border-left: 3px solid var(--primary);
+    border-radius: 0 7px 7px 0;
+    color: #c8c8c8;
+    background: rgba(240, 68, 22, .065);
+    font-size: 12px;
+    line-height: 1.55;
+}
+
 .backtest-report-section {
     padding: 17px 19px;
     border: 1px solid #393939;
@@ -3593,6 +3604,11 @@ html[data-theme="light"] .backtest-report-section:first-child {
     border-color: #d7d9dc;
     background: #fff;
     box-shadow: 0 8px 24px rgba(24, 28, 34, .05);
+}
+
+html[data-theme="light"] .backtest-report-introduction {
+    color: #4e5551;
+    background: rgba(240, 68, 22, .055);
 }
 
 html[data-theme="light"] .backtest-report-message .backtest-report-section h2,

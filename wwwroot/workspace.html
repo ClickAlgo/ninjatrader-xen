@@ -17,7 +17,7 @@
                 document.documentElement.dataset.theme = "light";
         })();
     </script>
-    <link rel="stylesheet" href="/css/site.css?v=1.0.9">
+    <link rel="stylesheet" href="/css/site.css?v=1.0.10">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -97,7 +97,7 @@
                     <span id="themeToggleLabel">Light theme</span>
                 </button>
             </div>
-            <div class="workspace-build-version">Build v1.0.7-beta</div>
+            <div class="workspace-build-version">Build v1.0.8-beta</div>
         </aside>
 
         <section class="chat-panel">
@@ -141,6 +141,12 @@
                         accept=".cs,.txt,.mq4,.mq5,.pine,text/plain">
                     <button id="sourceFileButton" class="button source-file-button"
                         type="button">Upload source file</button>
+                    <input id="analyzerTradesFileInput" type="file"
+                        accept=".csv,text/csv">
+                    <button id="analyzerTradesFileButton"
+                        class="button source-file-button" type="button" hidden>
+                        Add Trades CSV (optional)
+                    </button>
                     <span id="sourceFileStatus">or paste the complete strategy source below</span>
                     <div id="existingCodeAttachments" class="existing-code-attachments" hidden></div>
                     <a id="analyzerExportGuide" class="analyzer-export-guide"
@@ -399,6 +405,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=1.1.6"></script>
+    <script src="/js/workspace.js?v=1.1.9"></script>
 </body>
 </html>
