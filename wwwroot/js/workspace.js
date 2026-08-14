@@ -166,6 +166,8 @@ document.getElementById("codeViewButton").addEventListener(
     "click",
     openCodeWorkspace);
 document.getElementById("closeProjectsButton").addEventListener("click", closeProjects);
+document.getElementById("deleteAllProjectsButton")
+    .addEventListener("click", deleteAllProjects);
 document.getElementById("closeCodeWorkspaceButton").addEventListener(
     "click",
     closeCodeWorkspace);
@@ -4093,7 +4095,12 @@ function closeProjects() {
 
 function renderProjects(projects) {
     const projectMessage = document.getElementById("projectsMessage");
+    const projectsFooter = document.getElementById("projectsFooter");
+    const deleteAllButton = document.getElementById("deleteAllProjectsButton");
     projectsList.innerHTML = "";
+    projectsFooter.hidden = projects.length === 0;
+    deleteAllButton.dataset.projectCount = String(projects.length);
+    deleteAllButton.disabled = false;
 
     if (!projects.length) {
         projectMessage.textContent = "No saved projects yet.";
@@ -4375,6 +4382,47 @@ async function deleteProject(project) {
         if (project.projectId === currentProjectId)
             startNewProject();
         await openProjects();
+    }
+}
+
+async function deleteAllProjects() {
+    const button = document.getElementById("deleteAllProjectsButton");
+    const projectCount = Number(button.dataset.projectCount) || 0;
+    if (projectCount === 0)
+        return;
+
+    const confirmation = window.prompt(
+        `Permanently delete all ${projectCount} saved project${
+            projectCount === 1 ? "" : "s"}?\n\n` +
+        "This also deletes every source revision and cannot be undone. " +
+        "Type DELETE to continue."
+    );
+    if (confirmation?.trim().toUpperCase() !== "DELETE")
+        return;
+
+    button.disabled = true;
+    const projectMessage = document.getElementById("projectsMessage");
+    projectMessage.textContent = "Deleting all projectsâ€¦";
+
+    try {
+        const response = await fetch("/api/projects/all", {
+            method: "DELETE",
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (response.status === 401) {
+            sessionStorage.removeItem("nx_access_token");
+            location.replace("/login.html");
+            return;
+        }
+        if (!response.ok)
+            throw new Error("Unable to delete all projects.");
+
+        startNewProject(false);
+        await openProjects();
+        projectMessage.textContent = "All saved projects were deleted.";
+    } catch (error) {
+        projectMessage.textContent = error.message;
+        button.disabled = false;
     }
 }
 

@@ -19,6 +19,7 @@ public static class ProjectEndpoints
         group.MapPost("/{projectId:guid}/revisions/{revisionId:int}/restore", RestoreRevision);
         group.MapPost("/", Save);
         group.MapPatch("/{projectId:guid}", Rename);
+        group.MapDelete("/all", DeleteAll);
         group.MapDelete("/{projectId:guid}", Delete);
         return app;
     }
@@ -615,6 +616,56 @@ public static class ProjectEndpoints
             return deleted == 1
                 ? Results.Ok(new { success = true })
                 : Results.NotFound();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    private static async Task<IResult> DeleteAll(
+        HttpContext context,
+        IConfiguration configuration)
+    {
+        if (!TryGetSubscriberId(context, out var subscriberId))
+            return Results.Unauthorized();
+
+        await using var connection = await OpenAuthorizedConnection(
+            configuration,
+            subscriberId);
+        if (connection is null)
+            return Results.Forbid();
+
+        await using var transaction =
+            (SqlTransaction)await connection.BeginTransactionAsync();
+        try
+        {
+            await using var command = new SqlCommand("""
+                DECLARE @DeletedProjects int;
+
+                DELETE FROM dbo.ExistingCodeProjectStates
+                WHERE SubscriberId = @SubscriberId;
+
+                DELETE FROM dbo.ProjectMemoryTurns
+                WHERE SubscriberId = @SubscriberId;
+
+                DELETE FROM dbo.ProjectRevisions
+                WHERE SubscriberId = @SubscriberId;
+
+                DELETE FROM dbo.SavedConversations
+                WHERE SubscriberId = @SubscriberId;
+
+                SET @DeletedProjects = @@ROWCOUNT;
+                SELECT @DeletedProjects;
+                """, connection, transaction);
+            command.Parameters.Add("@SubscriberId", SqlDbType.Int)
+                .Value = subscriberId;
+
+            var deletedProjects = Convert.ToInt32(
+                await command.ExecuteScalarAsync());
+            await transaction.CommitAsync();
+            return Results.Ok(new { success = true, deletedProjects });
         }
         catch
         {

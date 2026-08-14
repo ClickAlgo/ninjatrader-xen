@@ -2677,6 +2677,27 @@ html[data-theme="light"] .analyzer-export-guide:focus-visible {
     padding: 16px 22px 22px;
 }
 
+.projects-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 14px 22px;
+    border-top: 1px solid var(--border);
+}
+
+.projects-footer[hidden] {
+    display: none;
+}
+
+.projects-footer button {
+    padding: 7px 9px;
+    border: 0;
+    color: #ff7979;
+    background: transparent;
+    font: 11px "Manrope", sans-serif;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
 .project-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;

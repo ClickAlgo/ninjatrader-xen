@@ -17,7 +17,7 @@
                 document.documentElement.dataset.theme = "light";
         })();
     </script>
-    <link rel="stylesheet" href="/css/site.css?v=1.0.8">
+    <link rel="stylesheet" href="/css/site.css?v=1.0.9">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -242,6 +242,11 @@
             </header>
             <div id="projectsMessage" class="projects-message">Loading projects…</div>
             <div id="projectsList" class="projects-list"></div>
+            <footer id="projectsFooter" class="projects-footer" hidden>
+                <button id="deleteAllProjectsButton" type="button">
+                    Delete all projects
+                </button>
+            </footer>
         </section>
     </div>
 
@@ -394,6 +399,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=1.1.4"></script>
+    <script src="/js/workspace.js?v=1.1.6"></script>
 </body>
 </html>
