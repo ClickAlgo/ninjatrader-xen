@@ -495,8 +495,16 @@ form.addEventListener("submit", async event => {
         } else {
             renderStructuredResponse(content, assistantText);
         }
-        if (ragDebug)
+        if (ragDebug?.showDebug === true)
             appendRagDebug(assistantMessage, ragDebug);
+        addModelFeedbackControls(assistantMessage, {
+            conversationId: currentProjectId,
+            model: modelSelect.value,
+            task: activeTask,
+            userPrompt: prompt,
+            assistantOutput: assistantText,
+            ragDebug
+        });
         if (shouldInviteFeedback)
             appendFeedbackInvitation(assistantMessage);
         scrollMessagesToBottom();
@@ -737,6 +745,96 @@ function appendRagDebug(message, debug) {
         content.insertBefore(element, responseActions);
     else
         message.appendChild(element);
+}
+
+function addModelFeedbackControls(message, meta) {
+    const container = document.createElement("div");
+    container.className = "model-feedback-controls";
+    container.setAttribute("role", "group");
+    container.setAttribute("aria-label", "Rate this response");
+
+    [
+        ["up", "Helpful", "👍"],
+        ["down", "Not helpful", "👎"]
+    ].forEach(([vote, label, icon]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "model-feedback-button";
+        button.dataset.vote = vote;
+        button.title = label;
+        button.setAttribute("aria-label", label);
+        button.textContent = icon;
+        button.addEventListener("click", async () => {
+            container.querySelectorAll("button")
+                .forEach(item => item.disabled = true);
+            try {
+                await sendModelFeedback(meta, vote === "up");
+                container.textContent = "Feedback saved";
+                container.classList.add("saved");
+            } catch (error) {
+                container.querySelectorAll("button")
+                    .forEach(item => item.disabled = false);
+                status.textContent = error.message ||
+                    "Your vote could not be saved.";
+            }
+        });
+        container.appendChild(button);
+    });
+
+    const content = message.querySelector(".message-content");
+    const responseActions = content?.querySelector(".response-code-actions");
+    if (responseActions)
+        responseActions.prepend(container);
+    else if (content)
+        content.appendChild(container);
+}
+
+async function sendModelFeedback(meta, wasHelpful) {
+    const response = await fetch("/api/model-feedback", {
+        method: "POST",
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            conversationId: meta.conversationId,
+            model: meta.model,
+            task: meta.task,
+            wasHelpful,
+            appVersion: document.querySelector(".workspace-build-version")
+                ?.textContent.replace(/^Build\s+/i, "").trim() || null,
+            userPrompt: meta.userPrompt,
+            assistantOutput: buildModelFeedbackOutput(meta, wasHelpful)
+        })
+    });
+
+    if (response.status === 401) {
+        sessionStorage.removeItem("nx_access_token");
+        location.replace("/login.html");
+        throw new Error("Your session has expired.");
+    }
+    if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.detail || payload.message ||
+            "Your vote could not be saved.");
+    }
+}
+
+function buildModelFeedbackOutput(meta, wasHelpful) {
+    const output = meta.assistantOutput || "";
+    if (wasHelpful || !Array.isArray(meta.ragDebug?.matches))
+        return output;
+
+    const matches = meta.ragDebug.matches.filter(match => match.used);
+    if (!matches.length)
+        return output;
+
+    const lines = matches.map(match => {
+        const confidence = Math.round(
+            Math.max(0, Math.min(1, Number(match.similarity) || 0)) * 100);
+        return `${match.title || "Unknown reference"} · Confidence ${confidence}%`;
+    });
+    return `${output.trimEnd()}\n\nKnowledge matches:\n${lines.join("\n")}`;
 }
 
 function scrollMessagesToBottom() {

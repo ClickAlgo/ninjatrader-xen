@@ -337,16 +337,17 @@ public static class ChatEndpoints
         if (existingCodeState is not null)
             systemPrompt += "\n\n" + ExistingCodeContext.Build(existingCodeState);
 
-        if (knowledgeRetriever.Options.ShowDebug &&
-            rag?.Best is not null)
+        if (rag?.Best is not null)
         {
             var similarityThreshold =
                 knowledgeRetriever.Options.SimilarityThreshold;
             await WriteEvent(context, new
             {
                 type = "rag.debug",
+                showDebug = knowledgeRetriever.Options.ShowDebug,
                 matches = rag.Matches.Select(match => new
                 {
+                    id = match.Id,
                     title = match.Title,
                     similarity = match.Similarity,
                     used = match.ForceInclude ||

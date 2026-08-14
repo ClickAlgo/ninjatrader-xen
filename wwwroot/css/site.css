@@ -1571,6 +1571,42 @@ tbody tr:last-child td {
     color: #b08d66;
 }
 
+.model-feedback-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-right: auto;
+    color: var(--muted);
+    font-size: .78rem;
+}
+
+.message-content > .model-feedback-controls {
+    justify-content: flex-end;
+    margin-top: 12px;
+    margin-right: 0;
+}
+
+.model-feedback-button {
+    padding: 4px 7px;
+    border: 1px solid transparent;
+    border-radius: 7px;
+    color: var(--muted);
+    background: transparent;
+    cursor: pointer;
+    filter: grayscale(1);
+    opacity: .7;
+}
+
+.model-feedback-button:hover {
+    border-color: var(--border);
+    filter: none;
+    opacity: 1;
+}
+
+.model-feedback-controls.saved {
+    opacity: .75;
+}
+
 .composer {
     margin: 0 clamp(20px, 5vw, 80px) 26px;
     padding: 14px;
