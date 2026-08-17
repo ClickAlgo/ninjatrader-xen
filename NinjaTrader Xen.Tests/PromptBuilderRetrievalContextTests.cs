@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using NinjaTrader_Xen.Services;
 
 namespace NinjaTrader_Xen.Tests;
 
@@ -30,7 +31,7 @@ public sealed class PromptBuilderRetrievalContextTests
     }
 
     [Fact]
-    public void Workspace_UsesPromptBuilderOnlyForTheFirstEmptyProjectRequest()
+    public void Workspace_UsesPromptBuilderUntilCompleteCodeExists()
     {
         var script = ReadWorkspaceScript();
         var start = script.IndexOf(
@@ -44,15 +45,11 @@ public sealed class PromptBuilderRetrievalContextTests
 
         Assert.Contains("/api/prompt-builder/check", reviewFunction);
         Assert.Contains(
-            "currentProjectId || history.length > 0 || getLatestGeneratedCode()",
+            "looksLikeCompleteNinjaScript(getLatestGeneratedCode())",
             reviewFunction);
-        Assert.True(
-            reviewFunction.IndexOf(
-                "currentProjectId || history.length > 0",
-                StringComparison.Ordinal) <
-            reviewFunction.IndexOf(
-                "/api/prompt-builder/check",
-                StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            "currentProjectId || history.length > 0",
+            reviewFunction);
         Assert.DoesNotContain("promptQualityChecked", script);
         Assert.Contains("promptReviewCompleted: completedPromptReview", script);
         Assert.Contains("hasCurrentCode: Boolean(getLatestGeneratedCode())", script);
@@ -79,6 +76,134 @@ public sealed class PromptBuilderRetrievalContextTests
         Assert.True(currentCodeGuard >= 0);
         Assert.True(currentCodeGuard < complexityCheck);
         Assert.Contains("return new(false, \"\", false);", service);
+    }
+
+    [Theory]
+    [InlineData("build a strategy")]
+    [InlineData("Create an automated trading system")]
+    [InlineData("Develop automated order management")]
+    public void PromptBuilderService_StopsStrategyRequestsInIndicatorTask(string prompt)
+    {
+        Assert.True(PromptBuilderService.IsStrategyRequestInIndicatorTask(
+            "build-indicator",
+            prompt));
+    }
+
+    [Theory]
+    [InlineData("Build an indicator with buy and sell chart markers")]
+    [InlineData("Create an RSI indicator with alerts")]
+    [InlineData("Build an indicator with no automated trade execution")]
+    [InlineData("Build an indicator that never manages orders or positions")]
+    public void PromptBuilderService_AllowsIndicatorSignalsAndAlerts(string prompt)
+    {
+        Assert.False(PromptBuilderService.IsStrategyRequestInIndicatorTask(
+            "build-indicator",
+            prompt));
+    }
+
+    [Theory]
+    [InlineData("build an indicator")]
+    [InlineData("Create a custom technical indicator")]
+    [InlineData("Develop a chart study")]
+    public void PromptBuilderService_StopsIndicatorRequestsInStrategyTask(string prompt)
+    {
+        Assert.True(PromptBuilderService.IsIndicatorRequestInStrategyTask(
+            "build-strategy",
+            prompt));
+    }
+
+    [Theory]
+    [InlineData("Build a strategy using an RSI indicator")]
+    [InlineData("Create a strategy with indicator-based entries")]
+    [InlineData("Build a strategy and create an indicator panel for its signals")]
+    public void PromptBuilderService_AllowsStrategiesThatUseIndicators(string prompt)
+    {
+        Assert.False(PromptBuilderService.IsIndicatorRequestInStrategyTask(
+            "build-strategy",
+            prompt));
+    }
+
+    [Theory]
+    [InlineData("build-strategy", "can you build NinjaTrader strategies?")]
+    [InlineData("build-indicator", "Can Xen build NinjaTrader 8 indicators")]
+    [InlineData("build-strategy", "What can you build in NinjaScript?")]
+    public void PromptBuilderService_BypassesCapabilityQuestions(
+        string task,
+        string prompt)
+    {
+        Assert.True(PromptBuilderService.IsNewBuildCapabilityQuestion(
+            task,
+            prompt));
+    }
+
+    [Theory]
+    [InlineData("Can you build me a strategy?")]
+    [InlineData("Can you build a strategy that trades an EMA crossover?")]
+    [InlineData("Can you build me an RSI indicator?")]
+    [InlineData("Build a NinjaTrader strategy")]
+    public void PromptBuilderService_DoesNotBypassBuildRequests(string prompt)
+    {
+        Assert.False(PromptBuilderService.IsNewBuildCapabilityQuestion(
+            "build-strategy",
+            prompt));
+    }
+
+    [Fact]
+    public void Workspace_ShowsTaskTypeGuardBeforePromptBuilderQuestions()
+    {
+        var script = ReadWorkspaceScript();
+        var reviewStart = script.IndexOf(
+            "async function reviewBuildPrompt",
+            StringComparison.Ordinal);
+        var reviewEnd = script.IndexOf(
+            "function showPromptReview",
+            reviewStart,
+            StringComparison.Ordinal);
+        var reviewFunction = script[reviewStart..reviewEnd];
+
+        Assert.Contains("if (response.stopMessage)", reviewFunction);
+        Assert.Contains(
+            "const notice = addMessage(\"assistant\", response.stopMessage)",
+            reviewFunction);
+        Assert.Contains(
+            "appendTaskSwitchAction(notice, targetTask, prompt)",
+            reviewFunction);
+        Assert.DoesNotContain("history.push", reviewFunction[
+            reviewFunction.IndexOf("if (response.stopMessage)", StringComparison.Ordinal)..
+            reviewFunction.IndexOf("if (!response.recommendPromptBuilder)", StringComparison.Ordinal)]);
+        Assert.True(
+            reviewFunction.IndexOf("if (response.stopMessage)", StringComparison.Ordinal) <
+            reviewFunction.IndexOf("showPromptReview", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Workspace_TaskMismatchSwitchCarriesTheOriginalPrompt()
+    {
+        var script = ReadWorkspaceScript();
+
+        Assert.Contains("function appendTaskSwitchAction", script);
+        Assert.Contains("switchToMismatchTask(targetTask)", script);
+        Assert.Contains("promptInput.value = originalPrompt;", script);
+        Assert.Contains("Switch to ${taskNames[targetTask]}", script);
+    }
+
+    [Fact]
+    public void Workspace_AddsTaskSwitchToChatGeneratedMismatchWarning()
+    {
+        var script = ReadWorkspaceScript();
+
+        Assert.Contains(
+            "getTaskSwitchTargetFromResponse(assistantText)",
+            script);
+        Assert.Contains(
+            "appendTaskSwitchAction(assistantMessage, responseSwitchTarget, prompt)",
+            script);
+        Assert.Contains(
+            "Please select the Build Strategy task and enter your request there.",
+            script);
+        Assert.Contains(
+            "Please select the Build Indicator task and enter your request there.",
+            script);
     }
 
     [Fact]
@@ -167,7 +292,7 @@ public sealed class PromptBuilderRetrievalContextTests
     {
         var script = ReadWorkspaceScript();
         var saveStart = script.IndexOf(
-            "async function saveCurrentProject()",
+            "async function saveCurrentProject(code = \"\")",
             StringComparison.Ordinal);
         var saveEnd = script.IndexOf(
             "async function openCodeWorkspace()",
@@ -175,7 +300,9 @@ public sealed class PromptBuilderRetrievalContextTests
             StringComparison.Ordinal);
         var saveFunction = script[saveStart..saveEnd];
 
-        Assert.Contains("const latestCode = getLatestGeneratedCode();", saveFunction);
+        Assert.Contains("async function saveCurrentProject(code = \"\")", saveFunction);
+        Assert.Contains("looksLikeCompleteNinjaScript(code)", saveFunction);
+        Assert.Contains("if (isNewCodeBuildTask() && !latestCode)", saveFunction);
         Assert.Contains("latestCode: latestCode || null", saveFunction);
         Assert.DoesNotContain("latestAssistant", saveFunction);
     }

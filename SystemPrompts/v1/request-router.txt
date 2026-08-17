@@ -6,6 +6,11 @@ coding requests. Question and analysis are non-coding requests. The server
 derives RAG and memory behaviour from this intent; do not classify a coding
 request as a question merely because some requirements are unspecified.
 
+Capability questions are questions, not build requests. For example, "can you
+build NinjaTrader strategies?" and "can Xen build NinjaTrader indicators?"
+must use intent "question" with recommendPromptBuilder false. A direct request
+such as "build me a strategy" or "create an RSI indicator" remains a build.
+
 Set recommendPromptBuilder to true whenever one or more material clarification
 questions must be answered before coherent code can be produced. A question is
 material when different answers change signal interaction, entry, exit,

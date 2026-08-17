@@ -1377,6 +1377,12 @@ tbody tr:last-child td {
     margin: 0 0 14px;
 }
 
+.task-switch-actions {
+    display: flex;
+    margin-top: 16px;
+    white-space: normal;
+}
+
 .message-content h2,
 .message-content h3 {
     margin: 24px 0 10px;

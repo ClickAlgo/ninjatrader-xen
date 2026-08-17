@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace NinjaTrader_Xen.Services;
 
@@ -9,6 +10,24 @@ public sealed class PromptBuilderService(
     RequestRouterService requestRouter,
     ILogger<PromptBuilderService> logger)
 {
+    private const string StrategyTaskMessage =
+        "This request describes a trading strategy, which should be built as a Strategy rather than an indicator. Please select the Build Strategy task and enter your request there.";
+
+    private const string IndicatorTaskMessage =
+        "This request describes an indicator, which should be built as an Indicator rather than a strategy. Please select the Build Indicator task and enter your request there.";
+
+    private static readonly Regex StrategyRequest = new(
+        @"\b(?:build|create|develop|write|make|code|convert)\s+(?:me\s+)?(?:an?\s+)?(?:automated\s+)?(?:trading\s+)?strateg(?:y|ies)\b|\b(?:build|create|develop|write|make|code|convert|add|implement)\s+(?:me\s+)?(?:an?\s+)?(?:trading robot|automated trading system|automated trade execution|automated order management|automated position management)\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex IndicatorRequest = new(
+        @"\b(?:build|create|develop|write|make|code|convert)\s+(?:me\s+)?(?:an?\s+)?(?:custom\s+)?(?:technical\s+)?indicator\b|\b(?:build|create|develop|write|make|code|convert)\s+(?:me\s+)?(?:a\s+)?chart study\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex CapabilityQuestion = new(
+        @"^\s*(?:(?:can|could|do|does|will|would)\s+(?:you|xen)\s+(?:build|create|develop|code|support|help\s+with)|what\s+(?:can|could|do|does|will|would)\s+(?:you|xen)\s+(?:build|create|develop|code|support))\s+(?:in\s+)?(?:ninjatrader(?:\s*8)?\s+)?(?:strategies|indicators|ninjascript|trading\s+strategies|technical\s+indicators)\s*[?.!]*\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
     private static readonly JsonSerializerOptions JsonOptions =
         new(JsonSerializerDefaults.Web);
 
@@ -25,6 +44,15 @@ public sealed class PromptBuilderService(
     {
         if (hasCurrentCode)
             return new(false, "", false);
+
+        if (IsNewBuildCapabilityQuestion(task, prompt))
+            return new(false, "", false);
+
+        if (IsStrategyRequestInIndicatorTask(task, prompt))
+            return new(false, "", false, StrategyTaskMessage, "build-strategy");
+
+        if (IsIndicatorRequestInStrategyTask(task, prompt))
+            return new(false, "", false, IndicatorTaskMessage, "build-indicator");
 
         var complexity = TradingRequestComplexityPolicy.Evaluate(task, prompt);
         if (complexity.Rejected)
@@ -302,6 +330,19 @@ public sealed class PromptBuilderService(
         prompt.Contains("```", StringComparison.Ordinal) ||
         prompt.Count(character => character == '\n') > 40;
 
+    internal static bool IsStrategyRequestInIndicatorTask(string task, string prompt) =>
+        task == "build-indicator" &&
+        StrategyRequest.IsMatch(prompt) &&
+        !IndicatorRequest.IsMatch(prompt);
+
+    internal static bool IsIndicatorRequestInStrategyTask(string task, string prompt) =>
+        task == "build-strategy" &&
+        IndicatorRequest.IsMatch(prompt) &&
+        !StrategyRequest.IsMatch(prompt);
+
+    internal static bool IsNewBuildCapabilityQuestion(string task, string prompt) =>
+        IsSupportedTask(task) && CapabilityQuestion.IsMatch(prompt);
+
     private static bool IsSupportedTask(string task) =>
         task is "build-strategy" or "build-indicator";
 
@@ -324,7 +365,9 @@ public sealed class PromptBuilderService(
 public sealed record PromptQualityResult(
     bool RecommendPromptBuilder,
     string Reason,
-    bool Required);
+    bool Required,
+    string? StopMessage = null,
+    string? TargetTask = null);
 public sealed record PromptBuilderQuestion(string Id, string Label, string Question, string Placeholder);
 public sealed record PromptBuilderAnswer(string Question, string? Answer);
 public sealed record PromptBuilderPlan(

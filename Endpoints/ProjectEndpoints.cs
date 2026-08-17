@@ -4,6 +4,7 @@ using NinjaTrader_Xen.Options;
 using System.Data;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace NinjaTrader_Xen.Endpoints;
 
@@ -439,6 +440,15 @@ public static class ProjectEndpoints
         if (request.Messages.Count is < 1 or > 100)
             return Results.BadRequest(new { message = "Project messages are invalid." });
 
+        if (RequiresCompleteCodeForPersistence(request.Task) &&
+            !IsCompleteNinjaScript(request.LatestCode))
+        {
+            return Results.BadRequest(new
+            {
+                message = "A complete NinjaScript Strategy or Indicator is required before this project can be saved."
+            });
+        }
+
         var messagesJson = JsonSerializer.Serialize(request.Messages);
         if (messagesJson.Length > 800_000)
             return Results.BadRequest(new { message = "Project history is too large." });
@@ -753,6 +763,15 @@ public static class ProjectEndpoints
         trimCommand.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
         await trimCommand.ExecuteNonQueryAsync();
     }
+
+    internal static bool RequiresCompleteCodeForPersistence(string task) =>
+        task is "build-strategy" or "build-indicator";
+
+    internal static bool IsCompleteNinjaScript(string? code) =>
+        !string.IsNullOrWhiteSpace(code) &&
+        Regex.IsMatch(code,
+            @"\bclass\s+[A-Za-z_][A-Za-z0-9_]*[\s\S]{0,300}:\s*(?:[\w.]+\.)?(?:Strategy|Indicator)\b") &&
+        Regex.IsMatch(code, @"\bOnStateChange\s*\(");
 
     private static async Task<SqlConnection?> OpenAuthorizedConnection(
         IConfiguration configuration,

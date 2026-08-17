@@ -34,6 +34,7 @@ let generating = false;
 let preparingRequest = false;
 let currentProjectId = null;
 let currentProjectTitle = "";
+let currentProjectPersisted = false;
 let currentController = null;
 let currentBalanceGbp = null;
 let promptBuilderBypassed = false;
@@ -304,6 +305,24 @@ document.getElementById("taskButtons").addEventListener("click", event => {
     applyCreditAvailability();
 });
 
+function switchToMismatchTask(nextTask) {
+    const button = document.querySelector(
+        `.task-button[data-task="${nextTask}"]`);
+    if (!button)
+        return false;
+
+    clearBuildPlan();
+    activeTask = nextTask;
+    document.querySelectorAll(".task-button").forEach(item =>
+        item.classList.toggle("active", item === button));
+    document.getElementById("taskTitle").textContent = taskNames[activeTask];
+    promptInput.placeholder = taskPlaceholders[activeTask];
+    startNewProject(false);
+    updateTaskSpecificUi();
+    applyCreditAvailability();
+    return true;
+}
+
 form.addEventListener("submit", async event => {
     event.preventDefault();
     if (generating || preparingRequest)
@@ -502,6 +521,15 @@ form.addEventListener("submit", async event => {
             throw new Error("The AI returned an empty response.");
 
         history.push({ role: "assistant", content: assistantText });
+        const responseCode = extractLatestCodeBlock(assistantText);
+        const completeResponseCode = looksLikeCompleteNinjaScript(responseCode)
+            ? responseCode
+            : "";
+        if (completeResponseCode && !currentProjectPersisted) {
+            const titlePrompt = getBuildPlan()?.originalPrompt || prompt;
+            currentProjectTitle = createProjectTitle(titlePrompt);
+            updateProjectTitle();
+        }
         const buildPlanStepReady = markBuildPlanResponseReady(prompt);
         assistantMessage.classList.remove("generating");
         if (activeTask === "analyse-backtest") {
@@ -510,6 +538,9 @@ form.addEventListener("submit", async event => {
         } else {
             renderStructuredResponse(content, assistantText);
         }
+        const responseSwitchTarget = getTaskSwitchTargetFromResponse(assistantText);
+        if (responseSwitchTarget)
+            appendTaskSwitchAction(assistantMessage, responseSwitchTarget, prompt);
         if (ragDebug?.showDebug === true)
             appendRagDebug(assistantMessage, ragDebug);
         addModelFeedbackControls(assistantMessage, {
@@ -526,7 +557,7 @@ form.addEventListener("submit", async event => {
         const shouldAutomaticallyBuild =
             buildPlanStepReady || isGeneratedRepair;
         const generatedCode = shouldAutomaticallyBuild
-            ? extractLatestCodeBlock(assistantText)
+            ? completeResponseCode
             : "";
         const automaticBuildButton = generatedCode
             ? assistantMessage.querySelector(".preflight-build-button")
@@ -539,9 +570,10 @@ form.addEventListener("submit", async event => {
                 automaticBuildButton,
                 { automatic: true })
             : undefined;
-        if (!generatedCode || automaticBuildResult === null) {
+        if ((!generatedCode || automaticBuildResult === null) &&
+            (completeResponseCode || !isNewCodeBuildTask())) {
             status.textContent = "Saving project…";
-            const saved = await saveCurrentProject();
+            const saved = await saveCurrentProject(completeResponseCode);
             status.textContent = isGeneratedRepair && !generatedCode
                 ? (saved
                     ? "Repair saved · no complete C# file returned for Build Check"
@@ -551,6 +583,8 @@ form.addEventListener("submit", async event => {
                     ? "Build Check unavailable · response saved"
                     : "Build Check unavailable · project not saved")
                 : (saved ? "Saved" : "Response ready · project not saved");
+        } else if (!completeResponseCode) {
+            status.textContent = "Response ready";
         }
     } catch (error) {
         if (error.name === "AbortError") {
@@ -620,6 +654,40 @@ function addMessage(role, text) {
     messages.appendChild(article);
     scrollMessagesToBottom();
     return article;
+}
+
+function appendTaskSwitchAction(message, targetTask, originalPrompt) {
+    if (!targetTask || !taskNames[targetTask])
+        return;
+
+    const actions = document.createElement("div");
+    actions.className = "task-switch-actions";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button primary";
+    button.textContent = `Switch to ${taskNames[targetTask]}`;
+    button.addEventListener("click", () => {
+        if (!switchToMismatchTask(targetTask))
+            return;
+        promptInput.value = originalPrompt;
+        updateClearInputButton();
+        promptInput.focus();
+    });
+    actions.appendChild(button);
+    message.querySelector(".message-content")?.appendChild(actions);
+}
+
+function getTaskSwitchTargetFromResponse(response) {
+    const text = response?.trim() || "";
+    if (text.includes(
+        "Please select the Build Strategy task and enter your request there.")) {
+        return "build-strategy";
+    }
+    if (text.includes(
+        "Please select the Build Indicator task and enter your request there.")) {
+        return "build-indicator";
+    }
+    return null;
 }
 
 function showTrialWelcome() {
@@ -1701,7 +1769,7 @@ async function runPreflightBuild(code, button, options = {}) {
         status.textContent = result.success
             ? "Build check passed · saving project..."
             : "Build check found errors · saving diagnostics...";
-        const saved = await saveCurrentProject();
+        const saved = await saveCurrentProject(code);
         status.textContent = result.success
             ? (saved ? "Build check passed and saved" : "Build check passed")
             : (saved ? "Build errors saved" : "Build check found errors");
@@ -1949,6 +2017,7 @@ function redirectMismatchedExistingSource(source, fileName = "") {
 function startNewProject(resetTask = true) {
     currentProjectId = null;
     currentProjectTitle = "";
+    currentProjectPersisted = false;
     history = [];
     existingCodeState = { sources: [], decisions: [], workingCode: null };
     renderExistingCodeAttachments();
@@ -2234,6 +2303,10 @@ function isExistingCodeTask(task = activeTask) {
 function isSourceAttachmentTask(task = activeTask) {
     return isExistingCodeTask(task) ||
         task === "convert-strategy" || task === "convert-indicator";
+}
+
+function isNewCodeBuildTask(task = activeTask) {
+    return task === "build-strategy" || task === "build-indicator";
 }
 
 function hasCurrentExistingSource() {
@@ -2658,7 +2731,7 @@ async function reviewBuildPrompt(prompt) {
 
     // Prompt Builder defines a new build. Once a project has started, all
     // later requests modify the authoritative implementation directly.
-    if (currentProjectId || history.length > 0 || getLatestGeneratedCode()) {
+    if (looksLikeCompleteNinjaScript(getLatestGeneratedCode())) {
         promptReviewCompleted = true;
         return prompt;
     }
@@ -2672,6 +2745,20 @@ async function reviewBuildPrompt(prompt) {
             hasCurrentCode: Boolean(getLatestGeneratedCode()),
             previousAssistantResponse: getLatestHistoryContent("assistant")
         });
+
+        if (response.stopMessage) {
+            addMessage("user", prompt);
+            const notice = addMessage("assistant", response.stopMessage);
+            promptInput.value = "";
+            updateClearInputButton();
+            const targetTask = response.targetTask ||
+                (activeTask === "build-indicator"
+                    ? "build-strategy"
+                    : "build-indicator");
+            appendTaskSwitchAction(notice, targetTask, prompt);
+            scrollMessagesToBottom();
+            return null;
+        }
 
         if (!response.recommendPromptBuilder) {
             promptReviewCompleted = true;
@@ -3218,7 +3305,7 @@ async function submitRequirementsValidation(event) {
             result.model || modelSelect.value);
         updateBalance(result.balanceGbp);
         status.textContent = "Requirements verification complete · saving project...";
-        const saved = await saveCurrentProject();
+        const saved = await saveCurrentProject(requirementsValidationCode);
         status.textContent = saved
             ? "Requirements verification saved"
             : "Verification complete · project not saved";
@@ -3867,14 +3954,16 @@ function updateProjectTitle() {
         currentProjectTitle || "Unsaved project";
 }
 
-async function saveCurrentProject() {
+async function saveCurrentProject(code = "") {
     if (!currentProjectId || history.length < 2)
         return false;
 
     // Build Check and requirements reports are assistant turns without code.
     // Resolve the newest source across the conversation so saving a report
     // still snapshots the code response that immediately preceded it.
-    const latestCode = getLatestGeneratedCode();
+    const latestCode = looksLikeCompleteNinjaScript(code) ? code.trim() : "";
+    if (isNewCodeBuildTask() && !latestCode)
+        return false;
 
     history = compactPreflightBuildHistory(history);
 
@@ -3895,6 +3984,8 @@ async function saveCurrentProject() {
             })
         });
 
+        if (response.ok)
+            currentProjectPersisted = true;
         return response.ok;
     } catch {
         return false;
@@ -4346,6 +4437,7 @@ async function loadProject(projectId) {
 function applyProjectToWorkspace(project) {
     currentProjectId = project.projectId;
     currentProjectTitle = project.title;
+    currentProjectPersisted = true;
     activeTask = taskNames[project.task] ? project.task : "build-strategy";
     history = compactPreflightBuildHistory(
         Array.isArray(project.messages) ? project.messages : []);
