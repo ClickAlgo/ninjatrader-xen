@@ -280,6 +280,8 @@
     position: relative;
     overflow: hidden;
     width: 100%;
+    max-width: 1040px;
+    margin-inline: auto;
     aspect-ratio: 16 / 9;
     border: 1px solid #454545;
     border-radius: 10px;
@@ -1786,6 +1788,10 @@ html[data-theme="light"] .analyzer-attachment button {
     background: #292929;
     color: #f0f0f0;
     font-size: 12px;
+}
+
+.source-file-button[hidden] {
+    display: none;
 }
 
 .source-file-button:hover {

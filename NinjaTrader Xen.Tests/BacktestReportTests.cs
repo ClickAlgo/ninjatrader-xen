@@ -107,6 +107,11 @@ public sealed class BacktestReportTests
             "wwwroot",
             "js",
             "workspace.js"));
+        var styles = File.ReadAllText(Path.Combine(
+            root,
+            "wwwroot",
+            "css",
+            "site.css"));
 
         Assert.Contains("Upload Summary CSV (required)", script);
         Assert.Contains("analyzerTradesFileInput", markup);
@@ -114,6 +119,10 @@ public sealed class BacktestReportTests
         Assert.Contains("importAnalyzerCsvFile(file, \"trades\"", script);
         Assert.Contains("Trade number", script);
         Assert.Contains("item.type !== expectedType", script);
+        Assert.Contains(
+            "analyzerTradesFileButton.hidden = activeTask !== \"analyse-backtest\"",
+            script);
+        Assert.Contains(".source-file-button[hidden]", styles);
     }
 
     private static string GetProjectRoot(
