@@ -1,4 +1,5 @@
 using Microsoft.Data.SqlClient;
+using Microsoft.AspNetCore.Mvc;
 using NinjaTrader_Xen.Models;
 using NinjaTrader_Xen.Options;
 using System.Data;
@@ -17,7 +18,10 @@ public static class ProjectEndpoints
         group.MapGet("/{projectId:guid}", Get);
         group.MapGet("/{projectId:guid}/revisions", ListRevisions);
         group.MapGet("/{projectId:guid}/revisions/{revisionId:int}", GetRevision);
+        group.MapPatch("/{projectId:guid}/revisions/{revisionId:int}/pin", SetRevisionPin);
         group.MapPost("/{projectId:guid}/revisions/{revisionId:int}/restore", RestoreRevision);
+        group.MapDelete("/{projectId:guid}/revisions/{revisionId:int}", DeleteRevision);
+        group.MapDelete("/{projectId:guid}/revisions", DeleteUnpinnedRevisions);
         group.MapPost("/", Save);
         group.MapPatch("/{projectId:guid}", Rename);
         group.MapDelete("/all", DeleteAll);
@@ -27,6 +31,7 @@ public static class ProjectEndpoints
 
     private static async Task<IResult> ListRevisions(
         Guid projectId,
+        int page,
         HttpContext context,
         IConfiguration configuration)
     {
@@ -39,8 +44,21 @@ public static class ProjectEndpoints
         if (connection is null)
             return Results.Forbid();
 
+        const int pageSize = 20;
+        page = Math.Max(1, page);
+        var offset = (page - 1) * pageSize;
         var revisions = new List<object>();
         await using var command = new SqlCommand("""
+            SELECT
+                COUNT(1) AS TotalCount,
+                COALESCE(SUM(CASE
+                    WHEN ISNULL(Notes, N'') LIKE N'PINNED|%' THEN 1
+                    ELSE 0
+                END), 0) AS PinnedCount
+            FROM dbo.ProjectRevisions
+            WHERE ConversationId = @ProjectId
+              AND SubscriberId = @SubscriberId;
+
             WITH Revisions AS
             (
                 SELECT
@@ -51,7 +69,12 @@ public static class ProjectEndpoints
                     CreatedUtc,
                     LEN(CodeText) AS CodeLength,
                     ROW_NUMBER() OVER (ORDER BY CreatedUtc, Id) AS VersionNumber,
-                    COUNT(*) OVER () AS VersionCount
+                    COUNT(*) OVER () AS VersionCount,
+                    CASE
+                        WHEN ISNULL(Notes, N'') LIKE N'PINNED|%'
+                            THEN CAST(1 AS bit)
+                        ELSE CAST(0 AS bit)
+                    END AS IsPinned
                 FROM dbo.ProjectRevisions
                 WHERE ConversationId = @ProjectId
                   AND SubscriberId = @SubscriberId
@@ -64,14 +87,27 @@ public static class ProjectEndpoints
                 CreatedUtc,
                 CodeLength,
                 VersionNumber,
-                VersionCount
+                VersionCount,
+                IsPinned
             FROM Revisions
-            ORDER BY VersionNumber DESC;
+            ORDER BY VersionNumber DESC
+            OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
             """, connection);
         command.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = projectId;
         command.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+        command.Parameters.Add("@Offset", SqlDbType.Int).Value = offset;
+        command.Parameters.Add("@PageSize", SqlDbType.Int).Value = pageSize;
 
         await using var reader = await command.ExecuteReaderAsync();
+        var totalCount = 0;
+        var pinnedCount = 0;
+        if (await reader.ReadAsync())
+        {
+            totalCount = reader.GetInt32(reader.GetOrdinal("TotalCount"));
+            pinnedCount = reader.GetInt32(reader.GetOrdinal("PinnedCount"));
+        }
+
+        await reader.NextResultAsync();
         while (await reader.ReadAsync())
         {
             var versionNumber = Convert.ToInt32(reader.GetInt64(
@@ -88,11 +124,166 @@ public static class ProjectEndpoints
                 createdUtc = reader.GetDateTime(reader.GetOrdinal("CreatedUtc")),
                 codeLength = reader.IsDBNull(reader.GetOrdinal("CodeLength"))
                     ? 0
-                    : Convert.ToInt32(reader.GetValue(reader.GetOrdinal("CodeLength")))
+                    : Convert.ToInt32(reader.GetValue(reader.GetOrdinal("CodeLength"))),
+                isPinned = reader.GetBoolean(reader.GetOrdinal("IsPinned"))
             });
         }
 
-        return Results.Ok(new { revisions });
+        var totalPages = Math.Max(1, (int)Math.Ceiling(totalCount / (double)pageSize));
+        return Results.Ok(new
+        {
+            revisions,
+            totalCount,
+            pinnedCount,
+            page,
+            pageSize,
+            totalPages
+        });
+    }
+
+    private static async Task<IResult> SetRevisionPin(
+        Guid projectId,
+        int revisionId,
+        PinRevisionRequest request,
+        HttpContext context,
+        IConfiguration configuration)
+    {
+        if (!TryGetSubscriberId(context, out var subscriberId))
+            return Results.Unauthorized();
+
+        await using var connection = await OpenAuthorizedConnection(configuration, subscriberId);
+        if (connection is null)
+            return Results.Forbid();
+
+        await using var command = new SqlCommand("""
+            UPDATE dbo.ProjectRevisions
+            SET Notes = CASE
+                WHEN @Pinned = 1
+                     AND ISNULL(Notes, N'') NOT LIKE N'PINNED|%'
+                    THEN CONCAT(N'PINNED|', ISNULL(Notes, N''))
+                WHEN @Pinned = 0
+                     AND ISNULL(Notes, N'') LIKE N'PINNED|%'
+                    THEN STUFF(Notes, 1, 7, N'')
+                ELSE Notes
+            END
+            WHERE Id = @RevisionId
+              AND ConversationId = @ProjectId
+              AND SubscriberId = @SubscriberId
+              AND (@Pinned = 0 OR LEN(ISNULL(Notes, N'')) <= 493);
+
+            SELECT @@ROWCOUNT;
+            """, connection);
+        command.Parameters.Add("@RevisionId", SqlDbType.Int).Value = revisionId;
+        command.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = projectId;
+        command.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+        command.Parameters.Add("@Pinned", SqlDbType.Bit).Value = request.Pinned;
+
+        var updated = Convert.ToInt32(await command.ExecuteScalarAsync());
+        return updated == 1
+            ? Results.Ok(new { success = true, pinned = request.Pinned })
+            : Results.BadRequest(new
+            {
+                message = "This snapshot was not found or its existing notes are too long to preserve while pinning."
+            });
+    }
+
+    private static async Task<IResult> DeleteRevision(
+        Guid projectId,
+        int revisionId,
+        HttpContext context,
+        IConfiguration configuration)
+    {
+        if (!TryGetSubscriberId(context, out var subscriberId))
+            return Results.Unauthorized();
+
+        await using var connection = await OpenAuthorizedConnection(configuration, subscriberId);
+        if (connection is null)
+            return Results.Forbid();
+
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        try
+        {
+            await using var command = new SqlCommand("""
+                DELETE pr
+                FROM dbo.ProjectRevisions AS pr
+                WHERE pr.Id = @RevisionId
+                  AND pr.ConversationId = @ProjectId
+                  AND pr.SubscriberId = @SubscriberId
+                  AND ISNULL(pr.Notes, N'') NOT LIKE N'PINNED|%'
+                  AND pr.Id <> (
+                      SELECT TOP(1) r2.Id
+                      FROM dbo.ProjectRevisions AS r2
+                      WHERE r2.ConversationId = @ProjectId
+                        AND r2.SubscriberId = @SubscriberId
+                      ORDER BY r2.CreatedUtc DESC, r2.Id DESC
+                  );
+
+                SELECT @@ROWCOUNT;
+                """, connection, transaction);
+            command.Parameters.Add("@RevisionId", SqlDbType.Int).Value = revisionId;
+            command.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = projectId;
+            command.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+            var deleted = Convert.ToInt32(await command.ExecuteScalarAsync());
+            await transaction.CommitAsync();
+            return deleted == 1
+                ? Results.Ok(new { success = true, deletedSnapshots = 1 })
+                : Results.BadRequest(new
+                {
+                    message = "The current or a pinned snapshot cannot be deleted."
+                });
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    private static async Task<IResult> DeleteUnpinnedRevisions(
+        Guid projectId,
+        [FromBody] DeleteRevisionHistoryRequest request,
+        HttpContext context,
+        IConfiguration configuration)
+    {
+        if (!TryGetSubscriberId(context, out var subscriberId))
+            return Results.Unauthorized();
+        if (!string.Equals(request.Confirmation?.Trim(), "DELETE", StringComparison.OrdinalIgnoreCase))
+            return Results.BadRequest(new { message = "Type DELETE to delete unpinned snapshot history." });
+
+        await using var connection = await OpenAuthorizedConnection(configuration, subscriberId);
+        if (connection is null)
+            return Results.Forbid();
+
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        try
+        {
+            await using var command = new SqlCommand("""
+                DELETE pr
+                FROM dbo.ProjectRevisions AS pr
+                WHERE pr.ConversationId = @ProjectId
+                  AND pr.SubscriberId = @SubscriberId
+                  AND ISNULL(pr.Notes, N'') NOT LIKE N'PINNED|%'
+                  AND pr.Id <> (
+                      SELECT TOP(1) r2.Id
+                      FROM dbo.ProjectRevisions AS r2
+                      WHERE r2.ConversationId = @ProjectId
+                        AND r2.SubscriberId = @SubscriberId
+                      ORDER BY r2.CreatedUtc DESC, r2.Id DESC
+                  );
+
+                SELECT @@ROWCOUNT;
+                """, connection, transaction);
+            command.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = projectId;
+            command.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+            var deletedSnapshots = Convert.ToInt32(await command.ExecuteScalarAsync());
+            await transaction.CommitAsync();
+            return Results.Ok(new { success = true, deletedSnapshots });
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     private static async Task<IResult> GetRevision(
@@ -267,7 +458,7 @@ public static class ProjectEndpoints
             }
 
             await using (var trimCommand = new SqlCommand("""
-                ;WITH Ranked AS
+                ;WITH RankedOrdinary AS
                 (
                     SELECT
                         Id,
@@ -277,8 +468,9 @@ public static class ProjectEndpoints
                     FROM dbo.ProjectRevisions
                     WHERE ConversationId = @ProjectId
                       AND SubscriberId = @SubscriberId
+                      AND ISNULL(Notes, N'') NOT LIKE N'PINNED|%'
                 )
-                DELETE FROM Ranked WHERE RowNumber > 50;
+                DELETE FROM RankedOrdinary WHERE RowNumber > 50;
                 """, connection, transaction))
             {
                 trimCommand.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = projectId;
@@ -749,15 +941,16 @@ public static class ProjectEndpoints
         }
 
         await using var trimCommand = new SqlCommand("""
-            ;WITH Ranked AS
+            ;WITH RankedOrdinary AS
             (
                 SELECT Id,
                        ROW_NUMBER() OVER (ORDER BY CreatedUtc DESC, Id DESC) AS RowNumber
                 FROM dbo.ProjectRevisions
                 WHERE ConversationId = @ProjectId
                   AND SubscriberId = @SubscriberId
+                  AND ISNULL(Notes, N'') NOT LIKE N'PINNED|%'
             )
-            DELETE FROM Ranked WHERE RowNumber > 50;
+            DELETE FROM RankedOrdinary WHERE RowNumber > 50;
             """, connection, transaction);
         trimCommand.Parameters.Add("@ProjectId", SqlDbType.UniqueIdentifier).Value = request.ProjectId;
         trimCommand.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
@@ -772,6 +965,9 @@ public static class ProjectEndpoints
         Regex.IsMatch(code,
             @"\bclass\s+[A-Za-z_][A-Za-z0-9_]*[\s\S]{0,300}:\s*(?:[\w.]+\.)?(?:Strategy|Indicator)\b") &&
         Regex.IsMatch(code, @"\bOnStateChange\s*\(");
+
+    public sealed record PinRevisionRequest(bool Pinned);
+    public sealed record DeleteRevisionHistoryRequest(string? Confirmation);
 
     private static async Task<SqlConnection?> OpenAuthorizedConnection(
         IConfiguration configuration,

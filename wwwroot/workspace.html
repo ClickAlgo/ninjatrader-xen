@@ -17,7 +17,7 @@
                 document.documentElement.dataset.theme = "light";
         })();
     </script>
-    <link rel="stylesheet" href="/css/site.css?v=1.0.11">
+    <link rel="stylesheet" href="/css/site.css?v=1.0.13">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -97,7 +97,7 @@
                     <span id="themeToggleLabel">Light theme</span>
                 </button>
             </div>
-            <div class="workspace-build-version">Build v1.0.10-beta</div>
+            <div class="workspace-build-version">Build v1.0.2-beta</div>
         </aside>
 
         <section class="chat-panel">
@@ -400,11 +400,22 @@
                     </p>
                     <div id="revisionMessage" class="revision-message"></div>
                     <div id="revisionList" class="revision-list"></div>
+                    <div id="revisionControls" class="revision-controls" hidden>
+                        <button id="previousRevisionPageButton" class="button"
+                            type="button">Previous</button>
+                        <span id="revisionPageLabel">Page 1 of 1</span>
+                        <button id="nextRevisionPageButton" class="button"
+                            type="button">Next</button>
+                    </div>
+                    <button id="deleteUnpinnedRevisionsButton"
+                        class="revision-delete-history" type="button">
+                        Delete unpinned history
+                    </button>
                 </aside>
             </div>
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=1.1.12"></script>
+    <script src="/js/workspace.js?v=1.1.13"></script>
 </body>
 </html>

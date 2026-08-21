@@ -1,10 +1,124 @@
 using System.Runtime.CompilerServices;
+using NinjaTrader_Xen.Endpoints;
 using NinjaTrader_Xen.Services;
 
 namespace NinjaTrader_Xen.Tests;
 
 public sealed class PromptBuilderRetrievalContextTests
 {
+    [Fact]
+    public void PromptBuilder_RequiresAnAnswerForEveryQuestion()
+    {
+        Assert.False(PromptBuilderEndpoints.HasAnswersForEveryQuestion([
+            new PromptBuilderAnswer("Entry rules?", ""),
+            new PromptBuilderAnswer("Exit rules?", "   ")
+        ]));
+        Assert.False(PromptBuilderEndpoints.HasAnswersForEveryQuestion([
+            new PromptBuilderAnswer("Entry rules?", "Use an EMA crossover"),
+            new PromptBuilderAnswer("Exit rules?", "")
+        ]));
+        Assert.True(PromptBuilderEndpoints.HasAnswersForEveryQuestion([
+            new PromptBuilderAnswer("Entry rules?", "Use an EMA crossover"),
+            new PromptBuilderAnswer("Exit rules?", "Exit on the opposite crossover")
+        ]));
+    }
+
+    [Fact]
+    public void Workspace_HighlightsBlankAnswersWhenBuildPlanIsRequested()
+    {
+        var script = ReadWorkspaceScript();
+
+        Assert.Contains("updatePromptBuilderComposeState", script);
+        Assert.Contains("validatePromptBuilderAnswers", script);
+        Assert.Contains("classList.toggle(\"invalid\", !field.value.trim())", script);
+        Assert.Contains("Answer every question before creating the Build Plan", script);
+        Assert.Contains("input.addEventListener(\"input\"", script);
+        Assert.Contains("button.dataset.decision = decision", script);
+        Assert.DoesNotContain("composeButton.disabled = !hasAnswer", script);
+    }
+
+    [Fact]
+    public void PromptBuilder_ScrollsQuestionsAndKeepsActionsVisible()
+    {
+        var root = GetProjectRoot();
+        var styles = File.ReadAllText(Path.Combine(
+            root,
+            "wwwroot",
+            "css",
+            "site.css"));
+
+        Assert.Contains("#promptBuilderModal .prompt-builder-dialog", styles);
+        Assert.Contains(
+            "grid-template-rows: auto auto minmax(0, 1fr) auto auto",
+            styles);
+        Assert.Contains("#promptBuilderModal .prompt-builder-body", styles);
+        Assert.Contains("overflow-y: auto", styles);
+    }
+
+    [Fact]
+    public void PromptBuilder_StatusHasSpaceBetweenQuestionsAndActions()
+    {
+        var root = GetProjectRoot();
+        var styles = File.ReadAllText(Path.Combine(
+            root,
+            "wwwroot",
+            "css",
+            "site.css"));
+
+        Assert.Contains("padding: 10px 24px 14px", styles);
+        Assert.Contains(".prompt-builder-status:empty", styles);
+    }
+
+    [Fact]
+    public void BuildPlan_RowsKeepTheirContentHeightInsideScrollableDialog()
+    {
+        var root = GetProjectRoot();
+        var styles = File.ReadAllText(Path.Combine(
+            root,
+            "wwwroot",
+            "css",
+            "site.css"));
+
+        Assert.Contains(
+            ".prompt-builder-plan-dialog .prompt-builder-body",
+            styles);
+        Assert.Contains("grid-auto-rows: max-content", styles);
+        Assert.Contains("align-content: start", styles);
+    }
+
+    [Fact]
+    public void BuildPlan_AppliesPlanLayoutToThePromptBuilderDialog()
+    {
+        var script = ReadWorkspaceScript();
+
+        Assert.Contains(
+            "promptBuilderModal.querySelector(\".prompt-builder-dialog\")",
+            script);
+        Assert.DoesNotContain(
+            "document.querySelector(\".prompt-builder-dialog\")",
+            script);
+    }
+
+    [Fact]
+    public void BuildPlan_UsesOneGuidedContinuationAction()
+    {
+        var script = ReadWorkspaceScript();
+        var start = script.IndexOf(
+            "async function showBuildPlan",
+            StringComparison.Ordinal);
+        var end = script.IndexOf(
+            "function addPlanAction",
+            start,
+            StringComparison.Ordinal);
+        var showPlan = script[start..end];
+
+        Assert.Contains("Start with Prompt 1", showPlan);
+        Assert.DoesNotContain("Copy prompt", showPlan);
+        Assert.DoesNotContain("Copy All", showPlan);
+        Assert.DoesNotContain("Download Plan", showPlan);
+        Assert.DoesNotContain("addPlanAction(\"Close\"", showPlan);
+    }
+
     [Fact]
     public void Workspace_PreservesOriginalPromptForBuildPlanRetrieval()
     {

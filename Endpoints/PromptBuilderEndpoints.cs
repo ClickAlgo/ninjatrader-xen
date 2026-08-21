@@ -81,6 +81,13 @@ public static class PromptBuilderEndpoints
         if (request.Answers.Any(item =>
                 item.Question?.Length > 500 || item.Answer?.Length > 2000))
             return Results.BadRequest(new { message = "A clarification answer is too long." });
+        if (!HasAnswersForEveryQuestion(request.Answers))
+        {
+            return Results.BadRequest(new
+            {
+                message = "Answer every clarification question or use Xen's baseline suggestions."
+            });
+        }
 
         try
         {
@@ -158,6 +165,11 @@ public static class PromptBuilderEndpoints
             return Results.BadRequest(new { message = "Enter a valid request." });
         return null;
     }
+
+    internal static bool HasAnswersForEveryQuestion(
+        IReadOnlyList<PromptBuilderAnswer>? answers) =>
+        answers is { Count: > 0 } &&
+        answers.All(item => !string.IsNullOrWhiteSpace(item.Answer));
 
     public sealed record PromptRequest(
         string Task,

@@ -44,6 +44,9 @@ let pendingAnalyzerExports = [];
 let existingCodeState = { sources: [], decisions: [], workingCode: null };
 let acceptedModelSelection = "";
 let preflightBuilding = false;
+let revisionPage = 1;
+let revisionTotalPages = 1;
+const revisionPageSize = 20;
 
 const lowCreditThresholdGbp = 1;
 const buildPlanStorageKey = "nx_active_build_plan_v1";
@@ -194,6 +197,15 @@ document.getElementById("downloadWorkspaceCodeButton").addEventListener(
         if (codeWorkspaceCode)
             downloadCode(codeWorkspaceCode);
     });
+document.getElementById("previousRevisionPageButton").addEventListener(
+    "click",
+    () => loadCodeRevisionPage(revisionPage - 1));
+document.getElementById("nextRevisionPageButton").addEventListener(
+    "click",
+    () => loadCodeRevisionPage(revisionPage + 1));
+document.getElementById("deleteUnpinnedRevisionsButton").addEventListener(
+    "click",
+    deleteUnpinnedCodeRevisions);
 codeWorkspaceModal.addEventListener("click", event => {
     if (event.target === codeWorkspaceModal)
         closeCodeWorkspace();
@@ -2792,7 +2804,7 @@ async function reviewBuildPrompt(prompt) {
 }
 
 function showPromptReview(reason, required = false) {
-    document.querySelector(".prompt-builder-dialog")
+    promptBuilderModal.querySelector(".prompt-builder-dialog")
         ?.classList.remove("prompt-builder-plan-dialog");
     document.getElementById("promptBuilderTitle").textContent =
         "Plan this build first?";
@@ -2826,8 +2838,8 @@ async function runPromptBuilder(prompt) {
         });
         renderPromptQuestions(result.questions);
         promptBuilderReason.textContent = pendingImage
-            ? "Your reference image will stay attached. Add requirements for more control, or build directly from the image and let Xen infer the indicator."
-            : "Answer the relevant questions. Leave an answer blank when you want Xen to use a sensible configurable default.";
+            ? "Your reference image will stay attached. Answer every question for more control, or build directly from the image and let Xen infer the indicator."
+            : "Answer every clarification question before creating the Build Plan, or let Xen suggest editable baseline answers.";
         promptBuilderStatus.textContent = "";
         setPromptBuilderActions([
             ["Create Build Plan", "compose", "button primary"],
@@ -2835,6 +2847,7 @@ async function runPromptBuilder(prompt) {
                 "build", "button"],
             ["Edit request", "edit", "button"]
         ]);
+        updatePromptBuilderComposeState();
         addBaselineSuggestionAction(prompt);
 
         const decision = await waitForPromptBuilderDecision();
@@ -2930,6 +2943,7 @@ function addBaselineSuggestionAction(prompt) {
                     container.appendChild(note);
                 }
             });
+            updatePromptBuilderComposeState();
             promptBuilderStatus.textContent =
                 "Editable baseline suggestions added to blank answers.";
             promptBuilderStatus.classList.remove("error");
@@ -3671,7 +3685,7 @@ async function showBuildPlan(plan = getBuildPlan()) {
     document.getElementById("promptBuilderTitle").textContent =
         "Your NinjaTrader Build Plan";
     promptBuilderBody.classList.remove("waiting");
-    document.querySelector(".prompt-builder-dialog")
+    promptBuilderModal.querySelector(".prompt-builder-dialog")
         ?.classList.add("prompt-builder-plan-dialog");
     promptBuilderReason.textContent = plan.explanation ||
         "Build and test this project in small, ordered iterations.";
@@ -3708,18 +3722,9 @@ async function showBuildPlan(plan = getBuildPlan()) {
         heading.className = "build-plan-step-heading";
         const title = document.createElement("h3");
         title.textContent = `Prompt ${index + 1} - ${step.title}`;
-        const copy = document.createElement("button");
-        copy.type = "button";
-        copy.className = "button build-plan-copy";
-        copy.textContent = "Copy prompt";
-        copy.addEventListener("click", async () => {
-            const copied = await copyText(step.prompt);
-            copy.textContent = copied ? "Copied" : "Copy failed";
-            window.setTimeout(() => copy.textContent = "Copy prompt", 1600);
-        });
         const text = document.createElement("pre");
         text.textContent = step.prompt;
-        heading.append(title, copy);
+        heading.appendChild(title);
         card.append(heading, text);
         promptBuilderBody.appendChild(card);
     });
@@ -3732,12 +3737,6 @@ async function showBuildPlan(plan = getBuildPlan()) {
             `Reload Prompt ${plan.currentIndex + 1}`,
         "start",
         "button primary");
-    addPlanUtilityAction("Copy All", async button => {
-        const copied = await copyText(formatBuildPlan(plan));
-        button.textContent = copied ? "Copied All" : "Copy failed";
-    });
-    addPlanUtilityAction("Download Plan", () => downloadBuildPlan(plan));
-    addPlanAction("Close", "close", "button");
     return waitForPromptBuilderDecision();
 }
 
@@ -3750,15 +3749,6 @@ function addPlanAction(label, decision, className) {
     promptBuilderActions.appendChild(button);
 }
 
-function addPlanUtilityAction(label, action) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "button";
-    button.textContent = label;
-    button.addEventListener("click", () => action(button));
-    promptBuilderActions.appendChild(button);
-}
-
 function formatBuildPlan(plan) {
     const assumptions = plan.assumptions?.length
         ? `\nMaterial assumptions\n${plan.assumptions.map(item => `- ${item}`).join("\n")}\n`
@@ -3768,20 +3758,6 @@ function formatBuildPlan(plan) {
         .join("\n\n---\n\n");
     return `NinjaTrader Xen Build Plan\n\n${plan.explanation}${assumptions}\n${prompts}\n\n` +
         "Submit prompts in order and compile/test every stage before continuing.";
-}
-
-function downloadBuildPlan(plan) {
-    const blob = new Blob([formatBuildPlan(plan)], {
-        type: "text/plain;charset=utf-8"
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `ninjatrader-xen-build-plan-${new Date().toISOString().slice(0, 10)}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
 }
 
 async function copyText(text) {
@@ -3811,6 +3787,7 @@ function renderPromptQuestions(questions) {
         input.maxLength = 2000;
         input.placeholder = item.placeholder || "Enter your preference";
         input.dataset.question = item.question;
+        input.addEventListener("input", updatePromptBuilderComposeState);
 
         field.append(label, question, input);
         promptBuilderBody.appendChild(field);
@@ -3837,9 +3814,46 @@ function setPromptBuilderActions(actions) {
         button.type = "button";
         button.className = className;
         button.textContent = label;
-        button.addEventListener("click", () => closePromptBuilder(decision));
+        button.dataset.decision = decision;
+        button.addEventListener("click", () => {
+            if (decision === "compose" && !validatePromptBuilderAnswers())
+                return;
+            closePromptBuilder(decision);
+        });
         promptBuilderActions.appendChild(button);
     });
+}
+
+function updatePromptBuilderComposeState() {
+    const fields = [...promptBuilderBody.querySelectorAll("[data-question]")];
+    if (promptBuilderStatus.dataset.validation !== "answers")
+        return;
+
+    fields.forEach(field => field.closest(".prompt-builder-field")
+        ?.classList.toggle("invalid", !field.value.trim()));
+    const allAnswered = fields.length > 0 &&
+        fields.every(field => field.value.trim());
+    if (allAnswered) {
+        promptBuilderStatus.textContent = "";
+        promptBuilderStatus.classList.remove("error");
+        delete promptBuilderStatus.dataset.validation;
+    }
+}
+
+function validatePromptBuilderAnswers() {
+    const fields = [...promptBuilderBody.querySelectorAll("[data-question]")];
+    const unanswered = fields.filter(field => !field.value.trim());
+    if (fields.length > 0 && !unanswered.length)
+        return true;
+
+    fields.forEach(field => field.closest(".prompt-builder-field")
+        ?.classList.toggle("invalid", !field.value.trim()));
+    promptBuilderStatus.textContent =
+        "Answer every question before creating the Build Plan, or use Xen's baseline suggestions.";
+    promptBuilderStatus.classList.add("error");
+    promptBuilderStatus.dataset.validation = "answers";
+    unanswered[0]?.focus();
+    return false;
 }
 
 function openPromptBuilder() {
@@ -3997,12 +4011,15 @@ async function openCodeWorkspace() {
     document.body.classList.add("modal-open");
     revisionList.replaceChildren();
     revisionMessage.textContent = "";
+    revisionMessage.classList.remove("error", "success");
+    revisionPage = 1;
 
     if (!currentProjectId) {
         setCodeWorkspaceCode("", "No saved source");
         revisionMessage.textContent =
             "Generate code or open a saved project to view its source history.";
         document.getElementById("revisionCount").textContent = "0 versions";
+        document.getElementById("revisionControls").hidden = true;
         return;
     }
 
@@ -4012,10 +4029,15 @@ async function openCodeWorkspace() {
     else
         setCodeWorkspaceCode("", "Loading source...");
 
-    revisionMessage.textContent = "Loading snapshots...";
+    await loadCodeRevisionPage(1, { previewCurrent: !currentCode });
+}
+
+async function loadCodeRevisionPage(page = revisionPage, options = {}) {
+    revisionMessage.textContent = options.message || "Loading snapshots...";
+    revisionMessage.classList.remove("error", "success");
     try {
         const response = await fetch(
-            `/api/projects/${currentProjectId}/revisions`,
+            `/api/projects/${currentProjectId}/revisions?page=${page}`,
             { headers: { "Authorization": `Bearer ${token}` } });
         if (response.status === 401) {
             sessionStorage.removeItem("nx_access_token");
@@ -4026,15 +4048,20 @@ async function openCodeWorkspace() {
             throw new Error("Unable to load source snapshots.");
 
         const result = await response.json();
-        const revisions = Array.isArray(result.revisions)
-            ? result.revisions
-            : [];
-        renderCodeRevisions(revisions);
-        if (!currentCode && revisions.length)
-            await previewCodeRevision(revisions[0]);
+        if (!(result.revisions || []).length && result.totalCount > 0 &&
+            page > result.totalPages) {
+            await loadCodeRevisionPage(result.totalPages, options);
+            return;
+        }
+        revisionPage = result.page || 1;
+        revisionTotalPages = result.totalPages || 1;
+        renderCodeRevisions(result);
+        if (options.previewCurrent && result.revisions?.length)
+            await previewCodeRevision(result.revisions[0]);
+        if (options.message)
+            showRevisionMessage(options.message, options.messageType || "success");
     } catch (error) {
-        revisionMessage.textContent = error.message;
-        revisionMessage.classList.add("error");
+        showRevisionMessage(error.message, "error");
     }
 }
 
@@ -4044,20 +4071,34 @@ function closeCodeWorkspace() {
     revisionMessage.classList.remove("error", "success");
 }
 
-function renderCodeRevisions(revisions) {
+function renderCodeRevisions(result) {
+    const revisions = Array.isArray(result.revisions) ? result.revisions : [];
     revisionList.replaceChildren();
     revisionMessage.textContent = revisions.length
         ? ""
         : "No source snapshots have been saved for this project yet.";
     revisionMessage.classList.remove("error", "success");
+    const totalCount = result.totalCount ?? revisions.length;
+    const pinnedCount = result.pinnedCount || 0;
     document.getElementById("revisionCount").textContent =
-        `${revisions.length} ${revisions.length === 1 ? "version" : "versions"}`;
+        `${totalCount} ${totalCount === 1 ? "snapshot" : "snapshots"} · ` +
+        `${pinnedCount} pinned`;
+    document.getElementById("revisionControls").hidden = totalCount <= revisionPageSize;
+    document.getElementById("revisionPageLabel").textContent =
+        `Page ${revisionPage} of ${revisionTotalPages}`;
+    document.getElementById("previousRevisionPageButton").disabled =
+        revisionPage <= 1;
+    document.getElementById("nextRevisionPageButton").disabled =
+        revisionPage >= revisionTotalPages;
 
     revisions.forEach(revision => {
         const row = document.createElement("article");
         row.className = "revision-item";
         if (revision.isCurrent)
             row.classList.add("current");
+        if (revision.isPinned)
+            row.classList.add("pinned");
+        row.dataset.revisionId = String(revision.revisionId);
 
         const details = document.createElement("button");
         details.type = "button";
@@ -4065,7 +4106,9 @@ function renderCodeRevisions(revisions) {
         const title = document.createElement("strong");
         title.textContent = `v${revision.versionNumber}`;
         const badge = document.createElement("span");
-        badge.textContent = revision.isCurrent ? "Current" : revision.model;
+        badge.textContent = revision.isCurrent
+            ? (revision.isPinned ? "Current · Pinned" : "Current")
+            : (revision.isPinned ? "Pinned" : revision.model);
         const date = document.createElement("small");
         date.textContent = new Intl.DateTimeFormat("en-GB", {
             dateStyle: "medium",
@@ -4077,9 +4120,18 @@ function renderCodeRevisions(revisions) {
             "click",
             () => previewCodeRevision(revision));
 
+        const actions = document.createElement("div");
+        actions.className = "revision-actions";
+        const pin = document.createElement("button");
+        pin.type = "button";
+        pin.className = "revision-action";
+        pin.textContent = revision.isPinned ? "Unpin" : "Pin";
+        pin.addEventListener(
+            "click",
+            () => setCodeRevisionPin(revision, !revision.isPinned));
         const restore = document.createElement("button");
         restore.type = "button";
-        restore.className = "revision-restore";
+        restore.className = "revision-action";
         restore.textContent = revision.isCurrent ? "Current" : "Restore";
         restore.disabled = revision.isCurrent;
         if (!revision.isCurrent) {
@@ -4088,9 +4140,101 @@ function renderCodeRevisions(revisions) {
                 () => restoreCodeRevision(revision));
         }
 
-        row.append(details, restore);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "revision-action danger";
+        remove.textContent = "Delete";
+        remove.disabled = revision.isCurrent || revision.isPinned;
+        if (!remove.disabled)
+            remove.addEventListener("click", () => deleteCodeRevision(revision));
+        actions.append(pin, restore, remove);
+        row.append(details, actions);
         revisionList.appendChild(row);
     });
+}
+
+function showRevisionMessage(message, type = "") {
+    revisionMessage.textContent = message;
+    revisionMessage.classList.remove("error", "success");
+    if (type)
+        revisionMessage.classList.add(type);
+}
+
+async function setCodeRevisionPin(revision, pinned) {
+    try {
+        const response = await fetch(
+            `/api/projects/${currentProjectId}/revisions/${revision.revisionId}/pin`,
+            {
+                method: "PATCH",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ pinned })
+            });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok)
+            throw new Error(result.message || "Unable to update this snapshot.");
+        await loadCodeRevisionPage(revisionPage, {
+            message: pinned ? "Snapshot pinned." : "Snapshot unpinned."
+        });
+    } catch (error) {
+        showRevisionMessage(error.message, "error");
+    }
+}
+
+async function deleteCodeRevision(revision) {
+    if (!window.confirm(
+        `Delete v${revision.versionNumber}? This snapshot cannot be recovered.`)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(
+            `/api/projects/${currentProjectId}/revisions/${revision.revisionId}`,
+            {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok)
+            throw new Error(result.message || "Unable to delete this snapshot.");
+        await loadCodeRevisionPage(revisionPage, {
+            message: `v${revision.versionNumber} was deleted.`
+        });
+    } catch (error) {
+        showRevisionMessage(error.message, "error");
+    }
+}
+
+async function deleteUnpinnedCodeRevisions() {
+    const confirmation = window.prompt(
+        "Delete every unpinned snapshot except the current one? " +
+        "Pinned snapshots will be kept. Type DELETE to continue.");
+    if (confirmation?.trim().toUpperCase() !== "DELETE")
+        return;
+
+    try {
+        const response = await fetch(
+            `/api/projects/${currentProjectId}/revisions`,
+            {
+                method: "DELETE",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ confirmation })
+            });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok)
+            throw new Error(result.message || "Unable to delete snapshot history.");
+        const deleted = result.deletedSnapshots || 0;
+        await loadCodeRevisionPage(1, {
+            message: `${deleted} unpinned ${deleted === 1 ? "snapshot" : "snapshots"} deleted.`
+        });
+    } catch (error) {
+        showRevisionMessage(error.message, "error");
+    }
 }
 
 async function previewCodeRevision(revision) {
@@ -4109,8 +4253,7 @@ async function previewCodeRevision(revision) {
         revisionList.querySelectorAll(".revision-item").forEach(item =>
             item.classList.remove("selected"));
         const selected = [...revisionList.children]
-            .find(item => item.querySelector(".revision-details strong")
-                ?.firstChild?.textContent === `v${revision.versionNumber}`);
+            .find(item => item.dataset.revisionId === String(revision.revisionId));
         selected?.classList.add("selected");
     } catch (error) {
         revisionMessage.textContent = error.message;
@@ -4145,17 +4288,11 @@ async function restoreCodeRevision(revision) {
             "The active Build Plan was cleared because it referred to a newer source state.";
         revisionMessage.classList.add("success");
 
-        const listResponse = await fetch(
-            `/api/projects/${currentProjectId}/revisions`,
-            { headers: { "Authorization": `Bearer ${token}` } });
-        if (listResponse.ok) {
-            const listResult = await listResponse.json();
-            renderCodeRevisions(listResult.revisions || []);
-            revisionMessage.textContent =
+        await loadCodeRevisionPage(1, {
+            message:
                 `v${revision.versionNumber} was restored as a new current snapshot. ` +
-                "The active Build Plan was cleared because it referred to a newer source state.";
-            revisionMessage.classList.add("success");
-        }
+                "The active Build Plan was cleared because it referred to a newer source state."
+        });
     } catch (error) {
         revisionMessage.textContent = error.message;
         revisionMessage.classList.add("error");

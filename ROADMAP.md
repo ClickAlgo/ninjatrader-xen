@@ -200,6 +200,17 @@ validated independently.
 - [x] Build diagnostics and repair results retained with the project
 - [x] Duplicate diagnostic noise avoided where practical
 - [x] Model selection restored independently from project history
+- [x] Source snapshot history is paged in groups of 20, reports total and pinned
+  counts, and keeps the newest/current snapshot on the first page
+- [x] Snapshot pins use a reversible `PINNED|` prefix in the existing revision
+  `Notes` field; pinning and unpinning preserve the original note text and require
+  no schema migration
+- [x] Individual and guarded bulk deletion are subscriber-scoped and preserve the
+  newest/current snapshot and every pinned snapshot in backend SQL
+- [x] Revision retention means the newest 50 ordinary (unpinned) snapshots plus
+  every pinned snapshot. Consecutive duplicate-source prevention remains active.
+  Build Plan state is stored separately and currently has no revision milestone
+  marker; no milestone classification is silently inferred from ordinary notes.
 
 ### Validation, compilation and repair
 
