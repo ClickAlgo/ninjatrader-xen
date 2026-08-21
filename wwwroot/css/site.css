@@ -4411,17 +4411,25 @@ html[data-theme="light"] .feedback-invitation-copy strong {
     background: #202020;
 }
 
-.revision-item.current,
-.revision-item.selected {
+.revision-item.current {
     border-color: rgba(240, 68, 22, .65);
 }
 
+.revision-item.selected:not(.current) {
+    border-color: #555;
+}
+
 .revision-item.pinned {
-    border-color: rgba(240, 68, 22, .78);
-    background: linear-gradient(135deg, rgba(240, 68, 22, .15), #202020 62%);
-    box-shadow:
-        inset 4px 0 0 var(--primary),
-        0 0 0 1px rgba(240, 68, 22, .12);
+    border-color: #353535;
+    background: #202020;
+}
+
+.revision-item.current.pinned {
+    border-color: rgba(240, 68, 22, .65);
+}
+
+.revision-item.selected.pinned:not(.current) {
+    border-color: #555;
 }
 
 .revision-item.pinned .revision-details {

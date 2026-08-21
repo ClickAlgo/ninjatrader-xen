@@ -92,7 +92,7 @@ public sealed class ProjectPersistenceTests
         Assert.Contains("confirmation?.trim().toUpperCase() !== \"DELETE\"", script);
         Assert.Contains("revision.isCurrent || revision.isPinned", script);
         Assert.Contains("page > result.totalPages", script);
-        Assert.Contains("pinnedMarker.textContent = \"Pinned snapshot\"", script);
+        Assert.Contains("pinnedMarker.textContent = \"Pinned\"", script);
         Assert.Contains("id=\"revisionControls\"", html);
         Assert.Contains("id=\"deleteUnpinnedRevisionsButton\"", html);
 
@@ -101,7 +101,9 @@ public sealed class ProjectPersistenceTests
         Assert.Contains(".revision-actions {", css);
         Assert.Contains("padding: 0 8px;", css);
         Assert.Contains(".revision-pinned-marker", css);
-        Assert.Contains("inset 4px 0 0 var(--primary)", css);
+        Assert.Contains(".revision-item.current.pinned", css);
+        Assert.Contains(".revision-item.selected.pinned:not(.current)", css);
+        Assert.DoesNotContain("inset 4px 0 0 var(--primary)", css);
     }
 
     [Fact]

@@ -4174,7 +4174,7 @@ function renderCodeRevisions(result) {
         if (revision.isPinned) {
             const pinnedMarker = document.createElement("span");
             pinnedMarker.className = "revision-pinned-marker";
-            pinnedMarker.textContent = "Pinned snapshot";
+            pinnedMarker.textContent = "Pinned";
             row.appendChild(pinnedMarker);
         }
         revisionList.appendChild(row);
