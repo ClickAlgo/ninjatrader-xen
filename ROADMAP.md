@@ -202,6 +202,9 @@ validated independently.
 - [x] Model selection restored independently from project history
 - [x] Source snapshot history is paged in groups of 20, reports total and pinned
   counts, and keeps the newest/current snapshot on the first page
+- [x] Opening a source snapshot shows the user prompt that generated its saved
+  source, derived from the revision's existing conversation history without a
+  schema change; older unreadable histories show a clear unavailable state
 - [x] Snapshot pins use a reversible `PINNED|` prefix in the existing revision
   `Notes` field; pinning and unpinning preserve the original note text and require
   no schema migration

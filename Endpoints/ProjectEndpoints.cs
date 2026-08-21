@@ -302,7 +302,7 @@ public static class ProjectEndpoints
             return Results.Forbid();
 
         await using var command = new SqlCommand("""
-            SELECT Id, Task, Model, Title, CodeText, CreatedUtc
+            SELECT Id, Task, Model, Title, MessagesJson, CodeText, CreatedUtc
             FROM dbo.ProjectRevisions
             WHERE Id = @RevisionId
               AND ConversationId = @ProjectId
@@ -316,15 +316,64 @@ public static class ProjectEndpoints
         if (!await reader.ReadAsync())
             return Results.NotFound();
 
+        var code = reader.GetString(reader.GetOrdinal("CodeText"));
+        var messagesJson = reader.GetString(reader.GetOrdinal("MessagesJson"));
         return Results.Ok(new
         {
             revisionId = reader.GetInt32(reader.GetOrdinal("Id")),
             task = reader.GetString(reader.GetOrdinal("Task")),
             model = reader.GetString(reader.GetOrdinal("Model")),
             title = reader.GetString(reader.GetOrdinal("Title")),
-            code = reader.GetString(reader.GetOrdinal("CodeText")),
+            code,
+            prompt = ExtractRevisionPrompt(messagesJson, code),
             createdUtc = reader.GetDateTime(reader.GetOrdinal("CreatedUtc"))
         });
+    }
+
+    internal static string? ExtractRevisionPrompt(string? messagesJson, string? code)
+    {
+        if (string.IsNullOrWhiteSpace(messagesJson))
+            return null;
+
+        IReadOnlyList<ChatTurn> messages;
+        try
+        {
+            messages = JsonSerializer.Deserialize<List<ChatTurn>>(
+                messagesJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        var assistantIndex = messages.Count;
+        var source = code?.Trim();
+        if (!string.IsNullOrWhiteSpace(source))
+        {
+            for (var index = messages.Count - 1; index >= 0; index--)
+            {
+                var turn = messages[index];
+                if (string.Equals(turn.Role, "assistant", StringComparison.OrdinalIgnoreCase) &&
+                    turn.Content?.Contains(source, StringComparison.Ordinal) == true)
+                {
+                    assistantIndex = index;
+                    break;
+                }
+            }
+        }
+
+        for (var index = assistantIndex - 1; index >= 0; index--)
+        {
+                var turn = messages[index];
+                if (string.Equals(turn.Role, "user", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(turn.Content))
+            {
+                return turn.Content.Trim();
+            }
+        }
+
+        return null;
     }
 
     private static async Task<IResult> RestoreRevision(

@@ -35,6 +35,7 @@ let preparingRequest = false;
 let currentProjectId = null;
 let currentProjectTitle = "";
 let currentProjectPersisted = false;
+let hasProjectSnapshots = false;
 let currentController = null;
 let currentBalanceGbp = null;
 let promptBuilderBypassed = false;
@@ -90,7 +91,9 @@ const feedbackComment = document.getElementById("feedbackComment");
 const feedbackStatus = document.getElementById("feedbackStatus");
 const submitFeedbackButton = document.getElementById("submitFeedbackButton");
 const codeWorkspaceModal = document.getElementById("codeWorkspaceModal");
+const codeViewButton = document.getElementById("codeViewButton");
 const codeWorkspacePreview = document.getElementById("codeWorkspacePreview");
+const codeWorkspacePrompt = document.getElementById("codeWorkspacePrompt");
 const revisionList = document.getElementById("revisionList");
 const revisionMessage = document.getElementById("revisionMessage");
 const sourceImport = document.getElementById("sourceImport");
@@ -156,6 +159,7 @@ showMobileWorkspaceNotice();
 renderActiveBuildPlan();
 updateTaskSpecificUi();
 updateClearInputButton();
+updateHistoryButton();
 sourceFileButton.addEventListener("click", () => {
     if (isExistingCodeTask())
         openExistingCodeModal();
@@ -179,7 +183,7 @@ removeImageButton.addEventListener("click", clearPendingImage);
 themeToggleButton.addEventListener("click", toggleWorkspaceTheme);
 
 document.getElementById("projectsButton").addEventListener("click", openProjects);
-document.getElementById("codeViewButton").addEventListener(
+codeViewButton.addEventListener(
     "click",
     openCodeWorkspace);
 document.getElementById("closeProjectsButton").addEventListener("click", closeProjects);
@@ -2030,6 +2034,8 @@ function startNewProject(resetTask = true) {
     currentProjectId = null;
     currentProjectTitle = "";
     currentProjectPersisted = false;
+    hasProjectSnapshots = false;
+    updateHistoryButton();
     history = [];
     existingCodeState = { sources: [], decisions: [], workingCode: null };
     renderExistingCodeAttachments();
@@ -3968,6 +3974,13 @@ function updateProjectTitle() {
         currentProjectTitle || "Unsaved project";
 }
 
+function updateHistoryButton() {
+    codeViewButton.disabled = !hasProjectSnapshots;
+    codeViewButton.title = hasProjectSnapshots
+        ? "View saved source snapshots"
+        : "History is available after Xen saves a source snapshot";
+}
+
 async function saveCurrentProject(code = "") {
     if (!currentProjectId || history.length < 2)
         return false;
@@ -3998,8 +4011,13 @@ async function saveCurrentProject(code = "") {
             })
         });
 
-        if (response.ok)
+        if (response.ok) {
             currentProjectPersisted = true;
+            if (latestCode) {
+                hasProjectSnapshots = true;
+                updateHistoryButton();
+            }
+        }
         return response.ok;
     } catch {
         return false;
@@ -4016,6 +4034,7 @@ async function openCodeWorkspace() {
 
     if (!currentProjectId) {
         setCodeWorkspaceCode("", "No saved source");
+        setCodeWorkspacePrompt("");
         revisionMessage.textContent =
             "Generate code or open a saved project to view its source history.";
         document.getElementById("revisionCount").textContent = "0 versions";
@@ -4029,7 +4048,8 @@ async function openCodeWorkspace() {
     else
         setCodeWorkspaceCode("", "Loading source...");
 
-    await loadCodeRevisionPage(1, { previewCurrent: !currentCode });
+    setCodeWorkspacePrompt(null, true);
+    await loadCodeRevisionPage(1, { previewCurrent: true });
 }
 
 async function loadCodeRevisionPage(page = revisionPage, options = {}) {
@@ -4073,11 +4093,15 @@ function closeCodeWorkspace() {
 
 function renderCodeRevisions(result) {
     const revisions = Array.isArray(result.revisions) ? result.revisions : [];
+    hasProjectSnapshots = (result.totalCount ?? revisions.length) > 0;
+    updateHistoryButton();
     revisionList.replaceChildren();
     revisionMessage.textContent = revisions.length
         ? ""
         : "No source snapshots have been saved for this project yet.";
     revisionMessage.classList.remove("error", "success");
+    if (!revisions.length)
+        setCodeWorkspacePrompt("");
     const totalCount = result.totalCount ?? revisions.length;
     const pinnedCount = result.pinnedCount || 0;
     document.getElementById("revisionCount").textContent =
@@ -4106,9 +4130,7 @@ function renderCodeRevisions(result) {
         const title = document.createElement("strong");
         title.textContent = `v${revision.versionNumber}`;
         const badge = document.createElement("span");
-        badge.textContent = revision.isCurrent
-            ? (revision.isPinned ? "Current · Pinned" : "Current")
-            : (revision.isPinned ? "Pinned" : revision.model);
+        badge.textContent = revision.isCurrent ? "Current" : revision.model;
         const date = document.createElement("small");
         date.textContent = new Intl.DateTimeFormat("en-GB", {
             dateStyle: "medium",
@@ -4149,6 +4171,12 @@ function renderCodeRevisions(result) {
             remove.addEventListener("click", () => deleteCodeRevision(revision));
         actions.append(pin, restore, remove);
         row.append(details, actions);
+        if (revision.isPinned) {
+            const pinnedMarker = document.createElement("span");
+            pinnedMarker.className = "revision-pinned-marker";
+            pinnedMarker.textContent = "Pinned snapshot";
+            row.appendChild(pinnedMarker);
+        }
         revisionList.appendChild(row);
     });
 }
@@ -4249,6 +4277,7 @@ async function previewCodeRevision(revision) {
         setCodeWorkspaceCode(
             result.code,
             `v${revision.versionNumber} - ${formatRevisionDate(result.createdUtc)}`);
+        setCodeWorkspacePrompt(result.prompt);
         revisionMessage.textContent = "";
         revisionList.querySelectorAll(".revision-item").forEach(item =>
             item.classList.remove("selected"));
@@ -4289,6 +4318,7 @@ async function restoreCodeRevision(revision) {
         revisionMessage.classList.add("success");
 
         await loadCodeRevisionPage(1, {
+            previewCurrent: true,
             message:
                 `v${revision.versionNumber} was restored as a new current snapshot. ` +
                 "The active Build Plan was cleared because it referred to a newer source state."
@@ -4297,6 +4327,13 @@ async function restoreCodeRevision(revision) {
         revisionMessage.textContent = error.message;
         revisionMessage.classList.add("error");
     }
+}
+
+function setCodeWorkspacePrompt(prompt, loading = false) {
+    codeWorkspacePrompt.textContent = loading
+        ? "Loading the prompt used to generate this snapshot..."
+        : (prompt?.trim() ||
+            "The generating prompt is unavailable for this older snapshot.");
 }
 
 function setCodeWorkspaceCode(code, meta) {
@@ -4575,6 +4612,8 @@ function applyProjectToWorkspace(project) {
     currentProjectId = project.projectId;
     currentProjectTitle = project.title;
     currentProjectPersisted = true;
+    hasProjectSnapshots = Boolean(project.latestCode);
+    updateHistoryButton();
     activeTask = taskNames[project.task] ? project.task : "build-strategy";
     history = compactPreflightBuildHistory(
         Array.isArray(project.messages) ? project.messages : []);

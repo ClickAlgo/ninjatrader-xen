@@ -1,5 +1,7 @@
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using NinjaTrader_Xen.Endpoints;
+using NinjaTrader_Xen.Models;
 
 namespace NinjaTrader_Xen.Tests;
 
@@ -90,6 +92,7 @@ public sealed class ProjectPersistenceTests
         Assert.Contains("confirmation?.trim().toUpperCase() !== \"DELETE\"", script);
         Assert.Contains("revision.isCurrent || revision.isPinned", script);
         Assert.Contains("page > result.totalPages", script);
+        Assert.Contains("pinnedMarker.textContent = \"Pinned snapshot\"", script);
         Assert.Contains("id=\"revisionControls\"", html);
         Assert.Contains("id=\"deleteUnpinnedRevisionsButton\"", html);
 
@@ -97,6 +100,8 @@ public sealed class ProjectPersistenceTests
         Assert.Contains("grid-template-columns: minmax(0, 1fr);", css);
         Assert.Contains(".revision-actions {", css);
         Assert.Contains("padding: 0 8px;", css);
+        Assert.Contains(".revision-pinned-marker", css);
+        Assert.Contains("inset 4px 0 0 var(--primary)", css);
     }
 
     [Fact]
@@ -120,6 +125,41 @@ public sealed class ProjectPersistenceTests
     }
 
     [Fact]
+    public void SnapshotDetails_ReturnThePromptThatGeneratedTheSelectedSource()
+    {
+        const string firstCode = "public class First : Strategy { }";
+        const string revisedCode = "public class Revised : Strategy { }";
+        var messagesJson = JsonSerializer.Serialize(new ChatTurn[]
+        {
+            new("user", "Build the first strategy"),
+            new("assistant", $"```csharp\n{firstCode}\n```"),
+            new("user", "Add a trailing stop"),
+            new("assistant", $"Here is the revision.\n```csharp\n{revisedCode}\n```")
+        });
+
+        Assert.Equal(
+            "Add a trailing stop",
+            ProjectEndpoints.ExtractRevisionPrompt(messagesJson, revisedCode));
+    }
+
+    [Fact]
+    public void SnapshotDetails_UseLatestUserPromptForLegacyUnmatchedSource()
+    {
+        var messagesJson = JsonSerializer.Serialize(new ChatTurn[]
+        {
+            new("user", "Use this uploaded strategy as the current source"),
+            new("assistant", "Source received.")
+        });
+
+        Assert.Equal(
+            "Use this uploaded strategy as the current source",
+            ProjectEndpoints.ExtractRevisionPrompt(
+                messagesJson,
+                "public class Uploaded : Strategy { }"));
+        Assert.Null(ProjectEndpoints.ExtractRevisionPrompt("not json", "source"));
+    }
+
+    [Fact]
     public void SnapshotRetention_KeepsFiftyOrdinaryPlusPinnedAndDuplicateGuard()
     {
         var endpoint = ReadProjectFile("Endpoints", "ProjectEndpoints.cs");
@@ -128,6 +168,38 @@ public sealed class ProjectPersistenceTests
         Assert.Contains("RankedOrdinary AS", endpoint);
         Assert.Contains("AND ISNULL(Notes, N'') NOT LIKE N'PINNED|%'", endpoint);
         Assert.Contains("string.Equals(existing?.Trim(), code, StringComparison.Ordinal)", endpoint);
+    }
+
+    [Fact]
+    public void SnapshotUi_ShowsGeneratingPromptAboveTheCodePreview()
+    {
+        var html = ReadProjectFile("wwwroot", "workspace.html");
+        var script = ReadWorkspaceScript();
+        var css = ReadProjectFile("wwwroot", "css", "site.css");
+
+        Assert.Contains("id=\"codeWorkspacePrompt\"", html);
+        Assert.Contains("Prompt used for this snapshot", html);
+        Assert.Contains("setCodeWorkspacePrompt(result.prompt)", script);
+        Assert.Contains("previewCurrent: true", script);
+        Assert.Contains(".code-workspace-prompt", css);
+        Assert.Contains("white-space: pre-wrap", css);
+    }
+
+    [Fact]
+    public void SnapshotUi_DisablesHistoryUntilASnapshotExists()
+    {
+        var html = ReadProjectFile("wwwroot", "workspace.html");
+        var script = ReadWorkspaceScript();
+        var css = ReadProjectFile("wwwroot", "css", "site.css");
+
+        Assert.Contains("id=\"codeViewButton\"", html);
+        Assert.Contains("disabled>History</button>", html);
+        Assert.Contains("let hasProjectSnapshots = false;", script);
+        Assert.Contains("codeViewButton.disabled = !hasProjectSnapshots", script);
+        Assert.Contains("hasProjectSnapshots = Boolean(project.latestCode)", script);
+        Assert.Contains("if (latestCode) {", script);
+        Assert.Contains("hasProjectSnapshots = false;", script);
+        Assert.Contains(".workspace-action:disabled", css);
     }
 
     private static string ReadWorkspaceScript()
