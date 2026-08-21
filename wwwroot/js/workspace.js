@@ -1658,7 +1658,7 @@ function appendResponseCodeActions(container, code) {
     const buildButton = document.createElement("button");
     buildButton.type = "button";
     buildButton.className = "code-action preflight-build-button";
-    buildButton.textContent = "Build check";
+    buildButton.textContent = "Build Check";
 
     const addonNotice = document.createElement("div");
     addonNotice.className = "addon-build-notice";
