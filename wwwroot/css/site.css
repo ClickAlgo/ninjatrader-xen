@@ -3953,6 +3953,32 @@ html[data-theme="light"] .code-workspace-dialog {
     color-scheme: dark;
 }
 
+html[data-theme="light"] .code-block {
+    border-color: #3a414b;
+    background: #20242a;
+}
+
+html[data-theme="light"] .code-toolbar {
+    border-bottom-color: #3a414b;
+    color: #aeb7c1;
+    background: #292e35;
+}
+
+html[data-theme="light"] .code-block pre {
+    color: #e2e6eb;
+    background: #20242a;
+    scrollbar-color: #6f7985 #20242a;
+}
+
+html[data-theme="light"] .code-block pre::-webkit-scrollbar-track {
+    background: #20242a;
+}
+
+html[data-theme="light"] .code-block pre::-webkit-scrollbar-thumb {
+    border-color: #20242a;
+    background: #6f7985;
+}
+
 /* Requirements verification */
 .requirements-validation-dialog {
     width: min(780px, calc(100vw - 32px));
@@ -4809,6 +4835,19 @@ html[data-theme="light"] .code-workspace-prompt p {
 
 html[data-theme="light"] .code-workspace-preview {
     color-scheme: dark;
+    color: #e2e6eb;
+    background: #20242a;
+    scrollbar-color: #6f7985 #20242a;
+}
+
+html[data-theme="light"] .code-workspace-preview::-webkit-scrollbar-track {
+    background: #20242a;
+}
+
+html[data-theme="light"] .code-workspace-preview::-webkit-scrollbar-thumb {
+    border: 2px solid #20242a;
+    border-radius: 999px;
+    background: #6f7985;
 }
 
 html[data-theme="light"] .revision-panel {
