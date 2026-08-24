@@ -2056,7 +2056,7 @@ function startNewProject(resetTask = true) {
     addMessage("assistant", taskIntro(activeTask));
     updateProjectTitle();
     renderActiveBuildPlan();
-    status.textContent = "Ready";
+    status.textContent = "";
     promptInput.focus();
 }
 
@@ -2077,7 +2077,7 @@ function clearComposerInput() {
     clearAnalyzerExports(false);
     updateTaskSpecificUi();
     updateClearInputButton();
-    status.textContent = "Ready";
+    status.textContent = "";
     promptInput.focus();
 }
 
@@ -2145,14 +2145,12 @@ function updateImageUploadUi(message = "") {
     if (message) {
         imageFileStatus.textContent = message;
     } else if (pendingImage) {
-        imageFileStatus.textContent =
-            `${pendingImage.name} attached · add instructions, then press Send`;
+        imageFileStatus.textContent = "";
     } else if (!supported) {
         imageFileStatus.textContent =
             "The selected model does not support images. Choose Sol or Claude.";
     } else {
-        imageFileStatus.textContent =
-            "PNG, JPEG or WebP · maximum 3 MB";
+        imageFileStatus.textContent = "";
     }
 }
 
@@ -2818,7 +2816,7 @@ async function reviewBuildPrompt(prompt) {
     } catch {
         return prompt;
     } finally {
-        setComposerReviewState(false, "Ready");
+        setComposerReviewState(false, "");
     }
 }
 

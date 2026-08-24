@@ -17,7 +17,7 @@
                 document.documentElement.dataset.theme = "light";
         })();
     </script>
-    <link rel="stylesheet" href="/css/site.css?v=1.0.27">
+    <link rel="stylesheet" href="/css/site.css?v=1.0.28">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -162,7 +162,7 @@
                         accept="image/png,image/jpeg,image/webp">
                     <button id="imageFileButton" class="button source-file-button"
                         type="button">Upload reference image</button>
-                    <span id="imageFileStatus">PNG, JPEG or WebP · maximum 3 MB</span>
+                    <span id="imageFileStatus" role="status"></span>
                     <div id="imagePreview" class="image-preview" hidden>
                         <img id="imagePreviewContent" alt="Attached reference">
                         <button id="removeImageButton" type="button"
@@ -171,9 +171,9 @@
                 </div>
                 <textarea id="promptInput" rows="3" maxlength="60000"
                     placeholder="Describe your NinjaTrader strategy…" required></textarea>
+                <span id="chatStatus" class="composer-status-live" role="status"></span>
                 <div class="composer-footer">
                     <div class="composer-context-actions">
-                        <span id="chatStatus" class="chat-status" role="status">Ready</span>
                         <button id="newProjectButton"
                             class="button clear-task-button"
                             type="button">Clear Task</button>
@@ -224,8 +224,12 @@
                     <textarea id="existingCodeText" rows="14" maxlength="500000"
                         placeholder="Paste the complete NinjaScript source here" required></textarea>
                 </label>
-                <button id="uploadExistingCodeButton" class="button" type="button">
-                    Load a .cs file
+                <button id="uploadExistingCodeButton"
+                    class="button existing-code-upload-button" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
+                    </svg>
+                    <span>Load a .cs file</span>
                 </button>
                 <a class="existing-code-help-link"
                     href="https://help.clickalgo.com/ninjatrader-xen/existing-code/"
@@ -423,6 +427,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=1.1.18"></script>
+    <script src="/js/workspace.js?v=1.1.19"></script>
 </body>
 </html>

@@ -1,0 +1,76 @@
+Validate whether the latest NinjaTrader 8 NinjaScript source satisfies the
+requirements. This is an audit only.
+
+Rules:
+- Do not rewrite or output corrected code.
+- Do not invent requirements.
+- Create the verification checklist only from behaviour explicitly requested in
+  REQUIREMENTS. TASK identifies the artifact type; it does not add features.
+- Interpret a vague requirement using its smallest direct implementation. Do
+  not substitute a more advanced implementation and then penalise its absence.
+- Do not reduce the match percentage for optional enhancements, defensive best
+  practices, future extensibility or features the user did not request.
+- In particular, do not require multi-series support, time or volatility
+  filters, dynamic risk logic, extra position sizing, order tracking or
+  per-position customisation unless REQUIREMENTS asks for it.
+- Judge only what is present in the supplied source.
+- Treat comments and descriptive claims as unimplemented unless executable code
+  supports them.
+- Detect TODOs, placeholders, empty handlers, stub methods, disabled logic and
+  incomplete branches.
+- For every finding, cite the relevant class, property, method or event handler.
+- Identify NinjaTrader lifecycle, multi-series, order-management, calculation,
+  state-management, trading-risk and repainting risks.
+- Put relevant non-requirement concerns under Risks. Their presence must not
+  lower Overall Match or create a repair item.
+- Do not claim compilation success. Mark anything needing NinjaTrader execution
+  or compilation as Manual test required.
+- Manual tests do not lower Overall Match when the required implementation is
+  present in source.
+- Calculate Overall Match from the explicit requirement checklist only. Use
+  consistent scoring: implemented receives full credit, partial receives half
+  credit, and not implemented receives no credit.
+- Be concise, direct and specific.
+
+Return this exact structure:
+
+# Requirements Verification
+
+## Overall Match
+Give a percentage estimate and one sentence.
+
+## Implemented
+For every implemented requirement, cite the relevant class, property or method.
+
+## Partially implemented
+Explain the limitation and cite the relevant source location.
+
+## Not implemented
+State exactly what is absent.
+
+## Assumptions made
+List assumptions present in the source or state "None identified".
+
+## Manual test required
+List compilation, chart, Strategy Analyzer, order and behavioural checks that
+cannot be proven by static source inspection.
+
+## Risks
+List relevant NinjaTrader API, lifecycle, trading, logic and repainting risks.
+
+## Recommended repair scope
+List only focused changes needed for explicit requirements classified as
+Partially implemented or Not implemented. Do not include optional enhancements,
+manual tests or general best practices. If none exist, state
+"No code repair required." Do not provide code.
+
+TASK:
+{{TASK}}
+
+REQUIREMENTS:
+{{REQUIREMENTS}}
+
+LATEST SOURCE:
+```csharp
+{{CODE}}
+```

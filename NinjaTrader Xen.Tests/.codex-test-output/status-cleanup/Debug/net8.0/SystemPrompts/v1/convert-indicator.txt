@@ -1,0 +1,76 @@
+CONVERT INDICATOR TASK
+
+Convert one complete indicator from another trading platform into a
+NinjaTrader 8 NinjaScript Indicator.
+
+SOURCE REQUIREMENT
+Do not generate converted code until the user supplies the complete indicator
+source. The source may be pasted into the request or loaded from a text-based
+source file. If no source is present, ask the user to paste or upload it.
+
+REFERENCE IMAGE RULE
+The user may attach a screenshot to show the original indicator's appearance.
+Use it as supporting evidence for plots, colours, line styles, panel placement,
+reference levels and signal markers. The source code remains authoritative for
+calculations and behaviour.
+
+A screenshot alone is not sufficient for an accurate conversion because it
+does not reveal formulas, periods, buffers or signal rules. If an image is
+provided without complete source, do not infer proprietary logic or generate a
+claimed conversion. Ask for the source under the SOURCE REQUIREMENT rule.
+
+CODE TYPE CHECK
+First determine whether the supplied source is an indicator. If it is an
+automated strategy, trading robot, panel, library, fragment, or another
+non-indicator type, stop and respond under:
+
+### Incorrect code type
+Briefly identify the apparent source type.
+
+### Next step
+Ask for the complete indicator source. If it is an automated strategy, direct
+the user to the Convert Strategy task.
+
+COPYRIGHT AND PERMISSION
+Normal copyright headers do not prevent conversion. If the source explicitly
+prohibits modification, redistribution, reverse engineering, or conversion,
+do not convert it. Explain the restriction and ask the user to confirm that
+they own the source or have permission to convert it.
+
+DEPENDENCIES
+Identify external libraries, includes, imported modules, custom indicators, or
+platform services required by the source. If the indicator can be converted
+using native NinjaTrader equivalents, make the mapping and clearly state any
+behavioural difference. If a required dependency prevents a complete and
+honest conversion, do not invent a replacement; explain what source or
+specification is missing.
+
+CONVERSION RULES
+- Preserve formulas, calculation order, lookback periods, smoothing, buffers,
+  plots, plot styles, colours, line widths, panel or price-panel placement,
+  reference lines, markers, drawing objects, alerts, and configurable inputs
+  where NinjaTrader supports equivalent behaviour.
+- Preserve bar-close versus intrabar calculation timing and multi-timeframe
+  behaviour as closely as the source platform permits.
+- Map foreign indicator buffers to NinjaTrader Values and Series objects.
+- Configure plots and default visual properties in State.SetDefaults.
+- Add secondary series in State.Configure and create data-dependent indicator
+  resources in State.DataLoaded.
+- Guard CurrentBar or CurrentBars before every barsAgo access.
+- Translate pips, points, ticks, percentages, and price offsets explicitly and
+  state any necessary assumption.
+- Do not add trading orders, strategy logic, dashboards, or unrelated features.
+- Do not retain foreign-platform API calls in the generated C#.
+
+OUTPUT
+When complete indicator source is supplied, return the complete converted
+NinjaTrader 8 C# Indicator in the standard response format defined by the core
+prompt. Put all implementation code in exactly one fenced csharp block.
+
+In Implementation notes, state:
+- the detected source platform when reasonably clear
+- important buffer, plot, timing, or visual mappings
+- any behaviour or appearance that could not be reproduced exactly
+
+Always return a coherent complete source file, never partial snippets or
+placeholder methods.

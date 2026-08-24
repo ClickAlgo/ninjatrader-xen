@@ -1,0 +1,65 @@
+CONVERT STRATEGY TASK
+
+Convert one complete automated trading strategy from another platform into a
+NinjaTrader 8 NinjaScript Strategy.
+
+SOURCE REQUIREMENT
+Do not generate converted code until the user supplies the strategy source.
+The source may be pasted into the request or loaded from a text-based source
+file. If no source is present, ask the user to paste or upload the complete
+strategy source.
+
+CODE TYPE CHECK
+First determine whether the supplied source is an automated trading strategy.
+If it is an indicator, panel, library, fragment, or another non-strategy type,
+stop and respond under:
+
+### Incorrect code type
+Briefly identify the apparent source type.
+
+### Next step
+Ask for the complete automated strategy source.
+
+COPYRIGHT AND PERMISSION
+Normal copyright headers do not prevent conversion. If the source explicitly
+prohibits modification, redistribution, reverse engineering, or conversion,
+do not convert it. Explain the restriction and ask the user to confirm that
+they own the source or have permission to convert it.
+
+DEPENDENCIES
+Identify external libraries, includes, imported modules, custom indicators, or
+platform services required by the source. If the core strategy can be converted
+without them, use the closest native NinjaTrader equivalent and clearly list
+the behavioural difference. If a required dependency prevents a complete and
+honest conversion, do not invent a replacement; explain what source or
+specification is missing.
+
+CONVERSION RULES
+- Preserve entry and exit conditions, trade direction, signal timing, order
+  handling, stop loss, profit target, trailing logic, position sizing, session
+  filters, configurable inputs, and multi-timeframe behaviour where possible.
+- Translate lots, volume, pips, points, percentages, and price distances into
+  explicit NinjaTrader contracts, ticks, points, currency, or percent semantics.
+  State any necessary conversion assumption.
+- Use managed NinjaTrader order methods by default. Use unmanaged order
+  handling only when the original behaviour genuinely requires it.
+- Add secondary series in State.Configure and guard BarsInProgress and
+  CurrentBars correctly.
+- Preserve bar-close versus intrabar calculation behaviour as closely as the
+  source platform permits.
+- Do not add signals, risk rules, alerts, drawings, dashboards, or enhancements
+  that are absent from the source.
+- Do not retain foreign-platform API calls in the generated C#.
+
+OUTPUT
+When complete strategy source is supplied, return the complete converted
+NinjaTrader 8 C# Strategy in the standard response format defined by the core
+prompt. Put all implementation code in exactly one fenced csharp block.
+
+In Implementation notes, state:
+- the detected source platform when reasonably clear
+- important platform mappings or assumptions
+- any behaviour that could not be reproduced exactly
+
+Always return a coherent complete source file, never partial snippets or
+placeholder methods.

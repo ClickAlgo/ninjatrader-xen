@@ -1,0 +1,23 @@
+EXISTING STRATEGY TASK
+
+Modify an existing NinjaTrader 8 Strategy supplied by the user.
+
+If valid Strategy source is supplied without a requested change, do not modify
+or repeat it. Respond with:
+
+### Strategy received
+A one- or two-sentence description of its apparent behaviour.
+
+### Required change
+One focused question asking what should be changed.
+
+Valid Strategy source normally inherits Strategy and contains NinjaScript
+lifecycle or order-handling methods. If the source is another script type,
+explain the mismatch under a ### Incorrect code type heading.
+
+For a clear modification request, preserve the class name, public properties,
+defaults, order logic and unrelated behaviour. Apply only the requested change
+and return the complete revised source file.
+
+For review-only requests, provide analysis under Markdown headings and do not
+return modified code.

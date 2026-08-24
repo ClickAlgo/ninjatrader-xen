@@ -36,53 +36,57 @@
     </header>
 
     <main>
-        <section class="landing-hero">
-            <div class="hero-glow" aria-hidden="true"></div>
+        <section class="landing-hero landing-hero-classic">
             <div class="landing-hero-copy">
-                <p class="hero-pill"><span></span>Purpose-built AI for NinjaTrader 8</p>
-                <h1>From trading idea to <em>working NinjaScript.</em></h1>
+                <p class="eyebrow">AI development for NinjaTrader</p>
+                <h1>Turn trading ideas into NinjaScript.</h1>
                 <p class="lead">
-                    Plan the build, generate the source and verify every requirement in one focused workspace for NinjaTrader strategies and indicators.
+                    Xen is a focused AI workspace for creating NinjaTrader strategies
+                    and indicators. Describe what you need in plain English, receive
+                    structured C# source code, then refine it through an ongoing project.
                 </p>
                 <div class="landing-hero-actions">
-                    <a class="button primary landing-primary-action" href="/register.html">Start building <span aria-hidden="true">→</span></a>
-                    <a class="button hero-secondary-action" href="#overview">Watch 1-minute overview</a>
+                    <a class="button primary landing-primary-action" href="/register.html">Start with £5 free credit</a>
                 </div>
-                <ul class="landing-highlights" aria-label="Pricing and ownership highlights">
+                <ul class="landing-highlights" aria-label="Account and pricing highlights">
+                    <li>£5 introductory credit</li>
                     <li>No subscription</li>
-                    <li>Top up from £1</li>
                     <li>Keep your source code</li>
                 </ul>
             </div>
 
-            <div class="product-preview" aria-label="Example Xen project workflow">
-                <div class="preview-browser-bar">
-                    <span class="preview-dot red"></span><span class="preview-dot amber"></span><span class="preview-dot green"></span>
-                    <span class="preview-address">NinjaTrader Xen · Build Strategy</span>
-                    <span class="preview-credit">Credit £9.84</span>
-                </div>
-                <div class="preview-flow">
-                    <div class="preview-flow-step complete"><span>01</span><strong>Trading idea</strong><small>Defined</small></div>
-                    <div class="preview-flow-line"></div>
-                    <div class="preview-flow-step active"><span>02</span><strong>Build Plan</strong><small>3 stages</small></div>
-                    <div class="preview-flow-line"></div>
-                    <div class="preview-flow-step"><span>03</span><strong>NinjaScript</strong><small>Ready</small></div>
-                    <div class="preview-flow-line"></div>
-                    <div class="preview-flow-step"><span>04</span><strong>Verify</strong><small>Checked</small></div>
+            <div class="product-preview classic-product-preview" aria-label="Example Xen workspace">
+                <div class="preview-topbar">
+                    <div class="preview-brand">
+                        <span class="brand-mark">X</span>
+                        <strong>XEN</strong>
+                        <small>NINJATRADER</small>
+                    </div>
+                    <span class="preview-credit">Credit: £9.84</span>
                 </div>
                 <div class="preview-layout">
-                    <aside class="preview-tasks">
-                        <span class="preview-label">BUILD PLAN</span>
-                        <strong>EMA trend strategy</strong>
-                        <div class="preview-task complete"><span>✓</span> Core signals</div>
-                        <div class="preview-task active"><span>2</span> Risk controls</div>
-                        <div class="preview-task"><span>3</span> Session rules</div>
-                    </aside>
+                    <div class="preview-tasks">
+                        <span class="preview-label">PROJECT TYPE</span>
+                        <strong>NinjaScript workflow</strong>
+                        <div class="preview-task active">Build Strategy</div>
+                        <div class="preview-task">Build Indicator</div>
+                        <div class="preview-task">Existing Strategy</div>
+                        <div class="preview-task">Existing Indicator</div>
+                    </div>
                     <div class="preview-workspace">
-                        <div class="preview-workspace-heading"><div><span class="preview-label">CURRENT STAGE</span><h2>Add ATR risk controls</h2></div><span class="preview-status">Building</span></div>
-                        <div class="preview-message"><span>YOU</span>Add a configurable ATR stop, profit target and daily loss limit.</div>
-                        <div class="preview-code"><div><span>protected override void</span> OnBarUpdate()</div><div>{</div><div>&nbsp;&nbsp;if (CrossAbove(FastEma, SlowEma, 1))</div><div>&nbsp;&nbsp;{</div><div class="code-added">+ &nbsp;&nbsp;SetStopLoss(CalculationMode.Ticks, atrStop);</div><div>&nbsp;&nbsp;&nbsp;&nbsp;EnterLong(DefaultQuantity);</div><div>&nbsp;&nbsp;}</div><div>}</div></div>
-                        <div class="preview-verification"><span>✓</span><div><strong>Requirements verified</strong><small>ATR stop · Profit target · Daily loss limit</small></div></div>
+                        <span class="preview-label">ACTIVE WORKSPACE</span>
+                        <h2>Build Strategy</h2>
+                        <div class="preview-message">
+                            <span>YOU</span>
+                            Build an EMA crossover strategy with an ATR stop and configurable position size.
+                        </div>
+                        <div class="preview-code">
+                            <div><span>protected override void</span> OnBarUpdate()</div>
+                            <div>{</div>
+                            <div>&nbsp;&nbsp;if (CrossAbove(FastEma, SlowEma, 1))</div>
+                            <div>&nbsp;&nbsp;&nbsp;&nbsp;EnterLong(DefaultQuantity);</div>
+                            <div>}</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -139,7 +143,7 @@
                 <h2>Use Xen when you need it. <em>Not every month.</em></h2>
                 <p>Add credit from £1 and pay for the AI usage behind your work. Your workspace shows the balance and warns you when it is running low.</p>
                 <div class="pricing-points"><span>✓ No subscription</span><span>✓ Top up securely</span><span>✓ Choose the cost of each model</span></div>
-                <a class="button primary landing-primary-action" href="/register.html">Create an account <span aria-hidden="true">→</span></a>
+                <a class="button primary landing-primary-action" href="/register.html">Claim £5 introductory credit <span aria-hidden="true">→</span></a>
             </div>
             <div class="credit-card-preview">
                 <div class="credit-card-top"><span>YOUR XEN CREDIT</span><span class="live-indicator"><i></i>Available</span></div>
@@ -183,8 +187,8 @@
         <section class="landing-cta">
             <p class="eyebrow">Build with a clearer process</p>
             <h2>Turn your next trading idea into NinjaScript.</h2>
-            <p>Create an account, choose a task and start with as little as £1 credit. No subscription required.</p>
-            <a class="button primary landing-primary-action" href="/register.html">Start building <span aria-hidden="true">→</span></a>
+            <p>Create an account, receive £5 introductory credit and start building without a subscription.</p>
+            <a class="button primary landing-primary-action" href="/register.html">Create account and get £5 credit <span aria-hidden="true">→</span></a>
         </section>
     </main>
 

@@ -1,0 +1,23 @@
+EXISTING INDICATOR TASK
+
+Modify an existing NinjaTrader 8 Indicator supplied by the user.
+
+If valid Indicator source is supplied without a requested change, do not modify
+or repeat it. Respond with:
+
+### Indicator received
+A one- or two-sentence description of its apparent calculation and output.
+
+### Required change
+One focused question asking what should be changed.
+
+Valid Indicator source normally inherits Indicator and defines calculation or
+plot behaviour. If the source is another script type, explain the mismatch
+under a ### Incorrect code type heading.
+
+For a clear modification request, preserve the class name, public properties,
+plots, defaults, calculations and unrelated behaviour. Apply only the requested
+change and return the complete revised source file.
+
+For review-only requests, provide analysis under Markdown headings and do not
+return modified code.
