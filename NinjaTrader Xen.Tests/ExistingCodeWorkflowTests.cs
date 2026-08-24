@@ -1,5 +1,8 @@
 namespace NinjaTrader_Xen.Tests;
 
+using NinjaTrader_Xen.Endpoints;
+using NinjaTrader_Xen.Models;
+
 public sealed class ExistingCodeWorkflowTests
 {
     private static readonly string Root = Path.GetFullPath(Path.Combine(
@@ -13,8 +16,8 @@ public sealed class ExistingCodeWorkflowTests
 
         Assert.Contains("id=\"existingCodeModal\"", html);
         Assert.Contains("Current codebase", html);
-        Assert.Contains("Integrate with current source", html);
-        Assert.Contains("Use as reference only", html);
+        Assert.Contains("Merge functionality into current source", html);
+        Assert.Contains("Use only as an example", html);
         Assert.Contains("Replace current source", script);
         Assert.Contains("https://help.clickalgo.com/ninjatrader-xen/existing-code/", html);
         Assert.Contains("Need help adding existing code?", html);
@@ -64,10 +67,66 @@ public sealed class ExistingCodeWorkflowTests
         var endpoint = File.ReadAllText(Path.Combine(
             Root, "Endpoints", "ExistingCodeEndpoints.cs"));
 
-        Assert.Contains("request.Sources.Count > 4", endpoint);
+        Assert.Contains("sources.Count > 4", endpoint);
         Assert.Contains("no more than four source files", endpoint);
         Assert.Contains("Conversion tasks allow one source file", endpoint);
     }
+
+    [Fact]
+    public void FirstExistingSourceMustBeCurrentCodebase()
+    {
+        Assert.Null(ExistingCodeEndpoints.ValidateSources("existing-strategy",
+            [Source("current-source")]));
+        Assert.Contains("Current codebase", ExistingCodeEndpoints.ValidateSources(
+            "existing-indicator", [Source("additional-source")])!);
+        Assert.Contains("Current codebase", ExistingCodeEndpoints.ValidateSources(
+            "existing-strategy", [Source("reference-source")])!);
+    }
+
+    [Fact]
+    public void ExistingSourcesAllowSupportOnlyAfterCurrentExists()
+    {
+        Assert.Null(ExistingCodeEndpoints.ValidateSources("existing-strategy",
+            [Source("current-source"), Source("additional-source"), Source("reference-source")]));
+    }
+
+    [Fact]
+    public void ExistingSourcesRejectMultipleCurrentAndInvalidRoles()
+    {
+        Assert.Contains("Only one", ExistingCodeEndpoints.ValidateSources("existing-strategy",
+            [Source("current-source"), Source("current-source")])!);
+        Assert.Contains("not supported", ExistingCodeEndpoints.ValidateSources("existing-strategy",
+            [Source("mystery-source")])!);
+    }
+
+    [Fact]
+    public void EmptyExistingSourcesAreAllowedForClearTask()
+    {
+        Assert.Null(ExistingCodeEndpoints.ValidateSources("existing-indicator", []));
+    }
+
+    [Theory]
+    [InlineData("convert-strategy")]
+    [InlineData("convert-indicator")]
+    public void ConversionTasksKeepOneAuthoritativeSource(string task)
+    {
+        Assert.Null(ExistingCodeEndpoints.ValidateSources(task, [Source("current-source")]));
+        Assert.Contains("one source", ExistingCodeEndpoints.ValidateSources(task,
+            [Source("current-source"), Source("additional-source")])!);
+    }
+
+    [Fact]
+    public void RoleChoicesStayLockedUntilCurrentSourceIsSaved()
+    {
+        var script = File.ReadAllText(Path.Combine(Root, "wwwroot", "js", "workspace.js"));
+
+        Assert.Contains("existingCodeRole.disabled = !hasCurrent", script);
+        Assert.Contains("role: hasCurrent ? existingCodeRole.value : \"current-source\"", script);
+        Assert.Contains("Remove Merge and Example sources before removing the Current codebase", script);
+    }
+
+    private static ExistingCodeSource Source(string role) =>
+        new(Guid.NewGuid().ToString("N"), "Source.cs", role, "public class Source { }");
 
     [Fact]
     public void ResponseActionsRequireACompleteNinjaScriptFile()

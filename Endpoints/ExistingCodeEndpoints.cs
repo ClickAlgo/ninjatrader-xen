@@ -32,13 +32,9 @@ public static class ExistingCodeEndpoints
             return Results.Unauthorized();
         if (!ExistingCodeContext.IsExistingCodeTask(request.Task))
             return Results.BadRequest(new { message = "Source state is limited to supported source-code tasks." });
-        if (request.Task is "convert-strategy" or "convert-indicator" &&
-            request.Sources.Count > 1)
-            return Results.BadRequest(new { message = "Conversion tasks allow one source file." });
-        if (request.Sources.Count > 4)
-            return Results.BadRequest(new { message = "Add no more than four source files." });
-        if (request.Sources.Count(source => source.Role == "current-source") > 1)
-            return Results.BadRequest(new { message = "Only one current source is allowed." });
+        var sourceValidationError = ValidateSources(request.Task, request.Sources);
+        if (sourceValidationError is not null)
+            return Results.BadRequest(new { message = sourceValidationError });
         if (request.Sources.Any(source => string.IsNullOrWhiteSpace(source.Code) ||
                 source.Code.Length > 500_000 || string.IsNullOrWhiteSpace(source.FileName)) ||
             request.Sources.Sum(source => source.Code.Length) > 800_000)
@@ -50,9 +46,7 @@ public static class ExistingCodeEndpoints
             {
                 Id = string.IsNullOrWhiteSpace(source.Id) ? Guid.NewGuid().ToString("N") : source.Id.Trim(),
                 FileName = Path.GetFileName(source.FileName.Trim()),
-                Role = source.Role is "additional-source" or "reference-source"
-                    ? source.Role
-                    : "current-source",
+                Role = source.Role,
                 Code = source.Code.Trim()
             }).ToArray(),
             existing?.Decisions ?? request.Decisions ?? [],
@@ -60,6 +54,28 @@ public static class ExistingCodeEndpoints
         await store.SaveAsync(subscriberId, projectId, request.Task, state,
             cancellationToken);
         return Results.Ok(state);
+    }
+
+    public static string? ValidateSources(string task,
+        IReadOnlyList<ExistingCodeSource> sources)
+    {
+        if (sources.Any(source => source.Role is not (
+                "current-source" or "additional-source" or "reference-source")))
+            return "The selected source role is not supported.";
+
+        if (task is "convert-strategy" or "convert-indicator")
+            return sources.Count > 1 ? "Conversion tasks allow one source file." : null;
+
+        if (sources.Count > 4)
+            return "Add no more than four source files.";
+
+        var currentCount = sources.Count(source => source.Role == "current-source");
+        if (currentCount > 1)
+            return "Only one current codebase is allowed.";
+        if (sources.Count > 0 && currentCount == 0)
+            return "Add a Current codebase before adding Merge or Example sources.";
+
+        return null;
     }
 
     private static bool TryGetSubscriberId(HttpContext context, out int subscriberId) =>

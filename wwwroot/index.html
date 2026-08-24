@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <meta name="apple-mobile-web-app-title" content="XEN AI">
     <link rel="manifest" href="/site.webmanifest">
-    <link rel="stylesheet" href="/css/site.css?v=0.3.7">
+    <link rel="stylesheet" href="/css/site.css?v=0.3.8">
 </head>
 <body class="landing-body">
     <header class="site-header landing-header">
@@ -23,9 +23,10 @@
             <span>NINJATRADER</span>
         </a>
         <nav class="landing-nav" aria-label="Primary navigation">
-            <a href="#overview">Watch overview</a>
+            <a href="#planner">Build Planner</a>
             <a href="#features">Features</a>
-            <a href="#workflow">How it works</a>
+            <a href="#pricing">Pricing</a>
+            <a href="#overview">Watch overview</a>
             <a href="#faq">FAQ</a>
         </nav>
         <div class="nav-actions">
@@ -36,263 +37,122 @@
 
     <main>
         <section class="landing-hero">
+            <div class="hero-glow" aria-hidden="true"></div>
             <div class="landing-hero-copy">
-                <p class="eyebrow">AI development for NinjaTrader</p>
-                <h1>Turn trading ideas into NinjaScript.</h1>
+                <p class="hero-pill"><span></span>Purpose-built AI for NinjaTrader 8</p>
+                <h1>From trading idea to <em>working NinjaScript.</em></h1>
                 <p class="lead">
-                    Xen is a focused AI workspace for creating NinjaTrader strategies
-                    and indicators. Describe what you need in plain English, receive
-                    structured C# source code, then refine it through an ongoing project.
+                    Plan the build, generate the source and verify every requirement in one focused workspace for NinjaTrader strategies and indicators.
                 </p>
                 <div class="landing-hero-actions">
-                    <a class="button primary landing-primary-action" href="/register.html">Start building</a>
-                    <a class="button" href="/login.html">Open your workspace</a>
+                    <a class="button primary landing-primary-action" href="/register.html">Start building <span aria-hidden="true">→</span></a>
+                    <a class="button hero-secondary-action" href="#overview">Watch 1-minute overview</a>
                 </div>
-                <ul class="landing-highlights" aria-label="Product highlights">
-                    <li>Strategies</li>
-                    <li>Indicators</li>
-                    <li>Existing code</li>
-                    <li>Saved projects</li>
+                <ul class="landing-highlights" aria-label="Pricing and ownership highlights">
+                    <li>No subscription</li>
+                    <li>Top up from £1</li>
+                    <li>Keep your source code</li>
                 </ul>
             </div>
 
-            <div class="product-preview" aria-label="Example Xen workspace">
-                <div class="preview-topbar">
-                    <div class="preview-brand">
-                        <span class="brand-mark">X</span>
-                        <strong>XEN</strong>
-                        <small>NINJATRADER</small>
-                    </div>
-                    <span class="preview-credit">Credit: £9.84</span>
+            <div class="product-preview" aria-label="Example Xen project workflow">
+                <div class="preview-browser-bar">
+                    <span class="preview-dot red"></span><span class="preview-dot amber"></span><span class="preview-dot green"></span>
+                    <span class="preview-address">NinjaTrader Xen · Build Strategy</span>
+                    <span class="preview-credit">Credit £9.84</span>
+                </div>
+                <div class="preview-flow">
+                    <div class="preview-flow-step complete"><span>01</span><strong>Trading idea</strong><small>Defined</small></div>
+                    <div class="preview-flow-line"></div>
+                    <div class="preview-flow-step active"><span>02</span><strong>Build Plan</strong><small>3 stages</small></div>
+                    <div class="preview-flow-line"></div>
+                    <div class="preview-flow-step"><span>03</span><strong>NinjaScript</strong><small>Ready</small></div>
+                    <div class="preview-flow-line"></div>
+                    <div class="preview-flow-step"><span>04</span><strong>Verify</strong><small>Checked</small></div>
                 </div>
                 <div class="preview-layout">
-                    <div class="preview-tasks">
-                        <span class="preview-label">PROJECT TYPE</span>
-                        <strong>NinjaScript workflow</strong>
-                        <div class="preview-task active">Build Strategy</div>
-                        <div class="preview-task">Build Indicator</div>
-                        <div class="preview-task">Existing Strategy</div>
-                        <div class="preview-task">Existing Indicator</div>
-                    </div>
+                    <aside class="preview-tasks">
+                        <span class="preview-label">BUILD PLAN</span>
+                        <strong>EMA trend strategy</strong>
+                        <div class="preview-task complete"><span>✓</span> Core signals</div>
+                        <div class="preview-task active"><span>2</span> Risk controls</div>
+                        <div class="preview-task"><span>3</span> Session rules</div>
+                    </aside>
                     <div class="preview-workspace">
-                        <span class="preview-label">ACTIVE WORKSPACE</span>
-                        <h2>Build Strategy</h2>
-                        <div class="preview-message">
-                            <span>YOU</span>
-                            Build an EMA crossover strategy with an ATR stop and
-                            configurable position size.
-                        </div>
-                        <div class="preview-code">
-                            <div><span>protected override void</span> OnBarUpdate()</div>
-                            <div>{</div>
-                            <div>&nbsp;&nbsp;if (CrossAbove(FastEma, SlowEma, 1))</div>
-                            <div>&nbsp;&nbsp;&nbsp;&nbsp;EnterLong(DefaultQuantity);</div>
-                            <div>}</div>
-                        </div>
+                        <div class="preview-workspace-heading"><div><span class="preview-label">CURRENT STAGE</span><h2>Add ATR risk controls</h2></div><span class="preview-status">Building</span></div>
+                        <div class="preview-message"><span>YOU</span>Add a configurable ATR stop, profit target and daily loss limit.</div>
+                        <div class="preview-code"><div><span>protected override void</span> OnBarUpdate()</div><div>{</div><div>&nbsp;&nbsp;if (CrossAbove(FastEma, SlowEma, 1))</div><div>&nbsp;&nbsp;{</div><div class="code-added">+ &nbsp;&nbsp;SetStopLoss(CalculationMode.Ticks, atrStop);</div><div>&nbsp;&nbsp;&nbsp;&nbsp;EnterLong(DefaultQuantity);</div><div>&nbsp;&nbsp;}</div><div>}</div></div>
+                        <div class="preview-verification"><span>✓</span><div><strong>Requirements verified</strong><small>ATR stop · Profit target · Daily loss limit</small></div></div>
                     </div>
                 </div>
             </div>
         </section>
 
-        <section class="landing-section landing-video-section" id="overview">
-            <div class="landing-video-heading">
-                <div>
-                    <p class="eyebrow">One-minute product overview</p>
-                    <h2>See Xen in action.</h2>
-                </div>
-                <div class="landing-video-intro">
-                    <p>
-                        See how Xen turns plain-English trading ideas into NinjaScript,
-                        plans complex projects, checks generated code and helps repair
-                        build errors.
-                    </p>
-                    <a class="button primary landing-primary-action" href="/register.html">Start building</a>
-                </div>
+        <section class="landing-proof" aria-label="Product capabilities">
+            <div><strong>Strategies</strong><span>Build from plain English</span></div>
+            <div><strong>Indicators</strong><span>Create plots and signals</span></div>
+            <div><strong>Existing code</strong><span>Explain, change and repair</span></div>
+            <div><strong>Conversions</strong><span>Bring tools to NinjaTrader</span></div>
+        </section>
+
+        <section class="landing-section signature-feature" id="planner">
+            <div class="signature-copy">
+                <p class="eyebrow">Built-in Build Planner</p>
+                <h2>Complex ideas become <em>clear build steps.</em></h2>
+                <p>Large trading projects fail when too much is attempted in one prompt. Xen asks the questions that matter, identifies assumptions and creates an ordered plan you can build and test in stages.</p>
+                <ol class="signature-steps">
+                    <li><span>01</span><div><strong>Clarify the specification</strong><p>Answer up to three focused questions about behaviour that affects the implementation.</p></div></li>
+                    <li><span>02</span><div><strong>Receive an ordered Build Plan</strong><p>Turn the idea into focused prompts with dependencies and assumptions made clear.</p></div></li>
+                    <li><span>03</span><div><strong>Build and test progressively</strong><p>Complete each stage, compile in NinjaTrader and continue without losing project context.</p></div></li>
+                </ol>
             </div>
-            <div class="landing-video-frame">
-                <iframe
-                    src="https://www.youtube-nocookie.com/embed/8rbgZM8T9og?rel=0"
-                    title="NinjaTrader Xen product overview"
-                    loading="lazy"
-                    referrerpolicy="strict-origin-when-cross-origin"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowfullscreen></iframe>
+            <div class="planner-preview" aria-label="Example Xen Build Plan">
+                <div class="planner-preview-head"><div><span class="preview-label">XEN BUILD PLANNER</span><strong>Opening range breakout</strong></div><span>3 stages</span></div>
+                <div class="planner-question"><small>CLARIFYING QUESTION</small><strong>How should the strategy behave after the daily loss limit is reached?</strong><p>Disable new entries until the next trading session.</p></div>
+                <div class="planner-stage complete"><span>✓</span><div><small>STAGE 1</small><strong>Session range and entry signals</strong></div><em>Ready</em></div>
+                <div class="planner-stage active"><span>2</span><div><small>STAGE 2</small><strong>Stops, targets and position sizing</strong></div><em>Next</em></div>
+                <div class="planner-stage"><span>3</span><div><small>STAGE 3</small><strong>Daily limits and trade management</strong></div><em>Planned</em></div>
             </div>
         </section>
 
         <section class="landing-section" id="features">
-            <div class="section-heading">
-                <p class="eyebrow">Available now</p>
-                <h2>A purpose-built workspace for NinjaScript</h2>
-                <p>
-                    The current Xen beta focuses on the core development loop:
-                    describe, generate, review and improve.
-                </p>
+            <div class="section-heading centered-heading">
+                <p class="eyebrow">More than code generation</p>
+                <h2>A complete NinjaScript workflow.</h2>
+                <p>Move from a rough idea to source you can review, compile and test—without losing the reasoning behind the project.</p>
             </div>
-            <div class="landing-card-grid">
-                <article class="landing-card">
-                    <span class="card-number">01</span>
-                    <h3>Build strategies</h3>
-                    <p>Define entries, exits, risk controls and configurable parameters. Xen turns the specification into structured NinjaScript strategy code.</p>
+            <div class="feature-bento">
+                <article class="feature-card feature-card-wide verification-card">
+                    <div class="feature-card-copy"><span class="feature-kicker">Requirements Verification</span><h3>Check the result against what you asked for.</h3><p>Xen audits the latest complete source against your original request or active Build Plan, then identifies implemented, partial and missing requirements.</p></div>
+                    <div class="verification-list"><div class="passed"><span>✓</span><strong>Entry rules</strong><small>Implemented</small></div><div class="passed"><span>✓</span><strong>ATR risk controls</strong><small>Implemented</small></div><div class="partial"><span>!</span><strong>Session reset</strong><small>Review suggested</small></div></div>
                 </article>
-                <article class="landing-card">
-                    <span class="card-number">02</span>
-                    <h3>Create indicators</h3>
-                    <p>Explain the calculations, plots and signals you need and generate a NinjaTrader indicator as readable C# source.</p>
-                </article>
-                <article class="landing-card">
-                    <span class="card-number">03</span>
-                    <h3>Improve existing code</h3>
-                    <p>Paste an existing strategy or indicator and ask Xen to explain, modify or repair the source while retaining the project context.</p>
-                </article>
-                <article class="landing-card">
-                    <span class="card-number">04</span>
-                    <h3>Work iteratively</h3>
-                    <p>Continue the conversation, request precise revisions and save the resulting project so you can return to it later.</p>
-                </article>
-                <article class="landing-card">
-                    <span class="card-number">05</span>
-                    <h3>Choose your AI model</h3>
-                    <p>Select from supported coding and reasoning models for each project, balancing capability, response time and usage cost.</p>
-                </article>
-                <article class="landing-card">
-                    <span class="card-number">06</span>
-                    <h3>Pay for what you use</h3>
-                    <p>See your credit balance in the workspace, receive low-credit warnings and top up securely from £1 with no subscription.</p>
-                </article>
+                <article class="feature-card"><span class="feature-icon">&lt;/&gt;</span><h3>Build new tools</h3><p>Create strategies and indicators with readable NinjaScript source and configurable parameters.</p></article>
+                <article class="feature-card"><span class="feature-icon">↻</span><h3>Improve existing code</h3><p>Paste or upload a project to explain, modify or repair it while keeping its context.</p></article>
+                <article class="feature-card"><span class="feature-icon">⇄</span><h3>Convert platforms</h3><p>Translate C#, MetaTrader or Pine Script tools into NinjaTrader 8 where the APIs support an equivalent.</p></article>
+                <article class="feature-card"><span class="feature-icon">◇</span><h3>Choose your model</h3><p>Select a supported coding or reasoning model to balance capability, speed and usage cost.</p></article>
             </div>
         </section>
 
-        <section class="landing-section prompt-builder-feature">
-            <div class="prompt-builder-feature-copy">
-                <p class="eyebrow">Strategy and indicator conversion</p>
-                <h2>Bring trading tools from other platforms.</h2>
-                <p>
-                    Paste source code or upload a C#, MetaTrader or Pine Script file
-                    and Xen will convert the trading tool into NinjaTrader 8
-                    NinjaScript. The dedicated conversion tasks preserve the original
-                    behaviour where the NinjaTrader API supports an equivalent.
-                </p>
+        <section class="landing-section pricing-feature" id="pricing">
+            <div class="pricing-copy">
+                <p class="eyebrow">Pay as you go</p>
+                <h2>Use Xen when you need it. <em>Not every month.</em></h2>
+                <p>Add credit from £1 and pay for the AI usage behind your work. Your workspace shows the balance and warns you when it is running low.</p>
+                <div class="pricing-points"><span>✓ No subscription</span><span>✓ Top up securely</span><span>✓ Choose the cost of each model</span></div>
+                <a class="button primary landing-primary-action" href="/register.html">Create an account <span aria-hidden="true">→</span></a>
             </div>
-            <ol class="prompt-builder-feature-steps">
-                <li>
-                    <span>01</span>
-                    <div>
-                        <h3>Convert automated strategies</h3>
-                        <p>Preserve entries, exits, risk controls, order management, configurable inputs and calculation timing.</p>
-                    </div>
-                </li>
-                <li>
-                    <span>02</span>
-                    <div>
-                        <h3>Convert indicators</h3>
-                        <p>Translate calculations, buffers, plots, visual behaviour and parameters into a NinjaTrader indicator.</p>
-                    </div>
-                </li>
-                <li>
-                    <span>03</span>
-                    <div>
-                        <h3>Review platform differences</h3>
-                        <p>Xen explains important mappings and limitations. Compile and compare every conversion in NinjaTrader before use.</p>
-                    </div>
-                </li>
-            </ol>
+            <div class="credit-card-preview">
+                <div class="credit-card-top"><span>YOUR XEN CREDIT</span><span class="live-indicator"><i></i>Available</span></div>
+                <strong class="credit-balance">£9.84</strong>
+                <p>Use your balance across strategies, indicators, existing code and conversions.</p>
+                <div class="credit-topups"><span>£1</span><span>£5</span><span class="selected">£10</span><span>£25</span></div>
+                <div class="credit-card-bottom"><span>Secure checkout</span><strong>No recurring charge</strong></div>
+            </div>
         </section>
 
-        <section class="landing-section prompt-builder-feature">
-            <div class="prompt-builder-feature-copy">
-                <p class="eyebrow">Built-in Prompt Builder</p>
-                <h2>Plan complex builds before generating code.</h2>
-                <p>
-                    When a trading-tool idea needs more definition, Xen can ask up to
-                    three focused questions and turn the answers into an ordered Build
-                    Plan. This keeps larger NinjaScript projects clear, incremental and
-                    easier to test.
-                </p>
-            </div>
-            <ol class="prompt-builder-feature-steps">
-                <li>
-                    <span>01</span>
-                    <div>
-                        <h3>Clarify what matters</h3>
-                        <p>Xen asks only the questions that materially affect the implementation.</p>
-                    </div>
-                </li>
-                <li>
-                    <span>02</span>
-                    <div>
-                        <h3>Create a staged Build Plan</h3>
-                        <p>Receive a sequence of focused prompts, with assumptions clearly identified.</p>
-                    </div>
-                </li>
-                <li>
-                    <span>03</span>
-                    <div>
-                        <h3>Build and test in order</h3>
-                        <p>Load each prompt into Xen, then compile and test the result in NinjaTrader before continuing.</p>
-                    </div>
-                </li>
-            </ol>
-        </section>
-
-        <section class="landing-section prompt-builder-feature">
-            <div class="prompt-builder-feature-copy">
-                <p class="eyebrow">Requirements Verification</p>
-                <h2>Check the code against what you requested.</h2>
-                <p>
-                    Go beyond initial code generation with a separate requirements
-                    audit. Xen checks the latest complete NinjaScript source against
-                    your original request or active Build Plan before you compile and
-                    test it in NinjaTrader.
-                </p>
-            </div>
-            <ol class="prompt-builder-feature-steps">
-                <li>
-                    <span>01</span>
-                    <div>
-                        <h3>Verify every requirement</h3>
-                        <p>See which requirements are implemented, partially implemented or missing from the generated source.</p>
-                    </div>
-                </li>
-                <li>
-                    <span>02</span>
-                    <div>
-                        <h3>Review risks and manual tests</h3>
-                        <p>Identify NinjaScript lifecycle concerns, trading risks and behaviour that must be tested inside NinjaTrader.</p>
-                    </div>
-                </li>
-                <li>
-                    <span>03</span>
-                    <div>
-                        <h3>Prepare a focused repair</h3>
-                        <p>Turn incomplete or missing requirements into a targeted repair request without rebuilding the entire project.</p>
-                    </div>
-                </li>
-            </ol>
-        </section>
-
-        <section class="landing-section workflow-section" id="workflow">
-            <div class="section-heading">
-                <p class="eyebrow">A simple workflow</p>
-                <h2>From specification to source code</h2>
-            </div>
-            <ol class="workflow-steps">
-                <li><span>1</span><div><h3>Select a task</h3><p>Start a new strategy or indicator, or bring existing source code.</p></div></li>
-                <li><span>2</span><div><h3>Describe the behaviour</h3><p>Give Xen the trading rules, parameters and changes you require.</p></div></li>
-                <li><span>3</span><div><h3>Review and refine</h3><p>Inspect the formatted response and request further modifications.</p></div></li>
-                <li><span>4</span><div><h3>Test in NinjaTrader</h3><p>Copy the source into NinjaTrader, compile it and validate its behaviour.</p></div></li>
-            </ol>
-        </section>
-
-        <section class="landing-section model-section">
-            <div>
-                <p class="eyebrow">Model choice</p>
-                <h2>Use the right model for the work.</h2>
-            </div>
-            <p>
-                Move between supported OpenAI, Anthropic and DeepSeek models from the
-                workspace. Your selection is remembered when you return.
-            </p>
+        <section class="landing-section landing-video-section" id="overview">
+            <div class="landing-video-heading"><div><p class="eyebrow">One-minute product overview</p><h2>See the workflow in action.</h2></div><div class="landing-video-intro"><p>See how Xen turns a plain-English idea into NinjaScript, plans complex projects, checks generated code and helps repair build errors.</p><a class="button" href="/register.html">Start building</a></div></div>
+            <div class="landing-video-frame"><iframe src="https://www.youtube-nocookie.com/embed/8rbgZM8T9og?rel=0" title="NinjaTrader Xen product overview" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div>
         </section>
 
         <section class="landing-section faq-section" id="faq">
@@ -321,10 +181,10 @@
         </section>
 
         <section class="landing-cta">
-            <p class="eyebrow">NinjaTrader Xen beta</p>
-            <h2>Start your first NinjaScript project.</h2>
-            <p>Create an account, select a task and describe what you want to build.</p>
-            <a class="button primary landing-primary-action" href="/register.html">Create account</a>
+            <p class="eyebrow">Build with a clearer process</p>
+            <h2>Turn your next trading idea into NinjaScript.</h2>
+            <p>Create an account, choose a task and start with as little as £1 credit. No subscription required.</p>
+            <a class="button primary landing-primary-action" href="/register.html">Start building <span aria-hidden="true">→</span></a>
         </section>
     </main>
 

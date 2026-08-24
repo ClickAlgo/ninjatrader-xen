@@ -2342,10 +2342,15 @@ function openExistingCodeModal() {
     if (!existingCodeFileName.value)
         existingCodeFileName.value = activeTask === "existing-strategy"
             ? "Strategy.cs" : "Indicator.cs";
+    const hasCurrent = hasCurrentExistingSource();
     document.getElementById("existingCodeCurrentRole").textContent =
-        hasCurrentExistingSource() ? "Replace current source" : "Current codebase";
-    existingCodeRole.value = hasCurrentExistingSource()
+        hasCurrent ? "Replace current source" : "Current codebase";
+    existingCodeRole.value = hasCurrent
         ? "additional-source" : "current-source";
+    existingCodeRole.disabled = !hasCurrent;
+    existingCodeRole.title = hasCurrent
+        ? "Choose how this source should be used"
+        : "The first source is always saved as the Current codebase";
     existingCodeModal.hidden = false;
     document.body.classList.add("modal-open");
     window.setTimeout(() => existingCodeText.focus(), 0);
@@ -2399,10 +2404,11 @@ async function saveExistingCodeAttachment(event) {
         currentProjectTitle = taskNames[activeTask];
         updateProjectTitle();
     }
+    const hasCurrent = hasCurrentExistingSource();
     const source = {
         id: crypto.randomUUID().replaceAll("-", ""),
         fileName,
-        role: existingCodeRole.value,
+        role: hasCurrent ? existingCodeRole.value : "current-source",
         code
     };
     const sources = [...existingCodeState.sources];
@@ -2486,6 +2492,13 @@ function renderExistingCodeAttachments() {
 
 async function removeExistingCodeAttachment(sourceId) {
     if (generating || !currentProjectId) return;
+    const source = existingCodeState.sources.find(item => item.id === sourceId);
+    if (source?.role === "current-source" && existingCodeState.sources.some(
+        item => item.id !== sourceId && item.role !== "current-source")) {
+        status.textContent =
+            "Remove Merge and Example sources before removing the Current codebase.";
+        return;
+    }
     const sources = existingCodeState.sources.filter(source => source.id !== sourceId);
     status.textContent = "Removing source...";
     const response = await fetch(`/api/projects/${currentProjectId}/existing-code`, {
