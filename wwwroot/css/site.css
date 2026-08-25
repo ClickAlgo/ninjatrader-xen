@@ -2336,18 +2336,6 @@ html[data-theme="light"] .analyzer-export-guide:focus-visible {
     font-size: .82rem;
 }
 
-.composer-status-live {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-}
-
 /* Compact NinjaTrader-inspired professional workspace */
 .workspace-header {
     height: 46px;

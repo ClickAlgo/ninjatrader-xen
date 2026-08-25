@@ -2441,7 +2441,9 @@ async function saveExistingCodeAttachment(event) {
     existingCodeText.value = "";
     renderExistingCodeAttachments();
     closeExistingCodeModal();
-    status.textContent = `${sources.length} source file${sources.length === 1 ? "" : "s"} retained`;
+    status.textContent = sources.length === 1
+        ? ""
+        : `${sources.length} source files retained`;
     promptInput.focus();
 }
 
@@ -2515,7 +2517,7 @@ async function removeExistingCodeAttachment(sourceId) {
     existingCodeState = payload;
     renderExistingCodeAttachments();
     status.textContent = sources.length
-        ? `${sources.length} source file${sources.length === 1 ? "" : "s"} retained`
+        ? (sources.length === 1 ? "" : `${sources.length} source files retained`)
         : isExistingCodeTask()
             ? "Source removed · add current source before sending requirements"
             : "Source removed · upload one source file to convert";
