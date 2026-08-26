@@ -269,10 +269,7 @@ public static class ChatEndpoints
             if (retrievalPrompt.Length > 60_000)
                 retrievalPrompt = retrievalPrompt[..60_000];
 
-            IReadOnlyList<string> ragCategories = request.Task is
-                "build-strategy" or "existing-strategy" or "convert-strategy"
-                    ? ["Strategy", "Indicator"]
-                    : ["Indicator"];
+            var ragCategories = GetRagCategories(request.Task);
             rag = await knowledgeRetriever.RetrieveAsync(
                 retrievalPrompt,
                 ragCategories,
@@ -529,6 +526,11 @@ public static class ChatEndpoints
 
         await Complete(context);
     }
+
+    internal static IReadOnlyList<string> GetRagCategories(string task) =>
+        task is "build-strategy" or "existing-strategy" or "convert-strategy"
+            ? ["Strategy", "Indicator"]
+            : ["Indicator"];
 
     internal static string SelectRetrievalPrompt(
         string originalPrompt,

@@ -63,10 +63,12 @@ public sealed class NinjaTraderKnowledgeRetriever(
 
         try
         {
-            var candidates = new List<RagMatch>();
             var matchesByQuery = new List<IReadOnlyList<RagMatch>>();
-            foreach (var query in queries)
+            var focusedStrategyCandidateIds = new HashSet<int>();
+            for (var queryIndex = 0; queryIndex < queries.Count; queryIndex++)
             {
+                var query = queries[queryIndex];
+                var isOriginalQuery = queryIndex == queries.Count - 1;
                 var queryVector = await CreateEmbedding(
                     query,
                     options.EmbeddingModel,
@@ -82,28 +84,56 @@ public sealed class NinjaTraderKnowledgeRetriever(
                         category,
                         Math.Clamp(options.TopK, 1, 10),
                         options.MaxContentCharacters,
-                        cancellationToken));
+                        cancellationToken,
+                        isOriginalQuery && category.Equals(
+                            "Strategy",
+                            StringComparison.OrdinalIgnoreCase)
+                                ? focusedStrategyCandidateIds
+                                : null));
                 }
 
                 var queryMatches = MergeMatches(
                     queryCandidates,
                     Math.Clamp(options.TopK, 1, 10) *
-                    searchCategories.Length);
+                    searchCategories.Length +
+                    (searchCategories.Contains(
+                        "Strategy",
+                        StringComparer.OrdinalIgnoreCase) ? 1 : 0));
                 matchesByQuery.Add(queryMatches);
-                candidates.AddRange(queryCandidates);
+
+                if (!isOriginalQuery &&
+                    searchCategories.Contains(
+                        "Strategy",
+                        StringComparer.OrdinalIgnoreCase) &&
+                    !queryMatches.Any(match =>
+                        match.Category.Equals(
+                            "Indicator",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        match.Similarity >= options.SimilarityThreshold))
+                {
+                    var focusedStrategy = queryMatches.FirstOrDefault(match =>
+                        match.Category.Equals(
+                            "Strategy",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        !IsCanonicalStrategy(match));
+                    if (focusedStrategy is not null)
+                        focusedStrategyCandidateIds.Add(focusedStrategy.Id);
+                }
             }
 
             var focusedQueryCount = queries.Count > 1 ? queries.Count - 1 : 0;
+            var originalQueryMatches = matchesByQuery.LastOrDefault() ?? [];
             var matches = SelectDiversifiedMatches(
                 matchesByQuery.Take(focusedQueryCount).ToList(),
-                candidates,
+                originalQueryMatches,
                 Math.Clamp(options.MaxInjectedResults, 1, 3),
                 options.SimilarityThreshold,
                 searchCategories.Contains(
                     "Strategy",
                     StringComparer.OrdinalIgnoreCase)
                         ? "Strategy"
-                        : null);
+                        : null,
+                focusedStrategyCandidateIds);
             return new RagRetrieval(
                 matches,
                 matches.Any(match =>
@@ -210,7 +240,8 @@ public sealed class NinjaTraderKnowledgeRetriever(
         string category,
         int topK,
         int maxContentCharacters,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlySet<int>? additionallyIncludeIds = null)
     {
         var candidates = new List<RagMatch>();
         await using var connection = new SqlConnection(
@@ -271,6 +302,12 @@ public sealed class NinjaTraderKnowledgeRetriever(
             .OrderByDescending(candidate => candidate.Similarity)
             .Take(topK)
             .ToList();
+        if (additionallyIncludeIds is not null)
+        {
+            ranked.AddRange(candidates.Where(candidate =>
+                additionallyIncludeIds.Contains(candidate.Id) &&
+                ranked.All(match => match.Id != candidate.Id)));
+        }
         if (category.Equals("Strategy", StringComparison.OrdinalIgnoreCase))
         {
             var canonical = candidates.FirstOrDefault(IsCanonicalStrategy);
@@ -332,24 +369,27 @@ public sealed class NinjaTraderKnowledgeRetriever(
 
     internal static IReadOnlyList<RagMatch> SelectDiversifiedMatches(
         IReadOnlyList<IReadOnlyList<RagMatch>> focusedQueryMatches,
-        IEnumerable<RagMatch> allMatches,
+        IReadOnlyList<RagMatch> originalQueryMatches,
         int maximumResults,
         double similarityThreshold,
-        string? requiredCategory = null)
+        string? requiredCategory = null,
+        IReadOnlySet<int>? preferredRequiredIds = null)
     {
         maximumResults = Math.Max(1, maximumResults);
         var selected = new List<RagMatch>(maximumResults);
         var selectedIds = new HashSet<int>();
-        var mergedMatches = MergeMatches(allMatches, int.MaxValue);
 
         if (!string.IsNullOrWhiteSpace(requiredCategory))
         {
-            var categoryMatches = mergedMatches
+            var categoryMatches = originalQueryMatches
                 .Where(match => match.Category.Equals(
                     requiredCategory,
                     StringComparison.OrdinalIgnoreCase))
                 .ToList();
             var requiredMatch = categoryMatches.FirstOrDefault(match =>
+                    preferredRequiredIds?.Contains(match.Id) == true &&
+                    match.Similarity >= similarityThreshold) ??
+                categoryMatches.FirstOrDefault(match =>
                     match.Similarity >= similarityThreshold) ??
                 categoryMatches.FirstOrDefault(IsCanonicalStrategy);
             if (requiredMatch is not null)
@@ -359,18 +399,22 @@ public sealed class NinjaTraderKnowledgeRetriever(
                 selected.Add(requiredMatch);
                 selectedIds.Add(requiredMatch.Id);
             }
+
+            // Indicator references are supplemental to a qualifying primary
+            // Strategy reference, never a replacement for one.
+            if (selected.Count == 0)
+                return selected;
         }
 
         foreach (var queryMatches in focusedQueryMatches)
         {
             var match = queryMatches
                 .Where(candidate => candidate.Similarity >= similarityThreshold)
-                .OrderBy(candidate =>
-                    !string.IsNullOrWhiteSpace(requiredCategory) &&
-                    candidate.Category.Equals(
+                .Where(candidate => string.IsNullOrWhiteSpace(requiredCategory) ||
+                    !candidate.Category.Equals(
                         requiredCategory,
                         StringComparison.OrdinalIgnoreCase))
-                .ThenByDescending(candidate => candidate.Similarity)
+                .OrderByDescending(candidate => candidate.Similarity)
                 .FirstOrDefault(candidate => !selectedIds.Contains(candidate.Id));
             if (match is null)
                 continue;
@@ -378,24 +422,21 @@ public sealed class NinjaTraderKnowledgeRetriever(
             selected.Add(match);
             selectedIds.Add(match.Id);
             if (selected.Count == maximumResults)
-                return selected
-                    .OrderByDescending(candidate => candidate.Similarity)
-                    .ToList();
+                return selected;
         }
 
-        foreach (var match in mergedMatches)
+        // A non-compound request gets one clean match from the original query.
+        // Compound requests only add focused matches that clear the threshold;
+        // unused capacity is deliberately left empty.
+        if (selected.Count == 0)
         {
-            if (!selectedIds.Add(match.Id))
-                continue;
-
-            selected.Add(match);
-            if (selected.Count == maximumResults)
-                break;
+            var originalMatch = originalQueryMatches.FirstOrDefault(candidate =>
+                candidate.Similarity >= similarityThreshold);
+            if (originalMatch is not null)
+                selected.Add(originalMatch);
         }
 
-        return selected
-            .OrderByDescending(candidate => candidate.Similarity)
-            .ToList();
+        return selected;
     }
 
     private static bool IsCanonicalStrategy(RagMatch match) =>

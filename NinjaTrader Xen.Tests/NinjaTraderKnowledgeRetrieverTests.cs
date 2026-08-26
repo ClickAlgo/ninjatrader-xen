@@ -33,6 +33,16 @@ public sealed class NinjaTraderKnowledgeRetrieverTests
     }
 
     [Fact]
+    public void BuildQueries_SeparatesRsiAndBreakoutAndKeepsOriginalFallback()
+    {
+        const string prompt = "build an rsi and break out strategy";
+
+        var queries = NinjaTraderKnowledgeRetriever.BuildQueries(prompt);
+
+        Assert.Equal(["rsi", "break out", prompt], queries);
+    }
+
+    [Fact]
     public void BuildQueries_RemovesFencedSourceCodeFromEveryQuery()
     {
         const string prompt = "Repair an Aroon strategy ```csharp\nprivate EMA ema;\n``` and EMA entries";
@@ -84,9 +94,126 @@ public sealed class NinjaTraderKnowledgeRetrieverTests
             3,
             0.5);
 
-        Assert.Equal([5, 1, 2], selected.Select(match => match.Id));
+        Assert.Equal([1, 2], selected.Select(match => match.Id));
         Assert.Contains(selected, match => match.Title == "Aroon");
         Assert.Contains(selected, match => match.Title == "SMA");
+    }
+
+    [Fact]
+    public void SelectDiversifiedMatches_SimpleStrategyDoesNotAddFiller()
+    {
+        var primary = new RagMatch(1, "Break-even strategy", "", "", 0.82, "Strategy");
+        var unrelatedStrategy = new RagMatch(2, "Unrelated strategy", "", "", 0.79, "Strategy");
+        var unrelatedIndicator = new RagMatch(3, "Unrelated indicator", "", "", 0.78, "Indicator");
+
+        var selected = NinjaTraderKnowledgeRetriever.SelectDiversifiedMatches(
+            [], [primary, unrelatedStrategy, unrelatedIndicator], 3, 0.5, "Strategy");
+
+        Assert.Equal([primary], selected);
+    }
+
+    [Fact]
+    public void SelectDiversifiedMatches_UsesOriginalQueryForPrimaryAndIndicatorsForFocusedSlots()
+    {
+        var fullQueryPrimary = new RagMatch(1, "Break-even strategy", "", "", 0.71, "Strategy");
+        var focusedStrategy = new RagMatch(2, "RSI strategy", "", "", 0.96, "Strategy");
+        var rsi = new RagMatch(3, "RSI indicator", "", "", 0.91, "Indicator");
+
+        var selected = NinjaTraderKnowledgeRetriever.SelectDiversifiedMatches(
+            [[focusedStrategy, rsi]],
+            [fullQueryPrimary, rsi],
+            3,
+            0.5,
+            "Strategy");
+
+        Assert.Equal([fullQueryPrimary, rsi], selected);
+    }
+
+    [Fact]
+    public void SelectDiversifiedMatches_PrefersFocusedStrategyConceptUsingOriginalScore()
+    {
+        var genericPrimary = new RagMatch(
+            1, "Use Indicator Signals Inside a Strategy", "", "", 0.4587, "Strategy");
+        var breakout = new RagMatch(
+            2, "Trade a Breakout Above the Initial Session High", "", "", 0.4162, "Strategy");
+        var rsi = new RagMatch(
+            3, "Relative Strength Index RSI Oscillator", "", "", 0.4651, "Indicator");
+
+        var selected = NinjaTraderKnowledgeRetriever.SelectDiversifiedMatches(
+            [[rsi], [breakout]],
+            [rsi, genericPrimary, breakout],
+            3,
+            0.4,
+            "Strategy",
+            new HashSet<int> { breakout.Id });
+
+        Assert.Equal([breakout, rsi], selected);
+    }
+
+    [Fact]
+    public void SelectDiversifiedMatches_DoesNotPreferFocusedStrategyBelowOriginalThreshold()
+    {
+        var genericPrimary = new RagMatch(1, "Generic strategy", "", "", 0.46, "Strategy");
+        var weakBreakout = new RagMatch(2, "Weak breakout", "", "", 0.39, "Strategy");
+
+        var selected = NinjaTraderKnowledgeRetriever.SelectDiversifiedMatches(
+            [[weakBreakout]],
+            [genericPrimary, weakBreakout],
+            3,
+            0.4,
+            "Strategy",
+            new HashSet<int> { weakBreakout.Id });
+
+        Assert.Equal(genericPrimary, selected[0]);
+    }
+
+    [Fact]
+    public void SelectDiversifiedMatches_DoesNotInjectIndicatorsWithoutPrimaryStrategy()
+    {
+        var rsi = new RagMatch(1, "RSI indicator", "", "", 0.91, "Indicator");
+
+        var selected = NinjaTraderKnowledgeRetriever.SelectDiversifiedMatches(
+            [[rsi]], [rsi], 3, 0.5, "Strategy");
+
+        Assert.Empty(selected);
+    }
+
+    [Theory]
+    [InlineData("build-strategy")]
+    [InlineData("existing-strategy")]
+    [InlineData("convert-strategy")]
+    public void StrategyTasksShareStrategyThenIndicatorCategories(string task)
+    {
+        Assert.Equal(
+            ["Strategy", "Indicator"],
+            Endpoints.ChatEndpoints.GetRagCategories(task));
+    }
+
+    [Theory]
+    [InlineData("build-indicator")]
+    [InlineData("existing-indicator")]
+    [InlineData("convert-indicator")]
+    public void IndicatorTasksSearchOnlyIndicatorCategory(string task)
+    {
+        Assert.Equal(
+            ["Indicator"],
+            Endpoints.ChatEndpoints.GetRagCategories(task));
+    }
+
+    [Fact]
+    public void BuildReferenceContext_KeepsPrimaryStrategyFirst()
+    {
+        IReadOnlyList<RagMatch> matches =
+        [
+            new(1, "Primary strategy", "", "strategy", 0.61, "Strategy"),
+            new(2, "RSI indicator", "", "indicator", 0.93, "Indicator")
+        ];
+
+        var context = NinjaTraderKnowledgeRetriever.BuildReferenceContext(matches, 12_000);
+
+        Assert.True(
+            context.IndexOf("[Reference: Primary strategy]", StringComparison.Ordinal) <
+            context.IndexOf("[Reference: RSI indicator]", StringComparison.Ordinal));
     }
 
     [Fact]
