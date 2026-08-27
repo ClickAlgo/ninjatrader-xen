@@ -1533,6 +1533,61 @@ h1 {
     width: min(100%, 760px);
 }
 
+.account-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 28px;
+}
+
+.other-xen-products {
+    flex: 0 0 auto;
+    padding-top: 3px;
+    text-align: right;
+}
+
+.other-xen-products > span {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--muted);
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.other-xen-product-links {
+    display: grid;
+    gap: 5px;
+}
+
+.other-xen-product-links a {
+    color: var(--muted);
+    font-size: .84rem;
+    text-decoration: none;
+}
+
+.other-xen-product-links a:hover {
+    color: var(--text);
+}
+
+@media (max-width: 620px) {
+    .account-heading {
+        display: grid;
+        gap: 18px;
+    }
+
+    .other-xen-products {
+        text-align: left;
+    }
+
+    .other-xen-product-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 18px;
+    }
+}
+
 .dashboard-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

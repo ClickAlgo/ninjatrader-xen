@@ -24,8 +24,19 @@
 
     <main class="account-shell">
         <section class="account-card account-card-wide">
-            <p class="eyebrow">Your account</p>
-            <h1>NinjaTrader Xen</h1>
+            <div class="account-heading">
+                <div>
+                    <p class="eyebrow">Your account</p>
+                    <h1>NinjaTrader Xen</h1>
+                </div>
+                <nav class="other-xen-products" aria-label="Other Xen products">
+                    <span>Other Xen products</span>
+                    <div class="other-xen-product-links">
+                        <a href="https://ai.clickalgo.com" target="_blank" rel="noopener noreferrer">cTrader Xen <span aria-hidden="true">↗</span></a>
+                        <a href="https://tradingview.clickalgo.com" target="_blank" rel="noopener noreferrer">TradingView Xen <span aria-hidden="true">↗</span></a>
+                    </div>
+                </nav>
+            </div>
             <div id="accountMessage" class="form-message">Loading account…</div>
             <div id="accountData" class="account-data" hidden>
                 <div><strong>Email:</strong> <span id="accountEmail"></span></div>

@@ -50,6 +50,7 @@ let revisionTotalPages = 1;
 const revisionPageSize = 20;
 
 const lowCreditThresholdGbp = 1;
+const activeProjectStorageKey = "nx_active_saved_project_id";
 const buildPlanStorageKey = "nx_active_build_plan_v1";
 const mobileWorkspaceNoticeKey = "nx_mobile_workspace_notice_dismissed";
 const defaultModel = "gpt-5.3-codex";
@@ -160,6 +161,7 @@ renderActiveBuildPlan();
 updateTaskSpecificUi();
 updateClearInputButton();
 updateHistoryButton();
+restoreActiveProject();
 sourceFileButton.addEventListener("click", () => {
     if (isExistingCodeTask())
         openExistingCodeModal();
@@ -2031,6 +2033,7 @@ function redirectMismatchedExistingSource(source, fileName = "") {
 }
 
 function startNewProject(resetTask = true) {
+    sessionStorage.removeItem(activeProjectStorageKey);
     currentProjectId = null;
     currentProjectTitle = "";
     currentProjectPersisted = false;
@@ -4026,6 +4029,7 @@ async function saveCurrentProject(code = "") {
 
         if (response.ok) {
             currentProjectPersisted = true;
+            sessionStorage.setItem(activeProjectStorageKey, currentProjectId);
             if (latestCode) {
                 hasProjectSnapshots = true;
                 updateHistoryButton();
@@ -4612,12 +4616,44 @@ async function loadProject(projectId) {
 
         const project = await response.json();
         applyProjectToWorkspace(project);
+        sessionStorage.setItem(activeProjectStorageKey, project.projectId);
         await loadExistingCodeState();
         status.textContent = "Project loaded";
         closeProjects();
         scrollMessagesToBottom();
     } catch (error) {
         document.getElementById("projectsMessage").textContent = error.message;
+    }
+}
+
+async function restoreActiveProject() {
+    const projectId = sessionStorage.getItem(activeProjectStorageKey);
+    if (!projectId)
+        return;
+
+    try {
+        const response = await fetch(`/api/projects/${projectId}`, {
+            headers: { "Authorization": `Bearer ${token}` }
+        });
+        if (response.status === 401) {
+            sessionStorage.removeItem("nx_access_token");
+            location.replace("/login.html");
+            return;
+        }
+        if (response.status === 404) {
+            sessionStorage.removeItem(activeProjectStorageKey);
+            return;
+        }
+        if (!response.ok)
+            return;
+
+        const project = await response.json();
+        applyProjectToWorkspace(project);
+        await loadExistingCodeState();
+        scrollMessagesToBottom();
+    } catch {
+        // Keep the active project identity so a transient failure can recover
+        // on the next workspace load.
     }
 }
 
