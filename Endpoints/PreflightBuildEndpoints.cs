@@ -195,8 +195,8 @@ public static class PreflightBuildEndpoints
                 errors = result.Errors,
                 durationMilliseconds = result.DurationMilliseconds,
                 message = result.Success
-                    ? "Preflight build passed. Final compilation and testing in NinjaTrader are still required."
-                    : "Preflight build failed. Review or repair the compiler errors below."
+                    ? "Xen successfully compiled the source against the installed NinjaTrader assemblies. No build errors were found. The add-on is ready to download and install in NinjaTrader."
+                    : "Add-on build failed. Review or repair the compiler errors below."
             });
         }
         catch (OperationCanceledException)
@@ -210,9 +210,9 @@ public static class PreflightBuildEndpoints
                 exception,
                 "The NinjaTrader preflight build infrastructure failed.");
             return Results.Problem(
-                title: "Preflight build unavailable",
+                title: "Add-on build unavailable",
                 detail:
-                    "The NinjaTrader preflight build could not be completed. Please try again.",
+                    "The NinjaTrader add-on build could not be completed. Please try again.",
                 statusCode: StatusCodes.Status500InternalServerError);
         }
     }

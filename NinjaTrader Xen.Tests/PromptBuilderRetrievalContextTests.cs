@@ -454,7 +454,7 @@ public sealed class PromptBuilderRetrievalContextTests
             "isGeneratedRepair && !generatedCode",
             script);
         Assert.Contains(
-            "no complete C# file returned for Build Check",
+            "no complete C# file returned for Build Add-On",
             script);
     }
 

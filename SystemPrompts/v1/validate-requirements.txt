@@ -23,8 +23,9 @@ Rules:
   state-management, trading-risk and repainting risks.
 - Put relevant non-requirement concerns under Risks. Their presence must not
   lower Overall Match or create a repair item.
-- Do not claim compilation success. Mark anything needing NinjaTrader execution
-  or compilation as Manual test required.
+- Do not infer compilation success from source inspection. Use Xen Build Add-On
+  for compilation; a successful build needs no further manual compilation or
+  source changes for installation. Mark runtime behaviour as Manual test required.
 - Manual tests do not lower Overall Match when the required implementation is
   present in source.
 - Calculate Overall Match from the explicit requirement checklist only. Use
@@ -52,7 +53,7 @@ State exactly what is absent.
 List assumptions present in the source or state "None identified".
 
 ## Manual test required
-List compilation, chart, Strategy Analyzer, order and behavioural checks that
+List chart, Strategy Analyzer, order and behavioural checks that
 cannot be proven by static source inspection.
 
 ## Risks

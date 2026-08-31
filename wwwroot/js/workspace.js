@@ -446,22 +446,22 @@ form.addEventListener("submit", async event => {
         </div>
     `;
 
-    generating = true;
-    updateImageUploadUi();
-    sendButton.disabled = true;
-    sendButton.classList.add("loading");
-    cancelButton.disabled = false;
-    modelSelect.disabled = true;
-    promptInput.disabled = true;
-    status.textContent = "Working…";
-    scrollMessagesToBottom();
-    currentController = new AbortController();
-    const bypassedPromptBuilder = promptBuilderBypassed;
-    const completedPromptReview = promptReviewCompleted;
-    promptBuilderBypassed = false;
-    promptReviewCompleted = false;
-
     try {
+        generating = true;
+        updateImageUploadUi();
+        sendButton.disabled = true;
+        sendButton.classList.add("loading");
+        cancelButton.disabled = false;
+        modelSelect.disabled = true;
+        promptInput.disabled = true;
+        status.textContent = "Working…";
+        scrollMessagesToBottom();
+        currentController = new AbortController();
+        const bypassedPromptBuilder = promptBuilderBypassed;
+        const completedPromptReview = promptReviewCompleted;
+        promptBuilderBypassed = false;
+        promptReviewCompleted = false;
+
         const response = await fetch("/api/chat/stream", {
             method: "POST",
             headers: {
@@ -594,12 +594,12 @@ form.addEventListener("submit", async event => {
             const saved = await saveCurrentProject(completeResponseCode);
             status.textContent = isGeneratedRepair && !generatedCode
                 ? (saved
-                    ? "Repair saved · no complete C# file returned for Build Check"
+                    ? "Repair saved · no complete C# file returned for Build Add-On"
                     : "Repair response ready · no complete C# file returned")
                 : automaticBuildResult === null
                 ? (saved
-                    ? "Build Check unavailable · response saved"
-                    : "Build Check unavailable · project not saved")
+                    ? "Build Add-On unavailable · response saved; retry Build Add-On"
+                    : "Build Add-On unavailable · project not saved; retry Build Add-On")
                 : (saved ? "Saved" : "Response ready · project not saved");
         } else if (!completeResponseCode) {
             status.textContent = "Response ready";
@@ -947,7 +947,7 @@ function scrollMessagesToBottom() {
 
 function renderStructuredResponse(container, source) {
     container.textContent = "";
-    if (/^# NinjaTrader (?:Preflight Build|Build Check)\b/im.test(source)) {
+    if (/^# NinjaTrader (?:Preflight Build|Build Check|Add-On Built|Add-On Build)\b/im.test(source)) {
         renderPreflightBuildReport(container, source);
         return;
     }
@@ -979,7 +979,7 @@ function renderStructuredResponse(container, source) {
 
 function isPreflightBuildReport(turn) {
     return turn?.role === "assistant" &&
-        /^# NinjaTrader (?:Preflight Build|Build Check)\b/im.test(
+        /^# NinjaTrader (?:Preflight Build|Build Check|Add-On Built|Add-On Build)\b/im.test(
             turn.content || "");
 }
 
@@ -1124,7 +1124,7 @@ function renderPreflightBuildReport(container, source) {
 
     const title = document.createElement("div");
     title.className = "preflight-result-title";
-    title.textContent = "NinjaTrader Build Check";
+    title.textContent = passed ? "NinjaTrader Add-On Built" : "NinjaTrader Add-On Build";
 
     const diagnostics = passed ? [] : parsePreflightDiagnostics(source);
     const groups = passed ? [] : groupPreflightDiagnostics(diagnostics);
@@ -1144,14 +1144,14 @@ function renderPreflightBuildReport(container, source) {
         const success = document.createElement("p");
         success.className = "preflight-result-description";
         success.textContent =
-            "Xen checked the source against the installed NinjaTrader assemblies and found no build errors.";
+            "Xen successfully compiled the source against the installed NinjaTrader assemblies. No build errors were found.";
         container.appendChild(success);
     } else {
         if (!diagnostics.length) {
             const unavailable = document.createElement("p");
             unavailable.className = "preflight-result-description";
             unavailable.textContent =
-                "The build check failed without structured compiler diagnostics.";
+                "The add-on build failed without structured compiler diagnostics.";
             container.appendChild(unavailable);
         }
 
@@ -1192,8 +1192,8 @@ function renderPreflightBuildReport(container, source) {
     const reminder = document.createElement("p");
     reminder.className = "preflight-result-reminder";
     reminder.textContent = passed
-        ? "Final compilation and behavioural testing in NinjaTrader are still required."
-        : "The source was not executed. Repair these errors, then run the build check again.";
+        ? "The add-on is ready to download and install in NinjaTrader."
+        : "The source was not executed. Repair these errors, then run Build Add-On again.";
     container.appendChild(reminder);
 
     if (!passed && diagnostics.length) {
@@ -1660,7 +1660,7 @@ function appendResponseCodeActions(container, code) {
     const buildButton = document.createElement("button");
     buildButton.type = "button";
     buildButton.className = "code-action preflight-build-button";
-    buildButton.textContent = "Build Check";
+    buildButton.textContent = "Build Add-On";
 
     const addonNotice = document.createElement("div");
     addonNotice.className = "addon-build-notice";
@@ -1730,7 +1730,7 @@ function hasSuccessfulBuildForCode(code) {
             continue;
         if (/```(?:csharp|cs)?\s*[\s\S]*?```/i.test(turn.content || ""))
             break;
-        if (!/^# NinjaTrader (?:Preflight Build|Build Check)\b/im.test(
+        if (!/^# NinjaTrader (?:Preflight Build|Build Check|Add-On Built|Add-On Build)\b/im.test(
                 turn.content || ""))
             continue;
         passed = /^## Build passed\b/im.test(turn.content || "");
@@ -1744,33 +1744,37 @@ async function runPreflightBuild(code, button, options = {}) {
     if (preflightBuilding || (generating && !automatic))
         return null;
 
-    preflightBuilding = true;
-    if (button) {
-        button.classList.remove("needs-build-check");
-        button.disabled = true;
-        button.classList.add("is-checking");
-        button.setAttribute("aria-busy", "true");
-        button.textContent = "Checking build...";
-    }
-    if (automatic)
-        setBuildPlanStepStatus("build-checking");
-    status.textContent = automatic
-        ? "Code returned · running automatic Build Check..."
-        : "Running NinjaTrader build check...";
-
     try {
-        const response = await fetch("/api/preflight/build", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                code,
-                task: activeTask
-            })
-        });
-        const result = await response.json().catch(() => ({}));
+        preflightBuilding = true;
+        if (button) {
+            button.classList.remove("needs-build-check");
+            button.disabled = true;
+            button.classList.add("is-checking");
+            button.setAttribute("aria-busy", "true");
+            button.textContent = "Building add-on...";
+        }
+        if (automatic)
+            setBuildPlanStepStatus("build-checking");
+        status.textContent = automatic
+            ? "Code returned · running automatic Build Add-On..."
+            : "Building NinjaTrader add-on...";
+
+        const { response, result } = await withRequestTimeout(async signal => {
+            const response = await fetch("/api/preflight/build", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    code,
+                    task: activeTask
+                }),
+                signal
+            });
+            const result = await response.json().catch(() => ({}));
+            return { response, result };
+        }, 210_000, "Build Add-On timed out. Your generated code is still available; retry Build Add-On.");
         if (response.status === 401) {
             sessionStorage.removeItem("nx_access_token");
             location.replace("/login.html");
@@ -1779,22 +1783,25 @@ async function runPreflightBuild(code, button, options = {}) {
         if (!response.ok)
             throw new Error(
                 result.message ||
-                "The NinjaTrader build check could not be started.");
+                "The NinjaTrader add-on build could not be started.");
 
         renderPreflightBuildResult(result);
         if (automatic)
             setBuildPlanStepStatus(result.success ? "compiled" : "build-failed");
         status.textContent = result.success
-            ? "Build check passed · saving project..."
-            : "Build check found errors · saving diagnostics...";
+            ? "Add-on built · saving project..."
+            : "Add-on build found errors · saving diagnostics...";
         const saved = await saveCurrentProject(code);
         status.textContent = result.success
-            ? (saved ? "Build check passed and saved" : "Build check passed")
-            : (saved ? "Build errors saved" : "Build check found errors");
+            ? (saved ? "Add-on built and saved" : "Add-on built · project not saved; retry Build Add-On to save")
+            : (saved ? "Build errors saved" : "Add-on build found errors · project not saved; retry Build Add-On to save");
         return result;
     } catch (error) {
-        if (automatic)
-            setBuildPlanStepStatus("build-failed");
+        if (automatic) {
+            // A storage failure must not escape into the chat error handler,
+            // which would replace the generated response with an error.
+            try { setBuildPlanStepStatus("build-failed"); } catch { }
+        }
         status.textContent = error.message;
         return null;
     } finally {
@@ -1803,7 +1810,7 @@ async function runPreflightBuild(code, button, options = {}) {
             button.disabled = false;
             button.classList.remove("is-checking");
             button.removeAttribute("aria-busy");
-            button.textContent = "Build check";
+            button.textContent = "Build Add-On";
         }
     }
 }
@@ -1811,14 +1818,14 @@ async function runPreflightBuild(code, button, options = {}) {
 function renderPreflightBuildResult(result) {
     const errors = Array.isArray(result.errors) ? result.errors : [];
     const report = result.success
-        ? "# NinjaTrader Build Check\n\n" +
+        ? "# NinjaTrader Add-On Built\n\n" +
           "## Build passed\n\n" +
-          "Xen checked the source against the installed NinjaTrader assemblies and found no build errors.\n\n" +
-          "Final compilation and behavioural testing in NinjaTrader are still required."
-        : "# NinjaTrader Build Check\n\n" +
+          "Xen successfully compiled the source against the installed NinjaTrader assemblies. No build errors were found.\n\n" +
+          "The add-on is ready to download and install in NinjaTrader."
+        : "# NinjaTrader Add-On Build\n\n" +
           "## Build failed\n\n" +
           `${formatPreflightErrors(errors)}\n\n` +
-          "The source was not executed. Repair these errors, then run the build check again.";
+          "The source was not executed. Repair these errors, then run Build Add-On again.";
 
     history = history.filter(turn => !isPreflightBuildReport(turn));
     messages.querySelectorAll(".preflight-build-message")
@@ -1852,7 +1859,7 @@ function startPreflightRepair(errors, requestedModel = null) {
     }
 
     promptInput.value =
-        `${preflightRepairPromptPrefix} the NinjaTrader build check. ` +
+        `${preflightRepairPromptPrefix} the NinjaTrader add-on build. ` +
         "Fix the exact compiler errors below, preserve all working behaviour " +
         "and explicit requirements, and return one complete compile-ready C# " +
         "file.\n\n" +
@@ -1869,7 +1876,7 @@ function countConsecutivePreflightRepairs() {
     for (let index = history.length - 1; index >= 0; index--) {
         const turn = history[index];
         if (turn.role === "assistant" &&
-            /^# NinjaTrader (?:Preflight Build|Build Check)\s+## Build passed\b/im.test(
+            /^# NinjaTrader (?:Preflight Build|Build Check|Add-On Built|Add-On Build)\s+## Build passed\b/im.test(
                 turn.content || "")) {
             break;
         }
@@ -1886,7 +1893,7 @@ function countConsecutivePreflightRepairs() {
 
 function formatPreflightErrors(errors) {
     if (!errors.length)
-        return "- BUILD: The build check failed without a structured compiler error.";
+        return "- BUILD: The add-on build failed without a structured compiler error.";
 
     return errors.map(error => {
         const location = error.line
@@ -3135,13 +3142,13 @@ function renderActiveBuildPlan() {
         primary.disabled = true;
     } else if (state === "build-checking") {
         detail.textContent =
-            `Xen is checking Prompt ${index + 1} against the installed NinjaTrader assemblies.`;
-        primary.textContent = "Running Build Check";
+            `Xen is building the add-on for Prompt ${index + 1} against the installed NinjaTrader assemblies.`;
+        primary.textContent = "Building Add-On";
         primary.disabled = true;
     } else if (state === "build-failed") {
         const finalStep = index === plan.prompts.length - 1;
         detail.textContent =
-            "Build Check did not pass. Repair the reported errors, or continue only if the server check is incompatible with your local setup.";
+            "Build Add-On did not pass. Repair the reported errors, or continue only if the server check is incompatible with your local setup.";
         primary.textContent = finalStep
             ? "Continue anyway and finish plan"
             : `Continue anyway to Prompt ${index + 2}`;
@@ -3152,7 +3159,7 @@ function renderActiveBuildPlan() {
             ? "Indicator"
             : "Strategy";
         detail.textContent =
-            `Import the ${toolName} into NinjaTrader, confirm it compiles, and test the current features before continuing.`;
+            `Use Build Add-On for the ${toolName}, then download, install and test the current features in NinjaTrader before continuing.`;
         primary.textContent = finalStep
             ? "Finish plan"
             : `Load Prompt ${index + 2}`;
@@ -3716,7 +3723,7 @@ async function showBuildPlan(plan = getBuildPlan()) {
     const instruction = document.createElement("p");
     instruction.className = "build-plan-instruction";
     instruction.textContent =
-        "Submit prompts in order. Compile and test every stage in NinjaTrader before continuing.";
+        "Submit prompts in order. Use Build Add-On, then download, install and test each stage in NinjaTrader before continuing.";
     promptBuilderBody.appendChild(instruction);
 
     if (plan.assumptions?.length) {
@@ -3997,6 +4004,24 @@ function updateHistoryButton() {
         : "History is available after Xen saves a source snapshot";
 }
 
+// Bound the entire operation, including response-body reads. Abort the network
+// work as well as settling the caller, even if an operation ignores the signal.
+async function withRequestTimeout(operation, timeoutMs, message) {
+    const controller = new AbortController();
+    let timer;
+    const timeout = new Promise((_, reject) => {
+        timer = window.setTimeout(() => {
+            reject(new Error(message));
+            controller.abort();
+        }, timeoutMs);
+    });
+    try {
+        return await Promise.race([operation(controller.signal), timeout]);
+    } finally {
+        window.clearTimeout(timer);
+    }
+}
+
 async function saveCurrentProject(code = "") {
     if (!currentProjectId || history.length < 2)
         return false;
@@ -4011,7 +4036,7 @@ async function saveCurrentProject(code = "") {
     history = compactPreflightBuildHistory(history);
 
     try {
-        const response = await fetch("/api/projects", {
+        const response = await withRequestTimeout(signal => fetch("/api/projects", {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${token}`,
@@ -4024,8 +4049,9 @@ async function saveCurrentProject(code = "") {
                 model: modelSelect.value,
                 messages: history,
                 latestCode: latestCode || null
-            })
-        });
+            }),
+            signal
+        }), 30_000, "Project saving timed out.");
 
         if (response.ok) {
             currentProjectPersisted = true;

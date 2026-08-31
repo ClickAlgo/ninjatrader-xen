@@ -29,7 +29,7 @@ public sealed partial class NinjaTraderPreflightCompiler
         var options = _options.CurrentValue;
         if (!options.Enabled)
         {
-            error = "NinjaTrader preflight builds are disabled.";
+            error = "NinjaTrader add-on builds are disabled.";
             return false;
         }
 
@@ -151,7 +151,7 @@ public sealed partial class NinjaTraderPreflightCompiler
 
             using var process = Process.Start(startInfo)
                 ?? throw new InvalidOperationException(
-                    "The NinjaTrader preflight build process could not be started.");
+                    "The NinjaTrader add-on build process could not be started.");
             var standardOutput = process.StandardOutput.ReadToEndAsync();
             var standardError = process.StandardError.ReadToEndAsync();
 
@@ -182,7 +182,7 @@ public sealed partial class NinjaTraderPreflightCompiler
                         null,
                         null,
                         "TIMEOUT",
-                        "The NinjaTrader preflight build timed out."));
+                        "The NinjaTrader add-on build timed out."));
             }
 
             var combinedOutput =
@@ -218,7 +218,7 @@ public sealed partial class NinjaTraderPreflightCompiler
                     null,
                     null,
                     "BUILD",
-                    "The preflight build failed without a structured compiler error."));
+                    "The add-on build failed without a structured compiler error."));
             }
 
             return new PreflightBuildResult(

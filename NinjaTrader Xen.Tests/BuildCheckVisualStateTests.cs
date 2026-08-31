@@ -23,7 +23,7 @@ public sealed class BuildCheckVisualStateTests
         Assert.Contains("@keyframes build-check-spinner", styles);
         Assert.Contains("@keyframes build-check-glow", styles);
         Assert.Contains("background: linear-gradient(135deg, #1c6a45, #164d35);", styles);
-        Assert.Contains("button.textContent = \"Checking build...\"", script);
+        Assert.Contains("button.textContent = \"Building add-on...\"", script);
         Assert.Contains("button.setAttribute(\"aria-busy\", \"true\")", script);
         Assert.Contains("button.disabled = true", script);
     }
