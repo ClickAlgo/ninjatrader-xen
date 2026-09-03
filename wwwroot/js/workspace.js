@@ -953,6 +953,12 @@ function renderStructuredResponse(container, source) {
     }
 
     const fencePattern = /```(?:csharp|cs)?\s*([\s\S]*?)```/gi;
+    const unfencedCode = extractUnfencedNinjaScript(source);
+    if (unfencedCode) {
+        appendCodeBlock(container, unfencedCode);
+        appendResponseCodeActions(container, unfencedCode);
+        return;
+    }
     let cursor = 0;
     let match;
     const generatedCode = [];
@@ -3227,10 +3233,9 @@ function getLatestGeneratedCode() {
     for (let index = history.length - 1; index >= 0; index -= 1) {
         const turn = history[index];
         if (turn.role === "assistant") {
-            const blocks = [...turn.content.matchAll(
-                /```(?:csharp|cs)?\s*([\s\S]*?)```/gi)];
-            if (blocks.length)
-                return blocks.at(-1)[1].trim();
+            const responseCode = extractLatestCodeBlock(turn.content);
+            if (responseCode)
+                return responseCode;
         }
 
         if (turn.role === "user") {
@@ -3246,7 +3251,73 @@ function getLatestGeneratedCode() {
 function extractLatestCodeBlock(text) {
     const blocks = [...(text || "").matchAll(
         /```(?:csharp|cs)?\s*([\s\S]*?)```/gi)];
-    return blocks.length ? blocks.at(-1)[1].trim() : "";
+    return blocks.length
+        ? blocks.at(-1)[1].trim()
+        : extractUnfencedNinjaScript(text);
+}
+
+function extractUnfencedNinjaScript(text) {
+    const candidate = (text || "").trim();
+    if (!candidate || candidate.includes("```") ||
+        !looksLikeCompleteNinjaScript(candidate)) {
+        return "";
+    }
+
+    // Only recover a response that begins like a source file. This avoids
+    // treating ordinary explanations containing small code fragments as the
+    // downloadable current implementation.
+    if (!/^(?:using\b|namespace\b|#(?:nullable|pragma|region)\b|\/\/|\/\*|\[|(?:public|internal)\s+(?:(?:sealed|partial|abstract)\s+)*class\b)/.test(candidate))
+        return "";
+
+    return hasBalancedCodeBraces(candidate) ? candidate : "";
+}
+
+function hasBalancedCodeBraces(source) {
+    let depth = 0;
+    let sawBrace = false;
+    let quote = "";
+    let lineComment = false;
+    let blockComment = false;
+
+    for (let index = 0; index < source.length; index += 1) {
+        const character = source[index];
+        const next = source[index + 1] || "";
+        if (lineComment) {
+            if (character === "\n") lineComment = false;
+            continue;
+        }
+        if (blockComment) {
+            if (character === "*" && next === "/") {
+                blockComment = false;
+                index += 1;
+            }
+            continue;
+        }
+        if (quote) {
+            if (character === "\\") {
+                index += 1;
+            } else if (character === quote) {
+                quote = "";
+            }
+            continue;
+        }
+        if (character === "/" && next === "/") {
+            lineComment = true;
+            index += 1;
+        } else if (character === "/" && next === "*") {
+            blockComment = true;
+            index += 1;
+        } else if (character === "\"" || character === "'") {
+            quote = character;
+        } else if (character === "{") {
+            sawBrace = true;
+            depth += 1;
+        } else if (character === "}" && --depth < 0) {
+            return false;
+        }
+    }
+
+    return sawBrace && depth === 0 && !quote && !blockComment;
 }
 
 function isGeneratedRepairPrompt(prompt) {

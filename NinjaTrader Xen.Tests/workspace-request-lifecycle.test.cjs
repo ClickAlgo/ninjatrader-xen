@@ -15,6 +15,50 @@ function section(start, end) {
 const code = 'namespace NinjaTrader.NinjaScript.Indicators { public class Example : Indicator {} }';
 const assistantText = '```csharp\n' + code + '\n```';
 const flush = () => new Promise(resolve => setImmediate(resolve));
+
+test('unfenced complete NinjaScript becomes the latest copyable source', () => {
+    const completeCode = `using NinjaTrader.NinjaScript;
+namespace NinjaTrader.NinjaScript.Indicators
+{
+    public class RelativeVolume : Indicator
+    {
+        protected override void OnStateChange() { }
+    }
+}`;
+    const context = {
+        history: [
+            { role: 'assistant', content: '```csharp\nold code\n```' },
+            { role: 'assistant', content: completeCode }
+        ],
+        looksLikeCompleteNinjaScript(value) {
+            return value.includes('class RelativeVolume : Indicator') &&
+                value.includes('OnStateChange');
+        }
+    };
+    vm.runInNewContext(
+        section('function getLatestGeneratedCode()', 'function isGeneratedRepairPrompt'),
+        context);
+
+    assert.equal(context.getLatestGeneratedCode(), completeCode);
+    assert.equal(context.extractLatestCodeBlock(completeCode), completeCode);
+});
+
+test('unfenced explanations and incomplete source are not treated as code', () => {
+    const context = {
+        looksLikeCompleteNinjaScript(value) {
+            return value.includes('class RelativeVolume : Indicator') &&
+                value.includes('OnStateChange');
+        }
+    };
+    vm.runInNewContext(
+        section('function extractLatestCodeBlock', 'function isGeneratedRepairPrompt'),
+        context);
+
+    assert.equal(context.extractLatestCodeBlock(
+        'Here is the change: class RelativeVolume : Indicator { void OnStateChange() {} }'), '');
+    assert.equal(context.extractLatestCodeBlock(
+        'public class RelativeVolume : Indicator { void OnStateChange() { }'), '');
+});
 function element() {
     const classes = new Set();
     return {

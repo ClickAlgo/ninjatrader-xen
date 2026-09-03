@@ -68,6 +68,18 @@ public sealed class ProjectPersistenceTests
     }
 
     [Fact]
+    public void Workspace_RecoversCompleteUnfencedNinjaScriptAsLatestCode()
+    {
+        var script = ReadWorkspaceScript();
+
+        Assert.Contains("const unfencedCode = extractUnfencedNinjaScript(source);", script);
+        Assert.Contains("appendResponseCodeActions(container, unfencedCode);", script);
+        Assert.Contains(": extractUnfencedNinjaScript(text);", script);
+        Assert.Contains("function hasBalancedCodeBraces(source)", script);
+        Assert.Contains("const responseCode = extractLatestCodeBlock(turn.content);", script);
+    }
+
+    [Fact]
     public void Workspace_UsesFirstCodeRequestForInitialProjectTitle()
     {
         var script = ReadWorkspaceScript();
