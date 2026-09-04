@@ -753,26 +753,36 @@ function showTrialWelcome() {
 }
 
 function showNoTrialCreditNotice(subscriberId) {
-    const seenKey = `nx_no_trial_credit_notice_${subscriberId}`;
+    const seenKey = `nx_no_trial_credit_notice_v2_${subscriberId}`;
     if (localStorage.getItem(seenKey) === "1")
         return;
 
     const banner = document.createElement("aside");
     banner.className = "trial-welcome trial-unavailable";
+    banner.setAttribute("role", "status");
 
     const copy = document.createElement("div");
     const heading = document.createElement("strong");
-    heading.textContent = "Welcome to Xen";
+    heading.textContent = "Free trial credit wasn’t added";
     const detail = document.createElement("p");
     detail.textContent =
-        "Free trial credit is not available for this account. " +
-        "You can still use Xen by topping up your balance from £1.";
-    copy.append(heading, detail);
+        "Trial credit may be unavailable when using a VPN, proxy or certain shared networks, " +
+        "or if a trial has already been claimed.";
+    const nextStep = document.createElement("p");
+    nextStep.textContent =
+        "Try turning off your VPN or proxy, then sign out and sign in again. " +
+        "You can also purchase credit to continue.";
+    const help = document.createElement("a");
+    help.href = "https://help.clickalgo.com/ninjatrader-xen/credits-account/#trial-credit";
+    help.target = "_blank";
+    help.rel = "noopener noreferrer";
+    help.textContent = "Why didn’t I receive free trial credit?";
+    copy.append(heading, detail, nextStep, help);
 
     const dismiss = document.createElement("button");
     dismiss.type = "button";
     dismiss.className = "trial-welcome-close";
-    dismiss.setAttribute("aria-label", "Dismiss welcome message");
+    dismiss.setAttribute("aria-label", "Dismiss trial credit guidance");
     dismiss.textContent = "×";
     dismiss.addEventListener("click", () => banner.remove());
 
@@ -4894,8 +4904,17 @@ async function loadBalance() {
             return;
         const result = await response.json();
         updateBalance(result.balanceGbp);
-        if (Number(result.balanceGbp) <= 0)
-            showNoTrialCreditNotice(result.subscriberId);
+        if (Number(result.balanceGbp) <= 0) {
+            // Existing credit history means credit was spent or expired, not withheld.
+            const historyResponse = await fetch("/api/account/transactions?take=1", {
+                headers: { "Authorization": `Bearer ${token}` }
+            }).catch(() => null);
+            if (historyResponse?.ok) {
+                const history = await historyResponse.json().catch(() => null);
+                if (Array.isArray(history?.transactions) && history.transactions.length === 0)
+                    showNoTrialCreditNotice(result.subscriberId);
+            }
+        }
     } catch {
         document.getElementById("workspaceBalance").textContent = "Credit unavailable";
     }

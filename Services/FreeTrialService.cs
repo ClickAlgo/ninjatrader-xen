@@ -391,8 +391,8 @@ public sealed class FreeTrialService(
         var ip = SanitizeIp(rawIp);
         var useCallerIp = string.IsNullOrWhiteSpace(ip) || IsPrivateOrLocalIp(ip);
         var address = useCallerIp
-            ? $"?key={Uri.EscapeDataString(proxyOptions.ApiKey)}&vpn=1&asn=1&risk=1"
-            : $"{Uri.EscapeDataString(ip!)}/?key={Uri.EscapeDataString(proxyOptions.ApiKey)}&vpn=1&asn=1&risk=1";
+            ? $"?key={Uri.EscapeDataString(proxyOptions.ApiKey)}"
+            : $"{Uri.EscapeDataString(ip!)}/?key={Uri.EscapeDataString(proxyOptions.ApiKey)}";
 
         try
         {
@@ -408,22 +408,23 @@ public sealed class FreeTrialService(
 
             using var document = JsonDocument.Parse(
                 await response.Content.ReadAsStringAsync(cancellationToken));
-            var record = FindAddressRecord(document.RootElement);
+            var record = FindAddressRecord(document.RootElement, useCallerIp ? null : ip);
             if (!record.HasValue)
                 return (false, null);
 
-            var countryCode =
-                ReadString(record.Value, "isocode") ??
-                ReadString(record.Value, "country_code");
-            var proxy = ReadString(record.Value, "proxy");
-            var type = ReadString(record.Value, "type") ?? "";
-            var risk = ReadDecimal(record.Value, "risk");
+            var detections = record.Value.GetProperty("detections");
+            var countryCode = ReadString(record.Value.GetProperty("location"), "country_code");
+            var type = ReadString(record.Value.GetProperty("network"), "type") ?? "";
+            var risk = ReadDecimal(detections, "risk");
             var blocked =
-                string.Equals(proxy, "yes", StringComparison.OrdinalIgnoreCase) ||
-                type.Contains("VPN", StringComparison.OrdinalIgnoreCase) ||
-                type.Contains("TOR", StringComparison.OrdinalIgnoreCase) ||
+                ReadBoolean(detections, "proxy") ||
+                ReadBoolean(detections, "vpn") ||
+                ReadBoolean(detections, "tor") ||
+                ReadBoolean(detections, "hosting") ||
+                ReadBoolean(detections, "anonymous") ||
+                ReadBoolean(detections, "compromised") ||
+                ReadBoolean(detections, "scraper") ||
                 type.Contains("HOSTING", StringComparison.OrdinalIgnoreCase) ||
-                type.Contains("PROXY", StringComparison.OrdinalIgnoreCase) ||
                 risk >= proxyOptions.RiskThreshold ||
                 trialOptions.BlockedCountryCodes.Any(code =>
                     string.Equals(
@@ -442,15 +443,24 @@ public sealed class FreeTrialService(
         }
     }
 
-    private static JsonElement? FindAddressRecord(JsonElement root)
+    private static JsonElement? FindAddressRecord(JsonElement root, string? requestedIp)
     {
         if (root.ValueKind != JsonValueKind.Object)
+            return null;
+
+        var status = ReadString(root, "status");
+        if (status is not ("ok" or "warning"))
+            return null;
+
+        var address = requestedIp ?? ReadString(root, "ip");
+        if (!IPAddress.TryParse(address, out var expectedIp))
             return null;
 
         foreach (var property in root.EnumerateObject())
         {
             if (property.Value.ValueKind == JsonValueKind.Object &&
-                !property.NameEquals("status"))
+                IPAddress.TryParse(property.Name, out var responseIp) &&
+                responseIp.Equals(expectedIp))
             {
                 return property.Value;
             }
@@ -463,6 +473,9 @@ public sealed class FreeTrialService(
         element.TryGetProperty(name, out var value)
             ? value.ToString()
             : null;
+
+    private static bool ReadBoolean(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
 
     private static decimal ReadDecimal(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) &&

@@ -1,0 +1,90 @@
+using System.Net;
+using System.Reflection;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using NinjaTrader_Xen.Services;
+
+// Invoke the real private network method, without calling the grant/database path.
+var configPath = Path.GetFullPath(args.Length > 0 ? args[0] : "appsettings.json");
+var ip = args.Length > 1 ? args[1] : "104.255.98.77";
+var fixture = args.Length > 2 ? args[2] : null;
+if (!IPAddress.TryParse(ip, out _)) throw new ArgumentException("A valid IP is required.");
+var configuration = new ConfigurationBuilder()
+    .AddJsonFile(configPath, optional: false)
+    .AddEnvironmentVariables()
+    .Build();
+var key = configuration["ProxyCheck:ApiKey"] ?? "";
+if (string.IsNullOrWhiteSpace(key) && fixture is null)
+{
+    Console.Error.WriteLine("No ProxyCheck API key configured. No request made.");
+    return 2;
+}
+if (fixture is not null && string.IsNullOrWhiteSpace(key))
+    configuration["ProxyCheck:ApiKey"] = key = "offline-fixture";
+string Redact(string value)
+{
+    if (key.Length > 0)
+        value = value.Replace(key, "[REDACTED]").Replace(Uri.EscapeDataString(key), "[REDACTED]");
+    return Regex.Replace(value, @"(?i)(key=)[^&\s""<>]+", "$1[REDACTED]");
+}
+var handler = new CaptureHandler(fixture, Redact);
+using var client = new HttpClient(handler)
+{
+    BaseAddress = new Uri("https://proxycheck.io/v3/"),
+    Timeout = TimeSpan.FromSeconds(6)
+};
+client.DefaultRequestHeaders.UserAgent.ParseAdd("ClickAlgo-NinjaTrader-Xen/1.0");
+using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new SafeLoggerProvider(Redact)));
+var service = new FreeTrialService(configuration, new SingleClientFactory(client), null!,
+    loggerFactory.CreateLogger<FreeTrialService>());
+var options = configuration.GetSection("FreeTrial").Get<FreeTrialOptions>() ?? new();
+Console.WriteLine($"UTC: {DateTime.UtcNow:O}\nIP: {ip}\nMode: {(fixture is null ? "LIVE" : "OFFLINE FIXTURE")}");
+Console.WriteLine($"Risk threshold: {configuration.GetValue("ProxyCheck:RiskThreshold", 50m)}");
+Console.WriteLine($"Blocked countries: {string.Join(",", options.BlockedCountryCodes)}");
+Console.WriteLine($"Source assembly: {typeof(FreeTrialService).Assembly.Location}");
+var method = typeof(FreeTrialService).GetMethod("CheckNetworkAsync", BindingFlags.Instance | BindingFlags.NonPublic)
+    ?? throw new MissingMethodException("CheckNetworkAsync not found.");
+var task = (Task<(bool Blocked, string? CountryCode)>)method.Invoke(service,
+    new object?[] { ip, options, CancellationToken.None })!;
+var result = await task;
+Console.WriteLine($"Network decision: {(result.Blocked ? "BLOCK" : "NOT BLOCKED")}\nCountry: {result.CountryCode ?? "unknown"}");
+Console.WriteLine("This tests network screening only. It does not grant credit or access the database.");
+if (!handler.SuccessfulResponse)
+    Console.WriteLine("No successful HTTP response: NOT BLOCKED may reflect fail-open behaviour, not a safe IP.");
+return handler.SuccessfulResponse ? 0 : 2;
+
+sealed class SingleClientFactory(HttpClient client) : IHttpClientFactory
+{
+    public HttpClient CreateClient(string name) => name == "proxy-check" ? client : throw new InvalidOperationException(name);
+}
+sealed class CaptureHandler(string? fixture, Func<string, string> redact) : DelegatingHandler(new HttpClientHandler())
+{
+    public bool SuccessfulResponse { get; private set; }
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+    {
+        Console.WriteLine("Request: " + redact(request.RequestUri!.ToString()));
+        var response = fixture is null
+            ? await base.SendAsync(request, token)
+            : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(await File.ReadAllTextAsync(fixture, token)) };
+        SuccessfulResponse = response.IsSuccessStatusCode;
+        Console.WriteLine($"HTTP: {(int)response.StatusCode}\nResponse body:");
+        Console.WriteLine(redact(await response.Content.ReadAsStringAsync(token)));
+        return response;
+    }
+}
+sealed class SafeLoggerProvider(Func<string, string> redact) : ILoggerProvider
+{
+    public ILogger CreateLogger(string categoryName) => new SafeLogger(redact);
+    public void Dispose() { }
+    sealed class SafeLogger(Func<string, string> redact) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel level) => true;
+        public void Log<TState>(LogLevel level, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Console.WriteLine(redact($"{level}: {formatter(state, exception)}"));
+            if (exception is not null) Console.WriteLine(redact(exception.GetType().Name + ": " + exception.Message));
+        }
+    }
+}

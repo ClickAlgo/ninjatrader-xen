@@ -1844,6 +1844,29 @@ tbody tr:last-child td {
     color: #d2c3a8;
 }
 
+.trial-unavailable p + p {
+    margin-top: 8px;
+}
+
+.trial-unavailable a {
+    display: inline-block;
+    margin-top: 12px;
+    color: #f5cb79;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+html[data-theme="light"] .trial-unavailable strong,
+html[data-theme="light"] .trial-unavailable a {
+    color: #754900;
+}
+
+html[data-theme="light"] .trial-welcome.trial-unavailable p {
+    color: #624f32;
+}
+
 .trial-welcome.mobile-workspace-notice {
     border-color: rgba(214, 157, 45, .62);
     background: rgba(181, 119, 24, .11);

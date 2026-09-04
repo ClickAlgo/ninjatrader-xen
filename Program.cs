@@ -94,7 +94,7 @@ builder.Services.AddHttpClient("mail-check", client =>
 });
 builder.Services.AddHttpClient("proxy-check", client =>
 {
-    client.BaseAddress = new Uri("https://proxycheck.io/v2/");
+    client.BaseAddress = new Uri("https://proxycheck.io/v3/");
     client.Timeout = TimeSpan.FromSeconds(6);
     client.DefaultRequestHeaders.UserAgent.ParseAdd(
         "ClickAlgo-NinjaTrader-Xen/1.0");

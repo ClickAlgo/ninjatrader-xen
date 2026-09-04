@@ -18,5 +18,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\NinjaTrader Xen.csproj" />
+    <Compile Remove="ProxyCheckHarness\**\*.cs" />
   </ItemGroup>
 </Project>
