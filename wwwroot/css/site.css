@@ -5790,3 +5790,39 @@ html[data-theme="light"] .existing-code-upload-button:hover:not(:disabled) {
         display: none;
     }
 }
+
+.response-code-actions .incomplete-recovery-button {
+    min-width: 210px;
+    padding: 11px 18px;
+    border-color: #f04a20;
+    color: #ffffff;
+    background: linear-gradient(135deg, #f04a20, #c92f0b);
+    box-shadow: 0 4px 14px rgba(217, 54, 15, .32);
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.response-code-actions .incomplete-recovery-button:hover:not(:disabled) {
+    border-color: #ff6a42;
+    color: #ffffff;
+    background: linear-gradient(135deg, #ff5a31, #d9360f);
+    box-shadow: 0 6px 18px rgba(217, 54, 15, .42);
+    transform: translateY(-1px);
+}
+
+.response-code-actions .incomplete-recovery-button:focus-visible {
+    outline: 3px solid rgba(255, 106, 66, .38);
+    outline-offset: 2px;
+}
+
+.response-code-actions .incomplete-recovery-button:disabled {
+    cursor: wait;
+    opacity: .65;
+}
+
+@media (max-width: 560px) {
+    .response-code-actions .incomplete-recovery-button {
+        flex-basis: 100%;
+        width: 100%;
+    }
+}

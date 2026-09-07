@@ -219,6 +219,9 @@ public sealed class SqlProjectMemoryStore(
 
         for (var index = history.Count - 1; index >= 0; index--)
         {
+            if ((history[index].Content ?? string.Empty).StartsWith(
+                    "> Xen: Response incomplete", StringComparison.Ordinal))
+                continue;
             var matches = Regex.Matches(
                 history[index].Content ?? string.Empty,
                 @"```(?:csharp|cs)?\s*([\s\S]*?)```",

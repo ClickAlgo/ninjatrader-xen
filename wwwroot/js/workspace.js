@@ -496,9 +496,19 @@ form.addEventListener("submit", async event => {
         let buffer = "";
         let assistantText = "";
         let ragDebug = null;
+        let incompleteMessage = "";
+        let streamDone = false;
 
         while (true) {
-            const { value, done } = await reader.read();
+            let chunk;
+            try {
+                chunk = await reader.read();
+            } catch (error) {
+                if (error.name === "AbortError" || !assistantText) throw error;
+                incompleteMessage = "The connection stopped before the response finished.";
+                break;
+            }
+            const { value, done } = chunk;
             if (done)
                 break;
 
@@ -512,8 +522,10 @@ form.addEventListener("submit", async event => {
                     continue;
 
                 const payload = line.slice(5).trim();
-                if (payload === "[DONE]")
+                if (payload === "[DONE]") {
+                    streamDone = true;
                     continue;
+                }
 
                 const eventData = JSON.parse(payload);
                 if (eventData.type === "response.output_text.delta") {
@@ -522,12 +534,17 @@ form.addEventListener("submit", async event => {
                     ragDebug = eventData;
                 } else if (eventData.type === "usage") {
                     updateBalance(eventData.balanceGbp);
+                } else if (eventData.type === "response.incomplete") {
+                    incompleteMessage = eventData.message;
                 } else if (eventData.type === "blocked" || eventData.type === "error") {
                     if (eventData.type === "blocked" &&
                         eventData.balanceGbp !== undefined) {
                         updateBalance(eventData.balanceGbp);
                     }
-                    throw new Error(eventData.message);
+                    if (eventData.type === "error" && assistantText)
+                        incompleteMessage = eventData.message;
+                    else
+                        throw new Error(eventData.message);
                 }
             }
         }
@@ -538,6 +555,10 @@ form.addEventListener("submit", async event => {
         if (!assistantText)
             throw new Error("The AI returned an empty response.");
 
+        if (!streamDone || responseHasIncompleteCode(assistantText))
+            incompleteMessage ||= "The response stopped before the code was complete.";
+        if (incompleteMessage)
+            assistantText = "> Xen: Response incomplete. " + incompleteMessage + "\n\n" + assistantText;
         history.push({ role: "assistant", content: assistantText });
         const responseCode = extractLatestCodeBlock(assistantText);
         const completeResponseCode = looksLikeCompleteNinjaScript(responseCode)
@@ -604,6 +625,8 @@ form.addEventListener("submit", async event => {
         } else if (!completeResponseCode) {
             status.textContent = "Response ready";
         }
+        if (incompleteMessage)
+            status.textContent = "Response incomplete · last complete code kept";
     } catch (error) {
         if (error.name === "AbortError") {
             history = previousHistory;
@@ -957,6 +980,8 @@ function scrollMessagesToBottom() {
 
 function renderStructuredResponse(container, source) {
     container.textContent = "";
+    const incomplete = source.startsWith("> Xen: Response incomplete") ||
+        responseHasIncompleteCode(source);
     if (/^# NinjaTrader (?:Preflight Build|Build Check|Add-On Built|Add-On Build)\b/im.test(source)) {
         renderPreflightBuildReport(container, source);
         return;
@@ -966,7 +991,7 @@ function renderStructuredResponse(container, source) {
     const unfencedCode = extractUnfencedNinjaScript(source);
     if (unfencedCode) {
         appendCodeBlock(container, unfencedCode);
-        appendResponseCodeActions(container, unfencedCode);
+        if (!incomplete) appendResponseCodeActions(container, unfencedCode);
         return;
     }
     let cursor = 0;
@@ -976,14 +1001,27 @@ function renderStructuredResponse(container, source) {
     while ((match = fencePattern.exec(source)) !== null) {
         appendProse(container, source.slice(cursor, match.index));
         const code = match[1].trim();
-        appendCodeBlock(container, code);
-        if (looksLikeCompleteNinjaScript(code))
+        appendCodeBlock(container, code,
+            incomplete ? "C# · Incomplete response" : "C# · NinjaScript", !incomplete);
+        if (!incomplete && looksLikeCompleteNinjaScript(code))
             generatedCode.push(code);
         cursor = match.index + match[0].length;
     }
 
-    appendProse(container, source.slice(cursor));
+    const remainder = source.slice(cursor);
+    const unfinishedFence = /```(?:csharp|cs)?[ \t]*\r?\n/i.exec(remainder);
+    if (unfinishedFence) {
+        appendProse(container, remainder.slice(0, unfinishedFence.index));
+        appendProse(container, "Response incomplete — this code is not ready to build.");
+        appendCodeBlock(container, remainder.slice(
+            unfinishedFence.index + unfinishedFence[0].length).trim(),
+            "C# · Incomplete response", false);
+    } else {
+        appendProse(container, remainder);
+    }
     decorateRequirementsMatch(container, source);
+    if (incomplete && activeTask !== "analyse-backtest")
+        appendIncompleteRecoveryAction(container, source);
     if (generatedCode.length) {
         const primaryCode = generatedCode.reduce(
             (longest, code) =>
@@ -3258,7 +3296,73 @@ function getLatestGeneratedCode() {
     return "";
 }
 
+function appendIncompleteRecoveryAction(container, source) {
+    const actions = document.createElement("div");
+    actions.className = "code-actions response-code-actions";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "code-action incomplete-recovery-button";
+    button.textContent = "Restore last snapshot";
+    button.addEventListener("click", async () => {
+        if (generating || preparingRequest || preflightBuilding) return;
+        const responseIndex = history.findLastIndex(turn => turn.role === "assistant");
+        if (!currentProjectPersisted || responseIndex < 0 ||
+            history[responseIndex].content !== source) {
+            status.textContent = "Open History to restore an older source snapshot";
+            return;
+        }
+        if (promptInput.value.trim() || pendingImage || pendingAnalyzerExports.length) {
+            status.textContent = "Send or clear your current draft before restoring the snapshot";
+            return;
+        }
+        button.disabled = true;
+        status.textContent = "Restoring last complete snapshot…";
+        try {
+            const revisionsResponse = await fetch(
+                `/api/projects/${currentProjectId}/revisions?page=1`,
+                { headers: { "Authorization": `Bearer ${token}` } });
+            const revisionsResult = await revisionsResponse.json().catch(() => ({}));
+            const latest = revisionsResult.revisions?.[0];
+            if (!revisionsResponse.ok || !latest)
+                throw new Error("No complete source snapshot is available to restore.");
+
+            const restoreResponse = await fetch(
+                `/api/projects/${currentProjectId}/revisions/${latest.revisionId}/restore`,
+                { method: "POST", headers: { "Authorization": `Bearer ${token}` } });
+            const restored = await restoreResponse.json().catch(() => ({}));
+            if (!restoreResponse.ok)
+                throw new Error(restored.detail || "Unable to restore the last snapshot.");
+
+            applyProjectToWorkspace(restored);
+            clearBuildPlan();
+            status.textContent = "Last complete snapshot restored · no AI credit used";
+            scrollMessagesToBottom();
+        } catch (error) {
+            status.textContent = error.message;
+            button.disabled = false;
+        }
+    });
+    const note = document.createElement("p");
+    note.className = "requirements-validation-note";
+    note.textContent = "Restores the last complete saved source without calling the AI model.";
+    actions.appendChild(button);
+    container.append(actions, note);
+}
+
+function responseHasIncompleteCode(text) {
+    const remaining = (text || "").replace(/```(?:csharp|cs)?\s*([\s\S]*?)```/gi,
+        (match, code) => {
+            return /\bOnStateChange\s*\(/.test(code) && !hasBalancedCodeBraces(code)
+                ? "```csharp\n" : "";
+        });
+    return /```(?:csharp|cs)?[ \t]*(?:\r?\n|$)/i.test(remaining);
+}
+
 function extractLatestCodeBlock(text) {
+    if ((text || "").startsWith("> Xen: Response incomplete"))
+        return "";
+    if (responseHasIncompleteCode(text))
+        return "";
     const blocks = [...(text || "").matchAll(
         /```(?:csharp|cs)?\s*([\s\S]*?)```/gi)];
     return blocks.length
@@ -3286,6 +3390,7 @@ function hasBalancedCodeBraces(source) {
     let depth = 0;
     let sawBrace = false;
     let quote = "";
+    let verbatim = false;
     let lineComment = false;
     let blockComment = false;
 
@@ -3304,10 +3409,13 @@ function hasBalancedCodeBraces(source) {
             continue;
         }
         if (quote) {
-            if (character === "\\") {
+            if (verbatim && character === '"' && next === '"') {
+                index += 1;
+            } else if (!verbatim && character === "\\") {
                 index += 1;
             } else if (character === quote) {
                 quote = "";
+                verbatim = false;
             }
             continue;
         }
@@ -3319,6 +3427,9 @@ function hasBalancedCodeBraces(source) {
             index += 1;
         } else if (character === "\"" || character === "'") {
             quote = character;
+            verbatim = character === '"' &&
+                (source[index - 1] === "@" ||
+                    (source[index - 1] === "$" && source[index - 2] === "@"));
         } else if (character === "{") {
             sawBrace = true;
             depth += 1;

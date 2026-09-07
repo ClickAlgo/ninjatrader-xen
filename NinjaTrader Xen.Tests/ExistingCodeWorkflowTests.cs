@@ -133,7 +133,7 @@ public sealed class ExistingCodeWorkflowTests
     {
         var script = File.ReadAllText(Path.Combine(Root, "wwwroot", "js", "workspace.js"));
 
-        Assert.Contains("if (looksLikeCompleteNinjaScript(code))", script);
+        Assert.Contains("if (!incomplete && looksLikeCompleteNinjaScript(code))", script);
         Assert.Contains("generatedCode.push(code)", script);
         Assert.DoesNotContain(
             "appendCodeBlock(container, code);\n        generatedCode.push(code);",

@@ -68,4 +68,6 @@ public sealed record AiStreamEvent(
     string? Delta,
     int InputTokens,
     int OutputTokens,
-    bool Completed);
+    bool Completed,
+    string? StopReason = null,
+    bool Incomplete = false);

@@ -6,6 +6,16 @@ namespace NinjaTrader_Xen.Tests;
 public sealed class ProjectMemoryTests
 {
     [Fact]
+    public void IncompleteResponseCannotReplacePreviousWorkingSource()
+    {
+        var old = new ChatTurn("assistant", "```csharp\nprevious complete code\n```");
+        var partial = new ChatTurn("assistant",
+            "> Xen: Response incomplete. Output limit reached.\n\n```csharp\nnew partial code\n```");
+        Assert.Equal(string.Empty, SqlProjectMemoryStore.ExtractLatestCode([partial]));
+        Assert.Equal("previous complete code", SqlProjectMemoryStore.ExtractLatestCode([old, partial]));
+    }
+
+    [Fact]
     public void CompressHistory_RetainsOnlyLatestFiveCompletedTurns()
     {
         var history = Enumerable.Range(1, 7)

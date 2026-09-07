@@ -382,6 +382,9 @@ public static class ChatEndpoints
         var outputTokens = 0;
         var generatedCharacters = 0;
         var assistantText = new StringBuilder();
+        var terminalReceived = false;
+        var incomplete = false;
+        string? stopReason = null;
         try
         {
             await foreach (var streamEvent in aiClient.StreamAsync(
@@ -406,9 +409,29 @@ public static class ChatEndpoints
 
                 if (streamEvent.Completed)
                 {
+                    terminalReceived = true;
+                    incomplete |= streamEvent.Incomplete;
+                    stopReason = streamEvent.StopReason;
                     inputTokens = streamEvent.InputTokens;
                     outputTokens = streamEvent.OutputTokens;
                 }
+            }
+            incomplete |= !terminalReceived;
+            if (incomplete)
+            {
+                var incompleteMessage = stopReason is "max_tokens" or "max_output_tokens" or "length"
+                    ? "The response reached its output limit. Ask Xen for a concise complete file."
+                    : "The response stopped before finishing. Please retry your request.";
+                logger.LogWarning(
+                    "Incomplete AI response for {ProjectId}: model {Model}, reason {StopReason}, allowance {MaximumOutputTokens}, output {OutputTokens}.",
+                    projectId, request.Model, stopReason, maximumOutputTokens, outputTokens);
+                await WriteEvent(context, new
+                {
+                    type = "response.incomplete",
+                    reason = stopReason ?? "stream_ended",
+                    message = incompleteMessage
+                });
+                assistantText.Insert(0, "> Xen: Response incomplete. " + incompleteMessage + "\n\n");
             }
 
             if (inputTokens <= 0)

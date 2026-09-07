@@ -16,6 +16,86 @@ const code = 'namespace NinjaTrader.NinjaScript.Indicators { public class Exampl
 const assistantText = '```csharp\n' + code + '\n```';
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
+for (const options of [
+    { incomplete: true },
+    { incomplete: true, repair: true },
+    { noDone: true },
+    { noDone: true, readError: true },
+    { text: '### Overview\n\n```csharp\npublic class RV : Indicator { void OnStateChange() {} private static DateTime EasterSun' }
+]) {
+    test('incomplete response is not saved or built: ' + JSON.stringify(options), async () => {
+        const w = workspace(options);
+        await w.submit();
+        assert.equal(w.requests.filter(r => r.url === '/api/preflight/build').length, 0);
+        assert.equal(w.requests.filter(r => r.url === '/api/projects').length, 0);
+        assert.match(w.c.status.textContent, /last complete code kept/);
+        assert.equal(w.c.generating, false);
+    });
+}
+
+test('incomplete initial build does not create a project', async () => {
+    const w = workspace({ incomplete: true });
+    w.c.currentProjectPersisted = false;
+    await w.submit();
+    assert.equal(w.requests.filter(r => r.url === '/api/projects').length, 0);
+    assert.match(w.c.status.textContent, /last complete code kept/);
+});
+
+test('unfinished fenced code stays in a labelled code box with copy but no build actions', () => {
+    const blocks = [];
+    let actions = 0;
+    const context = {
+        activeTask: 'build-indicator', appendIncompleteRecoveryAction() {},
+        appendProse() {}, decorateRequirementsMatch() {},
+        appendCodeBlock(...args) { blocks.push(args); },
+        appendResponseCodeActions() { actions++; }
+    };
+    vm.runInNewContext([
+        section('function renderStructuredResponse(', 'function renderBacktestReport('),
+        section('function looksLikeCompleteNinjaScript(', 'function openExistingCodeModal('),
+        section('function responseHasIncompleteCode(', 'function isGeneratedRepairPrompt(')
+    ].join('\n'), context);
+    const partial = 'public class RV : Indicator { void OnStateChange() {} private static DateTime EasterSun';
+    context.renderStructuredResponse({}, '### Overview\n\n```csharp\n' + partial);
+    assert.equal(blocks.length, 1);
+    assert.equal(blocks[0][1], partial);
+    assert.match(blocks[0][2], /Incomplete/);
+    assert.equal(blocks[0][3], false); // Copy-only toolbar
+    assert.equal(actions, 0);
+    assert.equal(context.extractLatestCodeBlock('```csharp\n' + partial + '\n```'), '');
+});
+
+test('balanced complete source accepts braces in comments and verbatim strings', () => {
+    const context = {};
+    vm.runInNewContext([
+        section('function looksLikeCompleteNinjaScript(', 'function openExistingCodeModal('),
+        section('function responseHasIncompleteCode(', 'function isGeneratedRepairPrompt(')
+    ].join('\n'), context);
+    const valid = 'public class RV : Indicator { void OnStateChange() { var path = @"C:\\"; /* } */ } }';
+    assert.equal(context.looksLikeCompleteNinjaScript(valid), true);
+    assert.equal(context.extractLatestCodeBlock('```csharp\n' + valid + '\n```'), valid);
+    assert.equal(context.extractLatestCodeBlock('```csharp\n' + valid.slice(0, -1) + '\n```'), '');
+});
+
+test('large complete fenced source remains extractable and build eligible', () => {
+    const context = {};
+    vm.runInNewContext([
+        section('function looksLikeCompleteNinjaScript(', 'function openExistingCodeModal('),
+        section('function responseHasIncompleteCode(', 'function isGeneratedRepairPrompt(')
+    ].join('\n'), context);
+    const methods = Array.from({ length: 2000 }, (_, index) =>
+        `private double Value${index}() { return ${index}; }`).join('\n');
+    const largeCode = `namespace NinjaTrader.NinjaScript.Indicators {
+public class LargeIndicator : Indicator {
+protected override void OnStateChange() {}
+${methods}
+}
+}`;
+    assert.ok(largeCode.length > 70000);
+    assert.equal(context.responseHasIncompleteCode('```csharp\n' + largeCode + '\n```'), false);
+    assert.equal(context.extractLatestCodeBlock('```csharp\n' + largeCode + '\n```'), largeCode);
+});
+
 test('unfenced complete NinjaScript becomes the latest copyable source', () => {
     const completeCode = `using NinjaTrader.NinjaScript;
 namespace NinjaTrader.NinjaScript.Indicators
@@ -51,7 +131,7 @@ test('unfenced explanations and incomplete source are not treated as code', () =
         }
     };
     vm.runInNewContext(
-        section('function extractLatestCodeBlock', 'function isGeneratedRepairPrompt'),
+        section('function responseHasIncompleteCode', 'function isGeneratedRepairPrompt'),
         context);
 
     assert.equal(context.extractLatestCodeBlock(
@@ -99,9 +179,9 @@ function workspace(options = {}) {
         redirectMismatchedExistingSource: () => false,
         isClearlyFrustrated: () => false,
         reviewBuildPrompt: async prompt => prompt,
-        isGeneratedRepairPrompt: () => false,
+        isGeneratedRepairPrompt: () => options.repair === true,
         buildRetrievalPrompt: prompt => prompt,
-        extractLatestCodeBlock: () => code,
+        extractLatestCodeBlock: text => text.startsWith('> Xen: Response incomplete') ? '' : code,
         looksLikeCompleteNinjaScript: value => value === code,
         markBuildPlanResponseReady: () => options.automatic !== false,
         getTaskSwitchTargetFromResponse: () => null,
@@ -126,7 +206,7 @@ function workspace(options = {}) {
             return message;
         },
         async fetch(url, init) {
-            requests.push({ url, signal: init.signal });
+            requests.push({ url, signal: init.signal, body: JSON.parse(init.body) });
             if (url === '/api/chat/stream') {
                 if (options.chatPending) return new Promise((_, reject) => {
                     init.signal.addEventListener('abort', () => {
@@ -138,11 +218,16 @@ function workspace(options = {}) {
                 let sent = false;
                 return { ok: true, status: 200, body: { getReader: () => ({
                     async read() {
-                        if (sent) return { done: true };
+                        if (sent) {
+                            if (options.readError) throw new Error('connection lost');
+                            return { done: true };
+                        }
                         sent = true;
                         return { done: false, value: Buffer.from('data: ' + JSON.stringify({
-                            type: 'response.output_text.delta', delta: assistantText
-                        }) + '\n\ndata: [DONE]\n\n') };
+                            type: 'response.output_text.delta', delta: options.text ?? assistantText
+                        }) + '\n\n' + (options.incomplete ? 'data: ' + JSON.stringify({
+                            type: 'response.incomplete', message: 'Output limit reached.'
+                        }) + '\n\n' : '') + (options.noDone ? '' : 'data: [DONE]\n\n')) };
                     }
                 }) } };
             }
@@ -167,6 +252,8 @@ function workspace(options = {}) {
         'restoreBuildPlanPromptLoaded']) c[name] = () => {};
     vm.createContext(c);
     vm.runInContext([
+        section('function responseHasIncompleteCode(', 'function extractLatestCodeBlock('),
+        section('function hasBalancedCodeBraces(', 'function isGeneratedRepairPrompt('),
         section('async function withRequestTimeout(', 'async function openCodeWorkspace('),
         section('async function runPreflightBuild(', 'function renderPreflightBuildResult('),
         section('function applyCreditAvailability()', 'function restoreSelectedModel()'),

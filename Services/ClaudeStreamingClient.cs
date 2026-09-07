@@ -59,11 +59,14 @@ public sealed class ClaudeStreamingClient(
             model,
             stream = true,
             max_tokens = maximumOutputTokens,
+            thinking = new { type = "disabled" },
             system = systemPrompt,
             messages
         };
 
         using var response = await SendAsync(body, cancellationToken);
+        string? stopReason = null;
+        var terminalReceived = false;
         var inputTokens = 0;
         var outputTokens = 0;
 
@@ -94,20 +97,26 @@ public sealed class ClaudeStreamingClient(
 
                 case "message_delta"
                     when payload.TryGetProperty("usage", out var deltaUsage):
+                    if (payload.TryGetProperty("delta", out var messageDelta) &&
+                        messageDelta.TryGetProperty("stop_reason", out var reason))
+                        stopReason = reason.GetString();
                     outputTokens = StreamingJson.ReadInt(
                         deltaUsage,
                         "output_tokens");
                     break;
 
                 case "message_stop":
+                    terminalReceived = true;
                     yield return new AiStreamEvent(
                         null,
                         inputTokens,
                         outputTokens,
-                        true);
+                        true, stopReason, stopReason is not ("end_turn" or "stop_sequence"));
                     break;
             }
         }
+        if (!terminalReceived)
+            yield return new AiStreamEvent(null, inputTokens, outputTokens, true, "stream_ended", true);
     }
 
     private async Task<HttpResponseMessage> SendAsync(
