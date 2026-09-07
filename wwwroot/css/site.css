@@ -3107,6 +3107,38 @@ html[data-theme="light"] .analyzer-export-guide:focus-visible {
     line-height: 1.55;
 }
 
+.payment-alternative {
+    margin-top: 24px;
+    padding: 18px;
+    border: 1px solid #454545;
+    border-radius: 7px;
+    background: #151515;
+}
+
+.payment-alternative h2 {
+    margin: 0 0 8px;
+    color: #eee;
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+.payment-alternative p {
+    margin: 0;
+    color: #bdbdbd;
+    font-size: 14px;
+    line-height: 1.65;
+}
+
+.payment-alternative a {
+    color: #55b9eb;
+    font-weight: 700;
+    text-decoration: underline;
+}
+
+.payment-alternative a:hover {
+    color: #8ed5f7;
+}
+
 .payment-terms {
     margin: 0;
 }
