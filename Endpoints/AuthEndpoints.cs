@@ -28,7 +28,9 @@ public static class AuthEndpoints
         IConfiguration configuration,
         IWebHostEnvironment environment,
         AccountEmailSender emailSender,
-        DisposableEmailGuard disposableEmailGuard)
+        DisposableEmailGuard disposableEmailGuard,
+        IRegistrationNetworkMetadataQueue registrationNetworkQueue,
+        ILoggerFactory loggerFactory)
     {
         var email = request.Email?.Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(email) ||
@@ -139,6 +141,17 @@ public static class AuthEndpoints
             }
 
             await transaction.CommitAsync();
+
+            if (!registrationNetworkQueue.TryEnqueue(
+                    new RegistrationNetworkMetadataWorkItem(
+                        subscriberId.Value,
+                        context.Connection.RemoteIpAddress)))
+            {
+                loggerFactory.CreateLogger("RegistrationNetworkMetadata")
+                    .LogWarning(
+                        "Registration network metadata queue was full; metadata skipped for subscriber {SubscriberId}.",
+                        subscriberId.Value);
+            }
 
             var baseUrl = environment.IsDevelopment()
                 ? $"{context.Request.Scheme}://{context.Request.Host}{context.Request.PathBase}".TrimEnd('/')

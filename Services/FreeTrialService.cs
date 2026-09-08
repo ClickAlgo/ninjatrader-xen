@@ -31,8 +31,54 @@ public sealed class FreeTrialService(
     IConfiguration configuration,
     IHttpClientFactory httpClientFactory,
     AccountEmailSender emailSender,
-    ILogger<FreeTrialService> logger)
+    ILogger<FreeTrialService> logger) : IRegistrationNetworkMetadataRecorder
 {
+    public async Task RecordRegistrationNetworkAsync(
+        int subscriberId,
+        IPAddress? remoteIp,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await InspectNetworkAsync(
+                remoteIp?.ToString(),
+                cancellationToken);
+            if (!result.Available)
+                return;
+
+            await using var connection = new SqlConnection(
+                configuration.GetConnectionString("CodePilot") ??
+                throw new InvalidOperationException(
+                    "ConnectionStrings:CodePilot is not configured."));
+            await connection.OpenAsync(cancellationToken);
+            await using var command = new SqlCommand("""
+                UPDATE dbo.Subscribers
+                SET RegistrationConnectionType = @ConnectionType,
+                    RegistrationCountryCode = @CountryCode,
+                    UpdatedUtc = SYSUTCDATETIME()
+                WHERE SubscriberId = @SubscriberId
+                  AND PlatformId = @PlatformId;
+                """, connection);
+            command.Parameters.Add("@ConnectionType", SqlDbType.NVarChar, 32)
+                .Value = result.ConnectionType;
+            command.Parameters.Add("@CountryCode", SqlDbType.Char, 2)
+                .Value = result.CountryCode is { Length: 2 }
+                    ? result.CountryCode.ToUpperInvariant()
+                    : DBNull.Value;
+            command.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+            command.Parameters.Add("@PlatformId", SqlDbType.Int).Value =
+                PlatformIds.NinjaTrader;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(
+                exception,
+                "Unable to record registration network metadata for subscriber {SubscriberId}.",
+                subscriberId);
+        }
+    }
+
     public async Task<FreeTrialResult> GrantIfEligibleAsync(
         int subscriberId,
         string email,
@@ -378,6 +424,24 @@ public sealed class FreeTrialService(
         FreeTrialOptions trialOptions,
         CancellationToken cancellationToken)
     {
+        var result = await InspectNetworkAsync(rawIp, cancellationToken);
+        if (!result.Available)
+            return (false, null);
+
+        var proxyOptions = configuration
+            .GetSection("ProxyCheck")
+            .Get<ProxyCheckOptions>() ?? new ProxyCheckOptions();
+        var blocked = result.ConnectionType is "Proxy" or "Hosting" ||
+            result.Risk >= proxyOptions.RiskThreshold ||
+            trialOptions.BlockedCountryCodes.Any(code =>
+                string.Equals(code, result.CountryCode, StringComparison.OrdinalIgnoreCase));
+        return (blocked, result.CountryCode);
+    }
+
+    private async Task<(bool Available, string ConnectionType, string? CountryCode, decimal Risk)> InspectNetworkAsync(
+        string? rawIp,
+        CancellationToken cancellationToken)
+    {
         var proxyOptions = configuration
             .GetSection("ProxyCheck")
             .Get<ProxyCheckOptions>() ?? new ProxyCheckOptions();
@@ -385,7 +449,7 @@ public sealed class FreeTrialService(
         {
             logger.LogWarning(
                 "ProxyCheck is not configured; free-trial network screening is unavailable.");
-            return (false, null);
+            return (false, "Unknown", null, 0);
         }
 
         var ip = SanitizeIp(rawIp);
@@ -403,43 +467,45 @@ public sealed class FreeTrialService(
                 logger.LogWarning(
                     "ProxyCheck returned status {StatusCode}. Failing open.",
                     (int)response.StatusCode);
-                return (false, null);
+                return (false, "Unknown", null, 0);
             }
 
             using var document = JsonDocument.Parse(
                 await response.Content.ReadAsStringAsync(cancellationToken));
             var record = FindAddressRecord(document.RootElement, useCallerIp ? null : ip);
             if (!record.HasValue)
-                return (false, null);
+                return (false, "Unknown", null, 0);
 
             var detections = record.Value.GetProperty("detections");
             var countryCode = ReadString(record.Value.GetProperty("location"), "country_code");
             var type = ReadString(record.Value.GetProperty("network"), "type") ?? "";
             var risk = ReadDecimal(detections, "risk");
-            var blocked =
+            var detectedProxy =
                 ReadBoolean(detections, "proxy") ||
                 ReadBoolean(detections, "vpn") ||
                 ReadBoolean(detections, "tor") ||
-                ReadBoolean(detections, "hosting") ||
                 ReadBoolean(detections, "anonymous") ||
                 ReadBoolean(detections, "compromised") ||
-                ReadBoolean(detections, "scraper") ||
-                type.Contains("HOSTING", StringComparison.OrdinalIgnoreCase) ||
-                risk >= proxyOptions.RiskThreshold ||
-                trialOptions.BlockedCountryCodes.Any(code =>
-                    string.Equals(
-                        code,
-                        countryCode,
-                        StringComparison.OrdinalIgnoreCase));
+                ReadBoolean(detections, "scraper");
+            var detectedHosting =
+                ReadBoolean(detections, "hosting") ||
+                type.Contains("HOSTING", StringComparison.OrdinalIgnoreCase);
+            var connectionType = detectedProxy
+                ? "Proxy"
+                : detectedHosting
+                    ? "Hosting"
+                    : string.IsNullOrWhiteSpace(type)
+                        ? "Unknown"
+                        : type;
 
-            return (blocked, countryCode);
+            return (true, connectionType, countryCode, risk);
         }
         catch (Exception exception)
         {
             logger.LogWarning(
                 exception,
                 "ProxyCheck failed during free-trial screening. Failing open.");
-            return (false, null);
+            return (false, "Unknown", null, 0);
         }
     }
 

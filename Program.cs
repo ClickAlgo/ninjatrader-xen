@@ -86,6 +86,11 @@ builder.Services
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<AccountEmailSender>();
 builder.Services.AddScoped<FreeTrialService>();
+builder.Services.AddScoped<IRegistrationNetworkMetadataRecorder>(provider =>
+    provider.GetRequiredService<FreeTrialService>());
+builder.Services.AddSingleton<IRegistrationNetworkMetadataQueue,
+    RegistrationNetworkMetadataQueue>();
+builder.Services.AddHostedService<RegistrationNetworkMetadataWorker>();
 builder.Services.AddScoped<DisposableEmailGuard>();
 builder.Services.AddHttpClient("mail-check", client =>
 {
