@@ -44,10 +44,75 @@ public sealed class ExistingCodeWorkflowTests
 
         Assert.Contains("function isSourceAttachmentTask", script);
         Assert.Contains("task === \"convert-strategy\" || task === \"convert-indicator\"", script);
-        Assert.Contains("saveConversionSourceAttachment(file.name, source)", script);
+        Assert.Contains("saveConversionSourceAttachment(fileName, code)", script);
         Assert.Contains("sources: [source]", script);
-        Assert.Contains("One source file · add conversion instructions below", script);
+        Assert.DoesNotContain("One source file required · additional details are optional", script);
         Assert.DoesNotContain("promptInput.value = request;", script);
+    }
+
+    [Fact]
+    public void ConversionTasksCanPasteOrUploadInTheSharedSourceDialog()
+    {
+        var html = File.ReadAllText(Path.Combine(Root, "wwwroot", "workspace.html"));
+        var script = File.ReadAllText(Path.Combine(Root, "wwwroot", "js", "workspace.js"));
+        var styles = File.ReadAllText(Path.Combine(Root, "wwwroot", "css", "site.css"));
+
+        Assert.Contains("if (isSourceAttachmentTask())", script);
+        Assert.Contains("button: \"Share source code\"", script);
+        Assert.Contains("existingCodeText.value = source", script);
+        Assert.Contains("openExistingCodeModal();", script);
+        Assert.Contains("Paste the complete source code from the original platform", script);
+        Assert.Contains("existingCodeRoleField.hidden = conversion", script);
+        Assert.Contains("await saveConversionSourceAttachment(fileName, code)", script);
+        Assert.Contains("Or upload source file", html);
+        Assert.Contains(".feedback-field[hidden]", styles);
+    }
+
+    [Fact]
+    public void AttachedSourceTasksCanBeSubmittedWithoutExtraInstructions()
+    {
+        var html = File.ReadAllText(Path.Combine(Root, "wwwroot", "workspace.html"));
+        var script = File.ReadAllText(Path.Combine(Root, "wwwroot", "js", "workspace.js"));
+
+        Assert.DoesNotContain("placeholder=\"Describe your NinjaTrader strategy…\" required", html);
+        Assert.Contains("const sourceTaskWithSource =", script);
+        Assert.Contains("Review the attached NinjaTrader strategy source.", script);
+        Assert.Contains("Review the attached NinjaTrader indicator source.", script);
+        Assert.Contains("Convert the attached strategy to NinjaTrader 8.", script);
+        Assert.Contains("Convert the attached indicator to NinjaTrader 8.", script);
+        Assert.Contains("Enter a request before sending", script);
+    }
+
+    [Fact]
+    public void AllSourceTasksTreatComposerTextAsOptionalAdditionalInformation()
+    {
+        var script = File.ReadAllText(Path.Combine(Root, "wwwroot", "js", "workspace.js"));
+
+        Assert.Contains("Optional: describe any changes, errors or strategy behaviour you want reviewed", script);
+        Assert.Contains("Optional: describe any changes, errors, calculations or chart display you want reviewed", script);
+        Assert.Contains("Optional: explain how you want the converted strategy to behave", script);
+        Assert.Contains("Optional: explain how the converted indicator should calculate or appear on the chart", script);
+        Assert.DoesNotContain("Source code required · additional details are optional", script);
+        Assert.DoesNotContain("Source attached · additional details are optional", script);
+        Assert.DoesNotContain("platform mappings", script);
+    }
+
+    [Fact]
+    public void StrategyConversionKeepsTimingRuleButMovesWarningOutOfTaskIntro()
+    {
+        var html = File.ReadAllText(Path.Combine(Root, "wwwroot", "workspace.html"));
+        var script = File.ReadAllText(Path.Combine(Root, "wwwroot", "js", "workspace.js"));
+        var prompt = File.ReadAllText(Path.Combine(
+            Root, "SystemPrompts", "v1", "convert-strategy.txt"));
+        var indicatorPrompt = File.ReadAllText(Path.Combine(
+            Root, "SystemPrompts", "v1", "convert-indicator.txt"));
+        const string warning = "Strategy conversions may compile correctly but still behave differently because platforms process bars, ticks and orders differently. Compare entry and exit timing with the original before live use.";
+        const string rule = "Preserve the source strategy’s execution timing and order behaviour as closely as NinjaTrader allows.";
+
+        Assert.DoesNotContain(warning, script);
+        Assert.Contains("A successful build confirms compatibility, not identical strategy behaviour.", html);
+        Assert.Contains(rule, prompt);
+        Assert.DoesNotContain(rule, indicatorPrompt);
     }
 
     [Fact]

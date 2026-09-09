@@ -17,7 +17,7 @@
                 document.documentElement.dataset.theme = "light";
         })();
     </script>
-    <link rel="stylesheet" href="/css/site.css?v=1.0.29">
+    <link rel="stylesheet" href="/css/site.css?v=1.0.32">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -99,7 +99,7 @@
                     <span id="themeToggleLabel">Light theme</span>
                 </button>
             </div>
-            <div class="workspace-build-version">Build v1.0.9-beta</div>
+            <div class="workspace-build-version">Build v1.1.0-beta</div>
         </aside>
 
         <section class="chat-panel">
@@ -129,8 +129,7 @@
                 <article class="message assistant">
                     <div class="message-label">Xen</div>
                     <div class="message-content">
-                        Describe the NinjaTrader strategy you want to build. Include entry,
-                        exit, stop-loss and position-sizing rules where possible.
+                        Describe the strategy, including entries, exits, risk and calculation mode.
                     </div>
                 </article>
             </div>
@@ -170,7 +169,7 @@
                     </div>
                 </div>
                 <textarea id="promptInput" rows="3" maxlength="60000"
-                    placeholder="Describe your NinjaTrader strategy…" required></textarea>
+                    placeholder="Describe your NinjaTrader strategy…"></textarea>
                 <div class="composer-footer">
                     <div class="composer-context-actions">
                         <span id="chatStatus" class="chat-status" role="status"></span>
@@ -211,7 +210,7 @@
                     <input id="existingCodeFileName" maxlength="160"
                         placeholder="MyIndicator.cs" required>
                 </label>
-                <label class="feedback-field">
+                <label id="existingCodeRoleField" class="feedback-field">
                     <span>How this source is used</span>
                     <select id="existingCodeRole">
                         <option id="existingCodeCurrentRole" value="current-source">Current codebase</option>
@@ -220,7 +219,7 @@
                     </select>
                 </label>
                 <label class="feedback-field">
-                    <span>NinjaScript source</span>
+                    <span id="existingCodeSourceLabel">NinjaScript source</span>
                     <textarea id="existingCodeText" rows="14" maxlength="500000"
                         placeholder="Paste the complete NinjaScript source here" required></textarea>
                 </label>
@@ -229,15 +228,16 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
                     </svg>
-                    <span>Load a .cs file</span>
+                    <span id="uploadExistingCodeLabel">Or upload source file</span>
                 </button>
-                <a class="existing-code-help-link"
+                <a id="existingCodeHelpLink" class="existing-code-help-link"
                     href="https://help.clickalgo.com/ninjatrader-xen/existing-code/"
                     target="_blank" rel="noopener noreferrer">Need help adding existing code?</a>
                 <p id="existingCodeStatus" class="feedback-status" role="status"></p>
                 <footer class="feedback-actions">
                     <button id="cancelExistingCodeButton" class="button" type="button">Cancel</button>
-                    <button class="button primary" type="submit">Add source</button>
+                    <button id="saveExistingCodeButton" class="button primary"
+                        type="submit">Add source code</button>
                 </footer>
             </form>
         </section>
@@ -258,6 +258,38 @@
                 <button id="deleteAllProjectsButton" type="button">
                     Delete all projects
                 </button>
+            </footer>
+        </section>
+    </div>
+
+    <div id="strategyConversionRiskModal" class="projects-modal" hidden>
+        <section class="prompt-builder-dialog conversion-risk-dialog" role="dialog"
+            aria-modal="true" aria-labelledby="strategyConversionRiskTitle">
+            <header class="projects-dialog-header">
+                <div>
+                    <p class="eyebrow">BEFORE LIVE USE</p>
+                    <h2 id="strategyConversionRiskTitle">Strategy timing may differ</h2>
+                </div>
+                <button id="closeStrategyConversionRiskButton" class="dialog-close"
+                    type="button" aria-label="Close">&times;</button>
+            </header>
+            <div class="conversion-risk-content">
+                <p>Converted strategies can behave differently because platforms process bars,
+                    ticks and orders differently. Broker data can also affect signal and fill timing.</p>
+                <p>A successful build confirms compatibility, not identical strategy behaviour.
+                    Compare entry and exit timing with the original before live use.</p>
+                <a href="https://help.clickalgo.com/ninjatrader-xen/build-strategies/#strategy-conversion-timing"
+                    target="_blank" rel="noopener noreferrer">Read about strategy conversion timing</a>
+                <label class="conversion-risk-choice">
+                    <input id="hideStrategyConversionRisk" type="checkbox">
+                    <span>Do not show this again</span>
+                </label>
+            </div>
+            <footer class="feedback-actions">
+                <button id="cancelStrategyConversionDownloadButton" class="button"
+                    type="button">Cancel</button>
+                <button id="continueStrategyConversionDownloadButton" class="button primary"
+                    type="button">Continue download</button>
             </footer>
         </section>
     </div>
@@ -427,6 +459,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=1.1.26"></script>
+    <script src="/js/workspace.js?v=1.1.36"></script>
 </body>
 </html>

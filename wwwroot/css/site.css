@@ -4940,6 +4940,42 @@ html[data-theme="light"] .requirements-validation-dialog {
     gap: 7px;
 }
 
+.feedback-field[hidden],
+.existing-code-help-link[hidden] {
+    display: none;
+}
+
+.conversion-risk-dialog {
+    max-width: 560px;
+}
+
+.conversion-risk-content {
+    display: grid;
+    gap: 14px;
+    padding: 20px 24px 8px;
+    color: var(--muted);
+    line-height: 1.55;
+}
+
+.conversion-risk-content p {
+    margin: 0;
+}
+
+.conversion-risk-content a {
+    color: #ff9b73;
+}
+
+.conversion-risk-choice {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--text);
+}
+
+.conversion-risk-dialog > .feedback-actions {
+    padding: 8px 24px 20px;
+}
+
 .feedback-field > span {
     color: #e8e8e8;
     font-size: 12px;

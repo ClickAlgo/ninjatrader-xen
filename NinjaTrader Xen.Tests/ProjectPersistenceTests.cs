@@ -91,6 +91,18 @@ public sealed class ProjectPersistenceTests
     }
 
     [Fact]
+    public void ConversionProjectTitlesComeFromSourceInsteadOfConversionInstructions()
+    {
+        var script = ReadWorkspaceScript();
+
+        Assert.Contains("function createConversionProjectTitle", script);
+        Assert.Contains("(?:strategy|indicator)", script);
+        Assert.Contains("source?.fileName || \"\"", script);
+        Assert.Contains("source?.code || prompt", script);
+        Assert.Contains("createConversionProjectTitle(fileName, code)", script);
+    }
+
+    [Fact]
     public void SnapshotUi_PagesPinsAndGuardsDeletion()
     {
         var script = ReadWorkspaceScript();

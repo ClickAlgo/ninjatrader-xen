@@ -15,10 +15,10 @@ const taskNames = {
 const taskPlaceholders = {
     "build-strategy": "Describe your NinjaTrader strategy…",
     "build-indicator": "Describe your NinjaTrader indicator…",
-    "existing-strategy": "Paste your strategy code and describe the changes…",
-    "existing-indicator": "Paste your indicator code and describe the changes…",
-    "convert-strategy": "Paste strategy source from another platform or upload a file…",
-    "convert-indicator": "Paste indicator source from another platform or upload a file…",
+    "existing-strategy": "Optional: describe any changes, errors or strategy behaviour you want reviewed…",
+    "existing-indicator": "Optional: describe any changes, errors, calculations or chart display you want reviewed…",
+    "convert-strategy": "Optional: explain how you want the converted strategy to behave…",
+    "convert-indicator": "Optional: explain how the converted indicator should calculate or appear on the chart…",
     "analyse-backtest": "Add the instrument, timeframe and any test context…"
 };
 const BACKTEST_REPORT_INTRODUCTION =
@@ -53,6 +53,7 @@ const lowCreditThresholdGbp = 1;
 const activeProjectStorageKey = "nx_active_saved_project_id";
 const buildPlanStorageKey = "nx_active_build_plan_v1";
 const mobileWorkspaceNoticeKey = "nx_mobile_workspace_notice_dismissed";
+const strategyConversionRiskHiddenKey = "nx_strategy_conversion_risk_hidden";
 const defaultModel = "gpt-5.3-codex";
 const preflightRepairPromptPrefix =
     "Repair the latest complete NinjaScript source so it passes";
@@ -111,6 +112,13 @@ const existingCodeForm = document.getElementById("existingCodeForm");
 const existingCodeText = document.getElementById("existingCodeText");
 const existingCodeFileName = document.getElementById("existingCodeFileName");
 const existingCodeRole = document.getElementById("existingCodeRole");
+const existingCodeRoleField = document.getElementById("existingCodeRoleField");
+const existingCodeTitle = document.getElementById("existingCodeTitle");
+const existingCodeSourceLabel = document.getElementById("existingCodeSourceLabel");
+const existingCodeHelpLink = document.getElementById("existingCodeHelpLink");
+const saveExistingCodeButton = document.getElementById("saveExistingCodeButton");
+const strategyConversionRiskModal = document.getElementById("strategyConversionRiskModal");
+const hideStrategyConversionRisk = document.getElementById("hideStrategyConversionRisk");
 const existingCodeStatus = document.getElementById("existingCodeStatus");
 const analyzerExportGuide = document.getElementById("analyzerExportGuide");
 const analyzerAttachments =
@@ -138,6 +146,7 @@ const requirementsValidationModel =
 const runRequirementsValidationButton =
     document.getElementById("runRequirementsValidationButton");
 let codeWorkspaceCode = "";
+let resolveStrategyConversionRisk = null;
 
 updateThemeToggle();
 restoreSelectedModel();
@@ -163,7 +172,7 @@ updateClearInputButton();
 updateHistoryButton();
 restoreActiveProject();
 sourceFileButton.addEventListener("click", () => {
-    if (isExistingCodeTask())
+    if (isSourceAttachmentTask())
         openExistingCodeModal();
     else
         sourceFileInput.click();
@@ -178,6 +187,16 @@ document.getElementById("cancelExistingCodeButton").addEventListener("click", cl
 document.getElementById("uploadExistingCodeButton").addEventListener("click", () => sourceFileInput.click());
 existingCodeModal.addEventListener("click", event => {
     if (event.target === existingCodeModal) closeExistingCodeModal();
+});
+document.getElementById("closeStrategyConversionRiskButton").addEventListener(
+    "click", () => closeStrategyConversionRisk(false));
+document.getElementById("cancelStrategyConversionDownloadButton").addEventListener(
+    "click", () => closeStrategyConversionRisk(false));
+document.getElementById("continueStrategyConversionDownloadButton").addEventListener(
+    "click", () => closeStrategyConversionRisk(true));
+strategyConversionRiskModal.addEventListener("click", event => {
+    if (event.target === strategyConversionRiskModal)
+        closeStrategyConversionRisk(false);
 });
 imageFileButton.addEventListener("click", () => imageFileInput.click());
 imageFileInput.addEventListener("change", importReferenceImage);
@@ -353,8 +372,21 @@ form.addEventListener("submit", async event => {
     }
 
     let prompt = promptInput.value.trim();
-    if (!prompt)
+    const sourceTaskWithSource = isSourceAttachmentTask() && hasCurrentExistingSource();
+    if (!prompt && sourceTaskWithSource) {
+        const defaultRequests = {
+            "existing-strategy": "Review the attached NinjaTrader strategy source.",
+            "existing-indicator": "Review the attached NinjaTrader indicator source.",
+            "convert-strategy": "Convert the attached strategy to NinjaTrader 8.",
+            "convert-indicator": "Convert the attached indicator to NinjaTrader 8."
+        };
+        prompt = defaultRequests[activeTask];
+    }
+    if (!prompt) {
+        status.textContent = "Enter a request before sending";
+        promptInput.focus();
         return;
+    }
     if (isExistingCodeTask() && looksLikeCompleteNinjaScript(prompt)) {
         existingCodeText.value = prompt;
         existingCodeFileName.value = activeTask === "existing-strategy"
@@ -413,8 +445,9 @@ form.addEventListener("submit", async event => {
     const createdProjectForRequest = !currentProjectId;
     if (createdProjectForRequest) {
         currentProjectId = crypto.randomUUID();
-        currentProjectTitle = createProjectTitle(
-            isAnalyzerRequest(prompt)
+        currentProjectTitle = activeTask === "convert-strategy" || activeTask === "convert-indicator"
+            ? createConversionProjectTitle("", prompt)
+            : createProjectTitle(isAnalyzerRequest(prompt)
                 ? "Analyse Strategy Analyzer results"
                 : prompt);
         updateProjectTitle();
@@ -565,8 +598,16 @@ form.addEventListener("submit", async event => {
             ? responseCode
             : "";
         if (completeResponseCode && !currentProjectPersisted) {
-            const titlePrompt = getBuildPlan()?.originalPrompt || prompt;
-            currentProjectTitle = createProjectTitle(titlePrompt);
+            if (activeTask === "convert-strategy" || activeTask === "convert-indicator") {
+                const source = existingCodeState.sources.find(
+                    item => item.role === "current-source");
+                currentProjectTitle = createConversionProjectTitle(
+                    source?.fileName || "",
+                    source?.code || prompt);
+            } else {
+                const titlePrompt = getBuildPlan()?.originalPrompt || prompt;
+                currentProjectTitle = createProjectTitle(titlePrompt);
+            }
             updateProjectTitle();
         }
         const buildPlanStepReady = markBuildPlanResponseReady(prompt);
@@ -1259,6 +1300,8 @@ function renderPreflightBuildReport(container, source) {
 async function downloadNinjaTraderAddon(code, button) {
     if (button.disabled)
         return;
+    if (!await confirmStrategyConversionDownload())
+        return;
 
     const originalLabel = button.textContent;
     button.disabled = true;
@@ -1314,6 +1357,36 @@ async function downloadNinjaTraderAddon(code, button) {
         button.disabled = false;
         button.textContent = originalLabel;
     }
+}
+
+function confirmStrategyConversionDownload() {
+    if (activeTask !== "convert-strategy")
+        return Promise.resolve(true);
+    try {
+        if (localStorage.getItem(strategyConversionRiskHiddenKey) === "true")
+            return Promise.resolve(true);
+    } catch { }
+
+    hideStrategyConversionRisk.checked = false;
+    strategyConversionRiskModal.hidden = false;
+    document.body.classList.add("modal-open");
+    return new Promise(resolve => {
+        resolveStrategyConversionRisk = resolve;
+    });
+}
+
+function closeStrategyConversionRisk(continueDownload) {
+    if (strategyConversionRiskModal.hidden)
+        return;
+    if (continueDownload && hideStrategyConversionRisk.checked) {
+        try { localStorage.setItem(strategyConversionRiskHiddenKey, "true"); }
+        catch { }
+    }
+    strategyConversionRiskModal.hidden = true;
+    document.body.classList.remove("modal-open");
+    const resolve = resolveStrategyConversionRisk;
+    resolveStrategyConversionRisk = null;
+    resolve?.(continueDownload);
 }
 
 function appendPreflightRepairActions(container, errors) {
@@ -2029,10 +2102,10 @@ function taskIntro(task) {
     const intros = {
         "build-strategy": "Describe the strategy, including entries, exits, risk and calculation mode.",
         "build-indicator": "Describe the calculation, plots, visual behaviour and configurable inputs.",
-        "existing-strategy": "Paste the complete strategy source and explain exactly what should change.",
-        "existing-indicator": "Paste the complete indicator source and explain exactly what should change.",
-        "convert-strategy": "Paste the complete strategy source from another platform, or upload a source file. Xen will convert it into a NinjaTrader 8 Strategy.",
-        "convert-indicator": "Paste the complete indicator source from another platform, or upload a source file. Xen will convert it into a NinjaTrader 8 Indicator.",
+        "existing-strategy": "Share the complete NinjaTrader strategy source. If needed, describe any changes, errors or strategy behaviour you want Xen to review.",
+        "existing-indicator": "Share the complete NinjaTrader indicator source. If needed, describe any changes, errors, calculations or chart display you want Xen to review.",
+        "convert-strategy": "Share the complete strategy source from another platform. You can provide additional information about how the converted strategy should behave.",
+        "convert-indicator": "Share the complete indicator source from another platform. You can provide additional information about how it should calculate or appear on the chart.",
         "analyse-backtest": "Upload a NinjaTrader Strategy Analyzer Summary CSV. You can also include a Trades CSV for deeper analysis."
     };
     return intros[task];
@@ -2148,13 +2221,13 @@ function clearComposerInput() {
 function updateTaskSpecificUi(preservePendingImage = false) {
     const uploadTasks = {
         "convert-strategy": {
-            button: "Upload source file",
-            status: "One source file · add conversion instructions below",
+            button: "Share source code",
+            status: "",
             accept: ".cs,.txt,.mq4,.mq5,.pine,text/plain"
         },
         "convert-indicator": {
-            button: "Upload source file",
-            status: "One source file · add conversion instructions below",
+            button: "Share source code",
+            status: "",
             accept: ".cs,.txt,.mq4,.mq5,.pine,text/plain"
         },
         "existing-strategy": {
@@ -2360,7 +2433,9 @@ async function importSourceFile() {
             return;
         }
         if (isConversion) {
-            await saveConversionSourceAttachment(file.name, source);
+            existingCodeFileName.value = file.name;
+            existingCodeText.value = source;
+            openExistingCodeModal();
             return;
         }
 
@@ -2399,11 +2474,21 @@ function looksLikeCompleteNinjaScript(value) {
 }
 
 function openExistingCodeModal() {
-    if (!isExistingCodeTask()) return;
+    if (!isSourceAttachmentTask()) return;
+    const conversion = activeTask === "convert-strategy" || activeTask === "convert-indicator";
     existingCodeStatus.textContent = "";
     if (!existingCodeFileName.value)
-        existingCodeFileName.value = activeTask === "existing-strategy"
-            ? "Strategy.cs" : "Indicator.cs";
+        existingCodeFileName.value = conversion
+            ? (activeTask === "convert-strategy" ? "Strategy.txt" : "Indicator.txt")
+            : (activeTask === "existing-strategy" ? "Strategy.cs" : "Indicator.cs");
+    existingCodeTitle.textContent = conversion ? "Share source code" : "Add source code";
+    existingCodeSourceLabel.textContent = conversion ? "Source code" : "NinjaScript source";
+    existingCodeText.placeholder = conversion
+        ? "Paste the complete source code from the original platform"
+        : "Paste the complete NinjaScript source here";
+    existingCodeRoleField.hidden = conversion;
+    existingCodeHelpLink.hidden = conversion;
+    saveExistingCodeButton.textContent = conversion ? "Share source code" : "Add source code";
     const hasCurrent = hasCurrentExistingSource();
     document.getElementById("existingCodeCurrentRole").textContent =
         hasCurrent ? "Replace current source" : "Current codebase";
@@ -2427,16 +2512,17 @@ function closeExistingCodeModal() {
 async function saveConversionSourceAttachment(fileName, code) {
     if (!currentProjectId) {
         currentProjectId = crypto.randomUUID();
-        currentProjectTitle = taskNames[activeTask];
-        updateProjectTitle();
     }
+    if (!currentProjectPersisted)
+        currentProjectTitle = createConversionProjectTitle(fileName, code);
+    updateProjectTitle();
     const source = {
         id: crypto.randomUUID().replaceAll("-", ""),
         fileName,
         role: "current-source",
         code
     };
-    sourceFileStatus.textContent = "Saving source attachment...";
+    existingCodeStatus.textContent = "Saving source code...";
     const response = await fetch(`/api/projects/${currentProjectId}/existing-code`, {
         method: "PUT",
         headers: {
@@ -2447,13 +2533,14 @@ async function saveConversionSourceAttachment(fileName, code) {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-        sourceFileStatus.textContent = payload.message || "Source could not be saved.";
-        return;
+        existingCodeStatus.textContent = payload.message || "Source could not be saved.";
+        return false;
     }
     existingCodeState = payload;
     renderExistingCodeAttachments();
-    sourceFileStatus.textContent = "Source attached · add conversion instructions below";
+    sourceFileStatus.textContent = "";
     promptInput.focus();
+    return true;
 }
 
 async function saveExistingCodeAttachment(event) {
@@ -2461,6 +2548,13 @@ async function saveExistingCodeAttachment(event) {
     const code = existingCodeText.value.trim();
     const fileName = existingCodeFileName.value.trim();
     if (!code || !fileName) return;
+    if (activeTask === "convert-strategy" || activeTask === "convert-indicator") {
+        if (!await saveConversionSourceAttachment(fileName, code))
+            return;
+        existingCodeText.value = "";
+        closeExistingCodeModal();
+        return;
+    }
     if (!currentProjectId) {
         currentProjectId = crypto.randomUUID();
         currentProjectTitle = taskNames[activeTask];
@@ -4182,6 +4276,37 @@ async function promptBuilderFetch(url, body) {
 function createProjectTitle(prompt) {
     const compact = prompt.replace(/\s+/g, " ").trim();
     return compact.length <= 54 ? compact : `${compact.slice(0, 51).trim()}…`;
+}
+
+function createConversionProjectTitle(fileName, source) {
+    const sourceText = source || "";
+    const pineTitle = sourceText.match(
+        /\b(?:strategy|indicator)\s*\(\s*["']([^"'\r\n]{1,160})["']/i)?.[1];
+    if (pineTitle)
+        return createProjectTitle(pineTitle);
+
+    const className = sourceText.match(
+        /\bclass\s+([A-Za-z_][A-Za-z0-9_]*)[\s\S]{0,200}:\s*(?:[A-Za-z_][A-Za-z0-9_.]*\.)?(?:Strategy|Indicator|Robot)\b/)?.[1];
+    if (className)
+        return createProjectTitle(className.replace(/([a-z0-9])([A-Z])/g, "$1 $2"));
+
+    const mqlDescription = sourceText.match(
+        /^\s*#property\s+description\s+["']([^"'\r\n]{1,160})["']/im)?.[1];
+    if (mqlDescription)
+        return createProjectTitle(mqlDescription);
+
+    const mqlHeaderName = sourceText.match(
+        /(?:^|\n)\s*(?:(?:\/\/|\/\*|\*)[^\r\n]*?)?([A-Za-z0-9][A-Za-z0-9 _.-]{1,100})\.(?:mq4|mq5)\b/i)?.[1];
+    if (mqlHeaderName)
+        return createProjectTitle(mqlHeaderName.trim());
+
+    const fileTitle = (fileName || "").replace(/\.[^.]+$/, "").trim();
+    if (fileTitle && !/^(?:strategy|indicator)$/i.test(fileTitle))
+        return createProjectTitle(fileTitle);
+
+    return activeTask === "convert-indicator"
+        ? "Convert Indicator"
+        : "Convert Strategy";
 }
 
 function updateProjectTitle() {

@@ -139,6 +139,69 @@ test('unfenced explanations and incomplete source are not treated as code', () =
     assert.equal(context.extractLatestCodeBlock(
         'public class RelativeVolume : Indicator { void OnStateChange() { }'), '');
 });
+
+test('conversion project titles prefer the declared source name', () => {
+    const context = { activeTask: 'convert-strategy' };
+    vm.runInNewContext(
+        section('function createProjectTitle(', 'function updateProjectTitle('),
+        context);
+
+    assert.equal(context.createConversionProjectTitle(
+        'Strategy.txt', 'strategy("EMA Intrabar Timing Test", overlay=true)'),
+        'EMA Intrabar Timing Test');
+    assert.equal(context.createConversionProjectTitle(
+        'uploaded-system.mq5', 'void OnTick() {}'),
+        'uploaded-system');
+    assert.equal(context.createConversionProjectTitle(
+        'Strategy.txt', 'public class FastCrossStrategy : Strategy {}'),
+        'Fast Cross Strategy');
+    assert.equal(context.createConversionProjectTitle(
+        'Strategy.txt', '[Robot] public class LondonBreakoutBot : Robot {}'),
+        'London Breakout Bot');
+    assert.equal(context.createConversionProjectTitle(
+        'Strategy.txt', '#property description "Session Breakout EA"\nvoid OnTick() {}'),
+        'Session Breakout EA');
+    assert.equal(context.createConversionProjectTitle(
+        'Strategy.txt', '//| MomentumTrader.mq5 |\nvoid OnTick() {}'),
+        'MomentumTrader');
+    assert.equal(context.createConversionProjectTitle(
+        'Strategy.txt', 'unknown source language'),
+        'Convert Strategy');
+});
+
+test('converted strategy download warning can be acknowledged and hidden', async () => {
+    const stored = new Map();
+    const classes = new Set();
+    const context = {
+        activeTask: 'convert-strategy',
+        strategyConversionRiskHiddenKey: 'risk-hidden',
+        strategyConversionRiskModal: { hidden: true },
+        hideStrategyConversionRisk: { checked: false },
+        resolveStrategyConversionRisk: null,
+        localStorage: {
+            getItem: key => stored.get(key) ?? null,
+            setItem: (key, value) => stored.set(key, value)
+        },
+        document: { body: { classList: {
+            add: name => classes.add(name),
+            remove: name => classes.delete(name)
+        } } }
+    };
+    vm.runInNewContext(
+        section('function confirmStrategyConversionDownload(', 'function appendPreflightRepairActions('),
+        context);
+
+    const decision = context.confirmStrategyConversionDownload();
+    assert.equal(context.strategyConversionRiskModal.hidden, false);
+    context.hideStrategyConversionRisk.checked = true;
+    context.closeStrategyConversionRisk(true);
+    assert.equal(await decision, true);
+    assert.equal(stored.get('risk-hidden'), 'true');
+    assert.equal(context.strategyConversionRiskModal.hidden, true);
+
+    assert.equal(await context.confirmStrategyConversionDownload(), true);
+    assert.equal(context.strategyConversionRiskModal.hidden, true);
+});
 function element() {
     const classes = new Set();
     return {
@@ -164,7 +227,7 @@ function workspace(options = {}) {
         currentController: null, currentBalanceGbp: options.balance ?? 1,
         currentProjectId: 'project-1', currentProjectTitle: 'Example',
         currentProjectPersisted: true, hasProjectSnapshots: false,
-        activeTask: 'build-indicator', history: [], pendingImage: null,
+        activeTask: options.task ?? 'build-indicator', history: [], pendingImage: null,
         pendingAnalyzerExports: [], promptBuilderBypassed: false, promptReviewCompleted: false,
         token: 'test-only', activeProjectStorageKey: 'test-only',
         taskPlaceholders: { 'build-indicator': 'Describe indicator' },
@@ -175,7 +238,9 @@ function workspace(options = {}) {
         sessionStorage: { setItem() {}, removeItem() {} },
         location: { replace() {} },
         form: { addEventListener(_, handler) { submit = handler; } },
-        isExistingCodeTask: () => false,
+        isExistingCodeTask: () => String(options.task ?? '').startsWith('existing-'),
+        isSourceAttachmentTask: () => /^(?:existing|convert)-/.test(options.task ?? ''),
+        hasCurrentExistingSource: () => options.hasSource === true,
         redirectMismatchedExistingSource: () => false,
         isClearlyFrustrated: () => false,
         reviewBuildPrompt: async prompt => prompt,
@@ -185,7 +250,7 @@ function workspace(options = {}) {
         looksLikeCompleteNinjaScript: value => value === code,
         markBuildPlanResponseReady: () => options.automatic !== false,
         getTaskSwitchTargetFromResponse: () => null,
-        isNewCodeBuildTask: () => true,
+        isNewCodeBuildTask: () => /^(?:build-strategy|build-indicator)$/.test(options.task ?? 'build-indicator'),
         compactPreflightBuildHistory: history => history,
         renderStructuredResponse(content, text) { content.textContent = text; },
         renderPreflightBuildResult(result) {
@@ -244,7 +309,7 @@ function workspace(options = {}) {
     };
     for (const name of ['sendButton', 'cancelButton', 'modelSelect', 'promptInput', 'status'])
         c[name] = element();
-    c.promptInput.value = 'Build an indicator';
+    c.promptInput.value = options.emptyPrompt ? '' : 'Build an indicator';
     c.modelSelect.value = 'gpt-5.3-codex';
     for (const name of ['markBuildPlanPromptSent', 'clearPendingImage', 'clearAnalyzerExports',
         'updateClearInputButton', 'updateImageUploadUi', 'scrollMessagesToBottom',
@@ -281,6 +346,22 @@ function assertReleased(w, disabled = false) {
     assert.equal(w.messageList[1].content.textContent, assistantText);
     assert.equal(w.messageList[1].removed, false);
     assert.equal(w.timers.size, 0);
+}
+
+for (const [task, expectedPrompt] of [
+    ['existing-strategy', 'Review the attached NinjaTrader strategy source.'],
+    ['existing-indicator', 'Review the attached NinjaTrader indicator source.'],
+    ['convert-strategy', 'Convert the attached strategy to NinjaTrader 8.'],
+    ['convert-indicator', 'Convert the attached indicator to NinjaTrader 8.']
+]) {
+    test(`${task}: attached source submits without additional information`, async () => {
+        const w = workspace({ task, hasSource: true, emptyPrompt: true, automatic: false });
+        await w.submit();
+        const chatRequest = w.requests.find(request => request.url === '/api/chat/stream');
+        assert.ok(chatRequest);
+        assert.equal(chatRequest.body.prompt, expectedPrompt);
+        assert.equal(w.c.history[0].content, expectedPrompt);
+    });
 }
 
 test('successful Build Check followed by stalled save unlocks without losing code', async () => {
@@ -417,7 +498,7 @@ for (const heading of ['NinjaTrader Preflight Build', 'NinjaTrader Build Check',
     });
 }
 
-test('new successful report stores the same final wording for every supported build task', () => {
+test('new successful report keeps the same compile-only wording for every supported build task', () => {
     for (const task of ['build-indicator', 'build-strategy', 'existing-indicator',
         'existing-strategy', 'convert-indicator', 'convert-strategy']) {
         const w = workspace();

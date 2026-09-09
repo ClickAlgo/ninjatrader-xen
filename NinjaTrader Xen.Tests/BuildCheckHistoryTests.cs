@@ -76,6 +76,25 @@ public sealed class BuildCheckHistoryTests
         Assert.DoesNotContain("Run Build Check successfully", clickHandler);
     }
 
+    [Fact]
+    public void ConvertedStrategyDownloadShowsDismissibleTimingNotice()
+    {
+        var script = ReadWorkspaceScript();
+        var root = GetProjectRoot();
+        var html = File.ReadAllText(Path.Combine(root, "wwwroot", "workspace.html"));
+
+        Assert.Contains("confirmStrategyConversionDownload()", script);
+        Assert.Contains("activeTask !== \"convert-strategy\"", script);
+        Assert.Contains("strategyConversionRiskHiddenKey", script);
+        Assert.Contains("Do not show this again", html);
+        Assert.Contains("Strategy timing may differ", html);
+        Assert.Contains("Broker data can also affect signal and fill timing", html);
+        Assert.Contains("Read about strategy conversion timing", html);
+        Assert.Contains("/build-strategies/#strategy-conversion-timing", html);
+        Assert.Contains(".conversion-risk-dialog > .feedback-actions", File.ReadAllText(
+            Path.Combine(root, "wwwroot", "css", "site.css")));
+    }
+
     private static string ReadWorkspaceScript()
     {
         var root = GetProjectRoot();
