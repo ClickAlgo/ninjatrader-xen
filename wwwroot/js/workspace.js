@@ -387,6 +387,9 @@ form.addEventListener("submit", async event => {
         promptInput.focus();
         return;
     }
+    if (activeTask === "existing-indicator" && pendingImage) {
+        prompt += "\n\nUse the attached reference image when reviewing the indicator's chart appearance.";
+    }
     if (isExistingCodeTask() && looksLikeCompleteNinjaScript(prompt)) {
         existingCodeText.value = prompt;
         existingCodeFileName.value = activeTask === "existing-strategy"
@@ -2272,7 +2275,8 @@ function updateTaskSpecificUi(preservePendingImage = false) {
 function updateImageUploadUi(message = "") {
     const allowed =
         activeTask === "build-indicator" ||
-        activeTask === "convert-indicator";
+        activeTask === "convert-indicator" ||
+        activeTask === "existing-indicator";
     imageImport.hidden = !allowed;
     if (!allowed)
         return;

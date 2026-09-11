@@ -17,7 +17,7 @@
                 document.documentElement.dataset.theme = "light";
         })();
     </script>
-    <link rel="stylesheet" href="/css/site.css?v=1.0.32">
+    <link rel="stylesheet" href="/css/site.css?v=1.0.35">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -137,36 +137,47 @@
             <section id="activeBuildPlanPanel" class="active-build-plan" hidden></section>
 
             <form id="chatForm" class="composer">
-                <div id="sourceImport" class="source-import" hidden>
-                    <input id="sourceFileInput" type="file"
-                        accept=".cs,.txt,.mq4,.mq5,.pine,text/plain">
-                    <button id="sourceFileButton" class="button source-file-button"
-                        type="button">Upload source file</button>
-                    <input id="analyzerTradesFileInput" type="file"
-                        accept=".csv,text/csv">
-                    <button id="analyzerTradesFileButton"
-                        class="button source-file-button" type="button" hidden>
-                        Add Trades CSV (optional)
-                    </button>
-                    <span id="sourceFileStatus">or paste the complete strategy source below</span>
+                <div class="composer-imports">
+                    <div class="composer-import-actions">
+                        <div id="sourceImport" class="source-import" hidden>
+                            <input id="sourceFileInput" type="file"
+                                accept=".cs,.txt,.mq4,.mq5,.pine,text/plain">
+                            <button id="sourceFileButton" class="button source-file-button"
+                                type="button">Upload source file</button>
+                            <input id="analyzerTradesFileInput" type="file"
+                                accept=".csv,text/csv">
+                            <button id="analyzerTradesFileButton"
+                                class="button source-file-button" type="button" hidden>
+                                Add Trades CSV (optional)
+                            </button>
+                            <span id="sourceFileStatus">or paste the complete strategy source below</span>
+                            <a id="analyzerExportGuide" class="analyzer-export-guide"
+                                href="https://help.clickalgo.com/ninjatrader-xen/strategy-analyzer/"
+                                target="_blank" rel="noopener noreferrer" hidden>How to export results</a>
+                        </div>
+                        <div id="imageImport" class="image-import" hidden>
+                            <input id="imageFileInput" type="file"
+                                accept="image/png,image/jpeg,image/webp">
+                            <button id="imageFileButton" class="button image-file-button"
+                                type="button" aria-label="Upload reference image"
+                                title="Upload reference image">
+                                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none">
+                                    <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                                    <circle cx="8.5" cy="9" r="1.5"></circle>
+                                    <path d="m5 17 4.5-4.5 3.5 3 2.5-2.5 3.5 4"></path>
+                                </svg>
+                            </button>
+                            <span id="imageFileStatus" role="status"></span>
+                            <div id="imagePreview" class="image-preview" hidden>
+                                <img id="imagePreviewContent" alt="Attached reference">
+                                <button id="removeImageButton" type="button"
+                                    aria-label="Remove reference image">&times;</button>
+                            </div>
+                        </div>
+                    </div>
                     <div id="existingCodeAttachments" class="existing-code-attachments" hidden></div>
-                    <a id="analyzerExportGuide" class="analyzer-export-guide"
-                        href="https://help.clickalgo.com/ninjatrader-xen/strategy-analyzer/"
-                        target="_blank" rel="noopener noreferrer" hidden>How to export results</a>
                     <div id="analyzerAttachments" class="analyzer-attachments"
                         aria-label="Attached Strategy Analyzer files" hidden></div>
-                </div>
-                <div id="imageImport" class="image-import" hidden>
-                    <input id="imageFileInput" type="file"
-                        accept="image/png,image/jpeg,image/webp">
-                    <button id="imageFileButton" class="button source-file-button"
-                        type="button">Upload reference image</button>
-                    <span id="imageFileStatus" role="status"></span>
-                    <div id="imagePreview" class="image-preview" hidden>
-                        <img id="imagePreviewContent" alt="Attached reference">
-                        <button id="removeImageButton" type="button"
-                            aria-label="Remove reference image">&times;</button>
-                    </div>
                 </div>
                 <textarea id="promptInput" rows="3" maxlength="60000"
                     placeholder="Describe your NinjaTrader strategy…"></textarea>
@@ -459,6 +470,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=1.1.36"></script>
+    <script src="/js/workspace.js?v=1.1.37"></script>
 </body>
 </html>

@@ -63,7 +63,8 @@ public sealed class ActiveProjectPersistenceTests
     {
         var html = ReadProjectFile("wwwroot", "workspace.html");
 
-        Assert.Contains("/js/workspace.js?v=1.1.36", html);
+        Assert.Contains("/js/workspace.js?v=1.1.37", html);
+        Assert.Contains("/css/site.css?v=1.0.35", html);
     }
 
     private static string FunctionBody(string script, string declaration)

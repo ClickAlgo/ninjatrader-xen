@@ -69,6 +69,31 @@ public sealed class ExistingCodeWorkflowTests
     }
 
     [Fact]
+    public void ConvertIndicatorUsesCompactAccessibleReferenceImageControl()
+    {
+        var html = File.ReadAllText(Path.Combine(Root, "wwwroot", "workspace.html"));
+        var styles = File.ReadAllText(Path.Combine(Root, "wwwroot", "css", "site.css"));
+
+        Assert.Contains("class=\"button image-file-button\"", html);
+        Assert.Contains("aria-label=\"Upload reference image\"", html);
+        Assert.DoesNotContain(">Upload reference image</button>", html);
+        Assert.Contains("class=\"composer-import-actions\"", html);
+        Assert.Contains(".image-file-button svg", styles);
+        Assert.Contains("width: 34px;", styles);
+        Assert.Contains(".composer-context-actions .chat-status:empty", styles);
+    }
+
+    [Fact]
+    public void ExistingIndicatorAllowsAnOptionalReferenceImage()
+    {
+        var script = File.ReadAllText(Path.Combine(Root, "wwwroot", "js", "workspace.js"));
+
+        Assert.Contains("activeTask === \"existing-indicator\";", script);
+        Assert.Contains("activeTask === \"existing-indicator\" && pendingImage", script);
+        Assert.Contains("Use the attached reference image when reviewing the indicator's chart appearance.", script);
+    }
+
+    [Fact]
     public void AttachedSourceTasksCanBeSubmittedWithoutExtraInstructions()
     {
         var html = File.ReadAllText(Path.Combine(Root, "wwwroot", "workspace.html"));

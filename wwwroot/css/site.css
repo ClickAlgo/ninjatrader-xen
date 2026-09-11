@@ -2196,6 +2196,17 @@ html[data-theme="light"] .trial-welcome.trial-unavailable p {
     line-height: 1.5;
 }
 
+.composer-imports {
+    display: flex;
+    flex-direction: column;
+}
+
+.composer-import-actions {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
 .source-import {
     display: flex;
     flex-wrap: wrap;
@@ -2270,8 +2281,7 @@ html[data-theme="light"] .analyzer-attachment button {
 }
 
 .image-import {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    display: flex;
     align-items: center;
     gap: 10px;
     padding: 2px 2px 11px;
@@ -2284,7 +2294,31 @@ html[data-theme="light"] .analyzer-attachment button {
     display: none;
 }
 
-.image-import .source-file-button:disabled {
+.image-file-button {
+    display: inline-grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-color: #484848;
+    background: #292929;
+    color: #f0f0f0;
+}
+
+.image-file-button svg {
+    width: 17px;
+    height: 17px;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.image-file-button:hover:not(:disabled) {
+    border-color: var(--primary);
+}
+
+.image-file-button:disabled {
     cursor: not-allowed;
     opacity: .5;
 }
@@ -2932,6 +2966,10 @@ html[data-theme="light"] .analyzer-export-guide:focus-visible {
     align-items: center;
     gap: 14px;
     min-width: 0;
+}
+
+.composer-context-actions .chat-status:empty {
+    display: none;
 }
 
 .clear-task-button {
@@ -4339,6 +4377,18 @@ html[data-theme="light"] .source-file-button {
     background: #ffffff;
 }
 
+html[data-theme="light"] .image-file-button {
+    border-color: #b9c1ca;
+    color: #303943;
+    background: #ffffff;
+}
+
+html[data-theme="light"] .image-file-button:hover:not(:disabled) {
+    border-color: #d84624;
+    color: #a92e18;
+    background: #fff4f1;
+}
+
 html[data-theme="light"] .source-file-button:hover:not(:disabled) {
     border-color: #d84624;
     color: #a92e18;
@@ -5572,6 +5622,7 @@ html[data-theme="light"] .revision-delete-history {
     flex-basis: 100%;
     flex-wrap: wrap;
     gap: 6px;
+    padding: 0 2px 11px;
 }
 
 .existing-code-attachment {
