@@ -65,7 +65,33 @@ public sealed class ExistingCodeWorkflowTests
         Assert.Contains("existingCodeRoleField.hidden = conversion", script);
         Assert.Contains("await saveConversionSourceAttachment(fileName, code)", script);
         Assert.Contains("Or upload source file", html);
+        Assert.Contains("Or upload source file (maximum 32 KB)", script);
+        Assert.Contains(": \"Or upload source file\";", script);
         Assert.Contains(".feedback-field[hidden]", styles);
+    }
+
+    [Fact]
+    public void OversizedConversionsUseDetailedPanelWhileOtherTasksKeepGenericWarning()
+    {
+        var html = File.ReadAllText(Path.Combine(Root, "wwwroot", "workspace.html"));
+        var script = File.ReadAllText(Path.Combine(Root, "wwwroot", "js", "workspace.js"));
+        var styles = File.ReadAllText(Path.Combine(Root, "wwwroot", "css", "site.css"));
+
+        Assert.Contains("function showOversizedSourceWarning(task = activeTask)", script);
+        Assert.Contains("const maximumSourceFileSizeKb = isConversion ? 32 : 512;", script);
+        Assert.Contains("if (file.size > maximumSourceFileSizeKb * 1024)", script);
+        Assert.Contains("showOversizedSourceWarning();", script);
+        Assert.Contains("if (isSourceAttachmentTask())\n            closeExistingCodeModal();", script);
+        Assert.Contains("task !== \"convert-strategy\" && task !== \"convert-indicator\"", script);
+        Assert.Contains("This file is too large. The maximum size is 512 KB.", script);
+        Assert.Contains("too large for a reliable direct AI conversion", script);
+        Assert.Contains("return incomplete NinjaScript", script);
+        Assert.Contains("convert each component separately", script);
+        Assert.Contains("mailto:development@clickalgo.com", script);
+        Assert.DoesNotContain("showOversizedSourceWarning();\n        sourceFileInput.value = \"\";", script);
+        Assert.Contains("id=\"sourceFileStatus\" role=\"status\"", html);
+        Assert.Contains("#sourceFileStatus.conversion-size-notice", styles);
+        Assert.Contains("html[data-theme=\"light\"] #sourceFileStatus.conversion-size-notice", styles);
     }
 
     [Fact]

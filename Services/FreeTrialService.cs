@@ -212,12 +212,15 @@ public sealed class FreeTrialService(
                     : reader.GetString(reader.GetOrdinal("RegistrationIp"));
             }
 
+            var ipPrefix = CreateIpPrefix(registrationIp);
+
             if (trialGranted ||
                 await HasExistingTrial(
                     connection,
                     transaction,
                     subscriberId,
                     deviceHash,
+                    ipPrefix,
                     cancellationToken))
             {
                 await transaction.RollbackAsync(cancellationToken);
@@ -296,7 +299,7 @@ public sealed class FreeTrialService(
                     "@IpPrefix",
                     SqlDbType.NVarChar,
                     128).Value =
-                        CreateIpPrefix(registrationIp) is { } ipPrefix
+                        ipPrefix is not null
                             ? ipPrefix
                             : DBNull.Value;
                 await grantCommand.ExecuteNonQueryAsync(cancellationToken);
@@ -385,6 +388,7 @@ public sealed class FreeTrialService(
         SqlTransaction transaction,
         int subscriberId,
         string deviceHash,
+        string? ipPrefix,
         CancellationToken cancellationToken)
     {
         await using var command = new SqlCommand("""
@@ -403,6 +407,7 @@ public sealed class FreeTrialService(
                         FROM dbo.FreeTrialGrants WITH (UPDLOCK, HOLDLOCK)
                         WHERE SubscriberId = @SubscriberId
                            OR DeviceHash = @DeviceHash
+                           OR IpPrefix = @IpPrefix
                     )
                     THEN 1
                     ELSE 0
@@ -415,6 +420,12 @@ public sealed class FreeTrialService(
             "@DeviceHash",
             SqlDbType.NVarChar,
             128).Value = deviceHash;
+        command.Parameters.Add(
+            "@IpPrefix",
+            SqlDbType.NVarChar,
+            128).Value = ipPrefix is not null
+                ? ipPrefix
+                : DBNull.Value;
         return Convert.ToInt32(
             await command.ExecuteScalarAsync(cancellationToken)) > 0;
     }

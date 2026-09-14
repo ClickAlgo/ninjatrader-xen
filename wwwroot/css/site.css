@@ -2399,6 +2399,48 @@ html[data-theme="light"] .analyzer-attachment button {
     white-space: nowrap;
 }
 
+#sourceFileStatus.conversion-size-notice {
+    flex: 1 0 100%;
+    overflow: visible;
+    padding: 12px 14px;
+    border: 1px solid rgba(232, 166, 45, .62);
+    border-radius: 7px;
+    color: #ffe1a3;
+    background: rgba(232, 166, 45, .1);
+    line-height: 1.5;
+    white-space: normal;
+}
+
+#sourceFileStatus.conversion-size-notice strong {
+    display: block;
+    margin-bottom: 6px;
+    color: #fff0ca;
+    font-size: 13px;
+}
+
+#sourceFileStatus.conversion-size-notice p {
+    margin: 5px 0 0;
+}
+
+#sourceFileStatus.conversion-size-notice a {
+    color: #ffd27a;
+    font-weight: 700;
+}
+
+html[data-theme="light"] #sourceFileStatus.conversion-size-notice {
+    border-color: rgba(166, 103, 0, .48);
+    color: #5f430f;
+    background: rgba(232, 166, 45, .13);
+}
+
+html[data-theme="light"] #sourceFileStatus.conversion-size-notice strong {
+    color: #603c00;
+}
+
+html[data-theme="light"] #sourceFileStatus.conversion-size-notice a {
+    color: #714800;
+}
+
 .analyzer-export-guide {
     flex: 0 0 auto;
     margin-left: auto;

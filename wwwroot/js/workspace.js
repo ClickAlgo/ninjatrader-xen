@@ -115,6 +115,7 @@ const existingCodeRole = document.getElementById("existingCodeRole");
 const existingCodeRoleField = document.getElementById("existingCodeRoleField");
 const existingCodeTitle = document.getElementById("existingCodeTitle");
 const existingCodeSourceLabel = document.getElementById("existingCodeSourceLabel");
+const uploadExistingCodeLabel = document.getElementById("uploadExistingCodeLabel");
 const existingCodeHelpLink = document.getElementById("existingCodeHelpLink");
 const saveExistingCodeButton = document.getElementById("saveExistingCodeButton");
 const strategyConversionRiskModal = document.getElementById("strategyConversionRiskModal");
@@ -2257,6 +2258,7 @@ function updateTaskSpecificUi(preservePendingImage = false) {
     analyzerTradesFileInput.value = "";
     analyzerTradesFileButton.hidden = activeTask !== "analyse-backtest";
     sourceFileButton.textContent = options?.button || "Upload source file";
+    sourceFileStatus.classList.remove("conversion-size-notice");
     sourceFileStatus.textContent = options?.status || "";
     renderExistingCodeAttachments();
     analyzerExportGuide.hidden = activeTask !== "analyse-backtest";
@@ -2396,6 +2398,8 @@ async function importSourceFile() {
     if (!file)
         return;
 
+    sourceFileStatus.classList.remove("conversion-size-notice");
+
     const isStrategyConversion = activeTask === "convert-strategy";
     const isIndicatorConversion = activeTask === "convert-indicator";
     const isConversion = isStrategyConversion || isIndicatorConversion;
@@ -2414,10 +2418,11 @@ async function importSourceFile() {
         return;
     }
 
-    if (file.size > 512 * 1024) {
-        sourceFileStatus.textContent =
-            "This file is too large. The maximum size is 512 KB.";
-        sourceFileInput.value = "";
+    const maximumSourceFileSizeKb = isConversion ? 32 : 512;
+    if (file.size > maximumSourceFileSizeKb * 1024) {
+        showOversizedSourceWarning();
+        if (isSourceAttachmentTask())
+            closeExistingCodeModal();
         return;
     }
 
@@ -2448,6 +2453,38 @@ async function importSourceFile() {
     } finally {
         sourceFileInput.value = "";
     }
+}
+
+function showOversizedSourceWarning(task = activeTask) {
+    if (task !== "convert-strategy" && task !== "convert-indicator") {
+        sourceFileStatus.classList.remove("conversion-size-notice");
+        sourceFileStatus.textContent =
+            "This file is too large. The maximum size is 512 KB.";
+        return;
+    }
+
+    const sourceType = task === "convert-strategy" ? "strategy" : "indicator";
+    sourceFileStatus.classList.add("conversion-size-notice");
+    sourceFileStatus.replaceChildren();
+
+    const title = document.createElement("strong");
+    title.textContent = `This ${sourceType} is too large for a reliable direct AI conversion.`;
+    const context = document.createElement("p");
+    context.textContent =
+        "Large codebases contain connected logic, shared state, dependencies and platform-specific behaviour.";
+    const risk = document.createElement("p");
+    risk.textContent =
+        `Current AI technology may omit logic, return incomplete NinjaScript, or change ${sourceType} behaviour when converting the entire project in one request.`;
+    const guidance = document.createElement("p");
+    guidance.textContent =
+        `Divide the source into smaller logical components, convert each component separately, then integrate and compile the complete NinjaScript ${sourceType}.`;
+    const alternative = document.createElement("p");
+    alternative.append("Alternatively, use ClickAlgo’s development services by contacting ");
+    const email = document.createElement("a");
+    email.href = "mailto:development@clickalgo.com";
+    email.textContent = "development@clickalgo.com";
+    alternative.append(email, ".");
+    sourceFileStatus.append(title, context, risk, guidance, alternative);
 }
 
 async function importAnalyzerTradesFile() {
@@ -2487,6 +2524,9 @@ function openExistingCodeModal() {
             : (activeTask === "existing-strategy" ? "Strategy.cs" : "Indicator.cs");
     existingCodeTitle.textContent = conversion ? "Share source code" : "Add source code";
     existingCodeSourceLabel.textContent = conversion ? "Source code" : "NinjaScript source";
+    uploadExistingCodeLabel.textContent = conversion
+        ? "Or upload source file (maximum 32 KB)"
+        : "Or upload source file";
     existingCodeText.placeholder = conversion
         ? "Paste the complete source code from the original platform"
         : "Paste the complete NinjaScript source here";
@@ -2542,6 +2582,7 @@ async function saveConversionSourceAttachment(fileName, code) {
     }
     existingCodeState = payload;
     renderExistingCodeAttachments();
+    sourceFileStatus.classList.remove("conversion-size-notice");
     sourceFileStatus.textContent = "";
     promptInput.focus();
     return true;
