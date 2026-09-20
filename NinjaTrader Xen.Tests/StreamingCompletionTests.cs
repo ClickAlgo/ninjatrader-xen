@@ -51,6 +51,30 @@ public sealed class StreamingCompletionTests
         AssertTerminal(Assert.Single(events), "stream_ended", true, 0, 0);
     }
 
+    [Fact]
+    public async Task OpenAi_PreservesIncompleteReasonAndUsage()
+    {
+        var stream = """
+            data: {"type":"response.output_text.delta","delta":"partial code"}
+            data: {"type":"response.incomplete","response":{"status":"incomplete","incomplete_details":{"reason":"max_output_tokens"},"usage":{"input_tokens":1234,"output_tokens":5678}}}
+            """;
+        var events = await Read("openai", stream);
+
+        Assert.Equal("partial code", events[0].Delta);
+        AssertTerminal(events[^1], "max_output_tokens", true, 1234, 5678);
+    }
+
+    [Fact]
+    public async Task OpenAi_PreservesCompletedUsage()
+    {
+        var stream = """
+            data: {"type":"response.completed","response":{"status":"completed","usage":{"input_tokens":12,"output_tokens":34}}}
+            """;
+        var events = await Read("openai", stream);
+
+        AssertTerminal(Assert.Single(events), null!, false, 12, 34);
+    }
+
     private static void AssertTerminal(AiStreamEvent item, string reason,
         bool incomplete, int input, int output)
     {
@@ -65,7 +89,9 @@ public sealed class StreamingCompletionTests
     {
         var factory = new StubFactory(sse);
         var config = new ConfigurationBuilder().Build();
-        IAiStreamingProvider client = new ClaudeStreamingClient(factory, config);
+        IAiStreamingProvider client = provider == "openai"
+            ? new OpenAiStreamingClient(factory, config)
+            : new ClaudeStreamingClient(factory, config);
         var result = new List<AiStreamEvent>();
         await foreach (var item in client.StreamAsync("test", "", [], "", null, 10000, default))
             result.Add(item);

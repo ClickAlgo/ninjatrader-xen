@@ -154,7 +154,16 @@ restoreSelectedModel();
 updateModelCostBadge();
 acceptedModelSelection = modelSelect.value;
 modelSelect.addEventListener("change", handleModelChange);
+let promptHeightManuallyResized = false;
 promptInput.addEventListener("input", updateClearInputButton);
+promptInput.addEventListener("pointerdown", event => {
+    const bounds = promptInput.getBoundingClientRect();
+    if (event.button !== 0 || event.clientX < bounds.right - 24 || event.clientY < bounds.bottom - 24) return;
+    const startingHeight = promptInput.offsetHeight;
+    window.addEventListener("pointerup", () => {
+        if (promptInput.offsetHeight !== startingHeight) promptHeightManuallyResized = true;
+    }, { once: true });
+});
 clearInputButton.addEventListener("click", clearComposerInput);
 cancelButton.addEventListener("click", () => {
     if (!currentController)
@@ -2202,6 +2211,13 @@ function startNewProject(resetTask = true) {
 }
 
 function updateClearInputButton() {
+    if (!promptInput.value) {
+        promptHeightManuallyResized = false;
+        promptInput.style.height = "";
+    } else if (!promptHeightManuallyResized) {
+        promptInput.style.height = "auto";
+        promptInput.style.height = `${promptInput.scrollHeight}px`;
+    }
     clearInputButton.hidden =
         generating ||
         promptInput.disabled ||
@@ -2641,6 +2657,7 @@ async function saveExistingCodeAttachment(event) {
     }
     existingCodeState = payload;
     promptInput.value = stripCompleteSourceFromPrompt(promptInput.value);
+    updateClearInputButton();
     existingCodeText.value = "";
     renderExistingCodeAttachments();
     closeExistingCodeModal();

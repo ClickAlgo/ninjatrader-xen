@@ -2253,6 +2253,11 @@ html[data-theme="light"] .trial-welcome.trial-unavailable p {
     line-height: 1.5;
 }
 
+.composer #promptInput {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
 .composer-imports {
     display: flex;
     flex-direction: column;

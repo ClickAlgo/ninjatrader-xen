@@ -99,15 +99,34 @@ public sealed class OpenAiStreamingClient(
                 if (!string.IsNullOrEmpty(delta))
                     yield return new AiStreamEvent(delta, 0, 0, false);
             }
-            else if (type == "response.completed" &&
-                     payload.TryGetProperty("response", out var completed) &&
-                     completed.TryGetProperty("usage", out var usage))
+            else if (type is "response.completed" or "response.incomplete" &&
+                     payload.TryGetProperty("response", out var completed))
             {
+                var inputTokens = 0;
+                var outputTokens = 0;
+                if (completed.TryGetProperty("usage", out var usage))
+                {
+                    inputTokens = StreamingJson.ReadInt(usage, "input_tokens");
+                    outputTokens = StreamingJson.ReadInt(usage, "output_tokens");
+                }
+
+                var incomplete = type == "response.incomplete";
+                string? stopReason = null;
+                if (incomplete &&
+                    completed.TryGetProperty("incomplete_details", out var details) &&
+                    details.ValueKind == JsonValueKind.Object &&
+                    details.TryGetProperty("reason", out var reason))
+                {
+                    stopReason = reason.GetString();
+                }
+
                 yield return new AiStreamEvent(
                     null,
-                    StreamingJson.ReadInt(usage, "input_tokens"),
-                    StreamingJson.ReadInt(usage, "output_tokens"),
-                    true);
+                    inputTokens,
+                    outputTokens,
+                    true,
+                    stopReason,
+                    incomplete);
             }
         }
     }

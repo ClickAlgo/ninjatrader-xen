@@ -378,6 +378,22 @@ public static class ChatEndpoints
             return;
         }
 
+        if (RequiresCompleteSourceResponse(route.Intent, currentCode) &&
+            !CanLikelyFitCompleteSource(currentCode, maximumOutputTokens))
+        {
+            await WriteEvent(context, new
+            {
+                type = "blocked",
+                message =
+                    "This source file is too large for the available response allowance. " +
+                    "No AI credit was used. Reduce or split the file, or use a controlled " +
+                    "patch workflow for a smaller change instead of retrying the same request.",
+                balanceGbp
+            });
+            await Complete(context);
+            return;
+        }
+
         var inputTokens = 0;
         var outputTokens = 0;
         var generatedCharacters = 0;
@@ -726,6 +742,27 @@ public static class ChatEndpoints
             availableOutputUsd / pricing.OutputPer1M * 1_000_000m);
 
         return (int)Math.Clamp(affordableTokens, 0, 10_000);
+    }
+
+    internal static bool RequiresCompleteSourceResponse(
+        string intent,
+        string currentCode) =>
+        !string.IsNullOrWhiteSpace(currentCode) &&
+        intent is "build" or "modify" or "convert" or "repair";
+
+    internal static bool CanLikelyFitCompleteSource(
+        string currentCode,
+        int maximumOutputTokens)
+    {
+        if (string.IsNullOrWhiteSpace(currentCode))
+            return true;
+
+        // Existing-code responses must reproduce the complete file. Estimate at
+        // the same four-characters-per-token ratio used by billing, then reserve
+        // room for the requested changes and the required response framing.
+        var sourceTokens = (int)Math.Ceiling(currentCode.Length / 4m);
+        var requiredTokens = (int)Math.Ceiling(sourceTokens * 1.15m) + 500;
+        return requiredTokens <= maximumOutputTokens;
     }
 
     private static (AiImage? Image, string? Error) ValidateImage(

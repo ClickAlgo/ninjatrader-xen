@@ -40,15 +40,43 @@ public sealed class ProxyCheckV3Tests
         Assert.False(await Check(new(), httpStatus: HttpStatusCode.ServiceUnavailable));
     }
 
+    [Fact]
+    public async Task WarningWithHostingDetectionBlocks()
+    {
+        Assert.True(await Check(
+            new() { ["hosting"] = true, ["risk"] = 0 },
+            status: "warning"));
+    }
+
+    [Fact]
+    public async Task WarningWithoutRequestedIpRecordPreservesFailOpenPolicy()
+    {
+        Assert.False(await Check(
+            new() { ["hosting"] = true, ["risk"] = 100 },
+            status: "warning",
+            responseIp: "203.0.113.10"));
+    }
+
+    [Theory]
+    [InlineData("Residential")]
+    [InlineData("Business")]
+    public async Task NonHostingConnectionTypesRemainEligibleForThisCheck(string type)
+    {
+        Assert.False(await Check(
+            new() { ["hosting"] = false, ["risk"] = 0 },
+            type));
+    }
+
     private static async Task<bool> Check(Dictionary<string, object> detections,
-        string type = "Business", string country = "US", HttpStatusCode httpStatus = HttpStatusCode.OK)
+        string type = "Business", string country = "US", HttpStatusCode httpStatus = HttpStatusCode.OK,
+        string status = "ok", string responseIp = "104.255.98.77")
     {
         // Metadata deliberately precedes the IP record, exercising address selection.
         var body = JsonSerializer.Serialize(new Dictionary<string, object>
         {
-            ["status"] = "ok",
+            ["status"] = status,
             ["metadata"] = new { description = "not an address record" },
-            ["104.255.98.77"] = new
+            [responseIp] = new
             {
                 detections,
                 network = new { type },
