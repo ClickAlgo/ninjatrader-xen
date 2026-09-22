@@ -589,8 +589,11 @@ form.addEventListener("submit", async event => {
                     }
                     if (eventData.type === "error" && assistantText)
                         incompleteMessage = eventData.message;
-                    else
-                        throw new Error(eventData.message);
+                    else {
+                        const requestError = new Error(eventData.message);
+                        requestError.helpUrl = eventData.helpUrl || "";
+                        throw requestError;
+                    }
                 }
             }
         }
@@ -714,6 +717,14 @@ form.addEventListener("submit", async event => {
         restoreBuildPlanPromptLoaded(prompt);
         assistantMessage.classList.remove("generating");
         content.textContent = error.message;
+        if (error.helpUrl) {
+            const help = document.createElement("a");
+            help.href = error.helpUrl;
+            help.target = "_blank";
+            help.rel = "noopener";
+            help.textContent = "Learn why large strategy conversions are limited";
+            content.append(document.createElement("br"), help);
+        }
         assistantMessage.classList.add("error");
         status.textContent = "Request failed";
     } finally {

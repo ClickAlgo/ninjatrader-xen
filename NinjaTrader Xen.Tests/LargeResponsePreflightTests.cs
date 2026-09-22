@@ -4,6 +4,9 @@ namespace NinjaTrader_Xen.Tests;
 
 public sealed class LargeResponsePreflightTests
 {
+    private static readonly string Root = Path.GetFullPath(Path.Combine(
+        AppContext.BaseDirectory, "..", "..", "..", ".."));
+
     [Theory]
     [InlineData("build", true)]
     [InlineData("modify", true)]
@@ -37,5 +40,39 @@ public sealed class LargeResponsePreflightTests
         Assert.Equal(expected,
             ChatEndpoints.CanLikelyFitCompleteSource(
                 new string('x', sourceCharacters), allowance));
+    }
+
+    [Fact]
+    public void AbsoluteSourceLimit_IsCheckedBeforeLowBalance()
+    {
+        var endpoint = File.ReadAllText(Path.Combine(
+            Root, "Endpoints", "ChatEndpoints.cs"));
+        var absoluteLimitCheck = endpoint.IndexOf(
+            "!CanLikelyFitCompleteSource(currentCode, MaximumResponseTokens)",
+            StringComparison.Ordinal);
+        var lowBalanceCheck = endpoint.IndexOf(
+            "if (maximumOutputTokens < 800)",
+            StringComparison.Ordinal);
+
+        Assert.True(absoluteLimitCheck >= 0);
+        Assert.True(lowBalanceCheck > absoluteLimitCheck);
+        Assert.Contains("even with additional credit", endpoint);
+        Assert.Contains("Ask Xen to analyse it without rewriting the full file", endpoint);
+        Assert.Contains(
+            "https://help.clickalgo.com/ninjatrader-xen/convert-strategies/#large-strategy-files",
+            endpoint);
+    }
+
+    [Fact]
+    public void AbsoluteSourceLimit_HelpLinkIsRenderedForTheCustomer()
+    {
+        var script = File.ReadAllText(Path.Combine(
+            Root, "wwwroot", "js", "workspace.js"));
+
+        Assert.Contains("requestError.helpUrl = eventData.helpUrl", script);
+        Assert.Contains("help.href = error.helpUrl", script);
+        Assert.Contains("help.target = \"_blank\"", script);
+        Assert.Contains("help.rel = \"noopener\"", script);
+        Assert.Contains("Learn why large strategy conversions are limited", script);
     }
 }

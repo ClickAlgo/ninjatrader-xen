@@ -12,6 +12,8 @@ namespace NinjaTrader_Xen.Endpoints;
 
 public static class ChatEndpoints
 {
+    internal const int MaximumResponseTokens = 10_000;
+
     private static readonly HashSet<string> AllowedTasks =
         new(StringComparer.OrdinalIgnoreCase)
         {
@@ -365,6 +367,23 @@ public static class ChatEndpoints
             systemPrompt,
             balanceGbp,
             image is not null);
+
+        if (RequiresCompleteSourceResponse(route.Intent, currentCode) &&
+            !CanLikelyFitCompleteSource(currentCode, MaximumResponseTokens))
+        {
+            await WriteEvent(context, new
+            {
+                type = "blocked",
+                message =
+                    "This source file is too large for a complete AI rewrite, even with additional credit. " +
+                    "No AI credit was used. Ask Xen to analyse it without rewriting the full file, or " +
+                    "split it into smaller components or controlled changes.",
+                helpUrl = "https://help.clickalgo.com/ninjatrader-xen/convert-strategies/#large-strategy-files",
+                balanceGbp
+            });
+            await Complete(context);
+            return;
+        }
 
         if (maximumOutputTokens < 800)
         {
@@ -741,7 +760,7 @@ public static class ChatEndpoints
         var affordableTokens = decimal.Floor(
             availableOutputUsd / pricing.OutputPer1M * 1_000_000m);
 
-        return (int)Math.Clamp(affordableTokens, 0, 10_000);
+        return (int)Math.Clamp(affordableTokens, 0, MaximumResponseTokens);
     }
 
     internal static bool RequiresCompleteSourceResponse(

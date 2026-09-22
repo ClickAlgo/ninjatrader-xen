@@ -788,7 +788,7 @@
 .landing-nav {
     gap: 8px;
     padding: 5px;
-    border: 1px solid #282c32;
+    border: 1px solid #5d5f61;
     border-radius: 999px;
     background: rgba(20, 22, 26, .82);
 }
@@ -797,7 +797,7 @@
     padding: 8px 13px;
     border-radius: 999px;
     color: #a5a8ae;
-    font-size: 12px;
+    font-size: 14px;
 }
 
 .landing-nav a:hover {
