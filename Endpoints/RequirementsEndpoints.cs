@@ -27,7 +27,7 @@ public static class RequirementsEndpoints
             "gpt-5.6-sol",
             "gpt-5.6-luna",
             "claude-sonnet-4-6",
-            "claude-opus-5",
+            "claude-opus-5-5",
             "deepseek-v4-pro",
             "kimi-k2.7-code"
         };

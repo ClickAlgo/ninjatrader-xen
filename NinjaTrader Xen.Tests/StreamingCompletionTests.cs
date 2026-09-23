@@ -9,21 +9,41 @@ namespace NinjaTrader_Xen.Tests;
 public sealed class StreamingCompletionTests
 {
     [Fact]
-    public async Task Claude_DisablesThinkingSoCodeGetsTheOutputBudget()
+    public async Task Claude_Opus55UsesAdaptiveThinkingAtLowEffort()
     {
         var factory = new StubFactory("data: {\"type\":\"message_stop\"}\n");
         var client = new ClaudeStreamingClient(
             factory, new ConfigurationBuilder().Build());
 
         await foreach (var _ in client.StreamAsync(
-            "claude-opus-5", "system", [], "prompt", null, 32000, default))
+            "claude-opus-5-5", "system", [], "prompt", null, 32000, default))
+        {
+        }
+
+        using var payload = JsonDocument.Parse(Assert.IsType<string>(factory.LastRequestBody));
+        Assert.Equal("adaptive",
+            payload.RootElement.GetProperty("thinking").GetProperty("type").GetString());
+        Assert.Equal("low",
+            payload.RootElement.GetProperty("output_config").GetProperty("effort").GetString());
+        Assert.Equal(32000, payload.RootElement.GetProperty("max_tokens").GetInt32());
+    }
+
+    [Fact]
+    public async Task Claude_OtherModelsKeepThinkingDisabled()
+    {
+        var factory = new StubFactory("data: {\"type\":\"message_stop\"}\n");
+        var client = new ClaudeStreamingClient(
+            factory, new ConfigurationBuilder().Build());
+
+        await foreach (var _ in client.StreamAsync(
+            "claude-sonnet-4-6", "system", [], "prompt", null, 32000, default))
         {
         }
 
         using var payload = JsonDocument.Parse(Assert.IsType<string>(factory.LastRequestBody));
         Assert.Equal("disabled",
             payload.RootElement.GetProperty("thinking").GetProperty("type").GetString());
-        Assert.Equal(32000, payload.RootElement.GetProperty("max_tokens").GetInt32());
+        Assert.False(payload.RootElement.TryGetProperty("output_config", out _));
     }
 
     [Theory]

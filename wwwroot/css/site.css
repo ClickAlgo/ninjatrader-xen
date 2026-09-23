@@ -1857,6 +1857,14 @@ tbody tr:last-child td {
     background: var(--surface);
 }
 
+html:not([data-theme="light"]) .model-field select {
+    border-color: #635f5f;
+}
+
+html:not([data-theme="light"]) .model-field-label {
+    color: #b8b8b8;
+}
+
 .messages {
     overflow-y: auto;
     min-height: 0;

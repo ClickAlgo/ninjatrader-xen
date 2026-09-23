@@ -20,7 +20,7 @@ const fs = require('node:fs');
             'namespace NinjaTrader.NinjaScript.Indicators { public class RV : Indicator { protected override void OnStateChange() {} private static DateTime EasterSun';
         let project = {
             projectId: id, title: 'Recovery browser fixture', task: 'build-indicator',
-            model: 'claude-opus-5', latestCode: oldCode,
+            model: 'claude-opus-5-5', latestCode: oldCode,
             messages: [
                 { role: 'user', content: 'Build a relative-volume indicator.' },
                 { role: 'assistant', content: '```csharp\n' + oldCode + '\n```' },
@@ -58,7 +58,7 @@ const fs = require('node:fs');
                 const body = request.postDataJSON();
                 assert.match(body.prompt, /^Repair the latest complete NinjaScript source after an incomplete response\./);
                 assert.match(body.prompt, /Request to complete:\nAdd holiday exclusions\.$/);
-                assert.equal(body.model, 'claude-opus-5');
+                assert.equal(body.model, 'claude-opus-5-5');
                 const response = chatRequests === 1
                     ? '```csharp\npublic class RV : Indicator { void OnStateChange() {}'
                     : '```csharp\n' + newCode + '\n```';

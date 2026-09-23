@@ -54,15 +54,23 @@ public sealed class ClaudeStreamingClient(
         }
         messages.Add(new { role = "user", content = userContent });
 
-        var body = new
+        var body = new Dictionary<string, object?>
         {
-            model,
-            stream = true,
-            max_tokens = maximumOutputTokens,
-            thinking = new { type = "disabled" },
-            system = systemPrompt,
-            messages
+            ["model"] = model,
+            ["stream"] = true,
+            ["max_tokens"] = maximumOutputTokens,
+            ["system"] = systemPrompt,
+            ["messages"] = messages
         };
+        if (model.Equals("claude-opus-5-5", StringComparison.OrdinalIgnoreCase))
+        {
+            body["thinking"] = new { type = "adaptive" };
+            body["output_config"] = new { effort = "low" };
+        }
+        else
+        {
+            body["thinking"] = new { type = "disabled" };
+        }
 
         using var response = await SendAsync(body, cancellationToken);
         string? stopReason = null;
@@ -140,8 +148,13 @@ public sealed class ClaudeStreamingClient(
         if (response.IsSuccessStatusCode)
             return response;
 
+        var errorBody = await response.Content.ReadAsStringAsync(
+            cancellationToken);
         response.Dispose();
+        var errorDetail = string.IsNullOrWhiteSpace(errorBody)
+            ? string.Empty
+            : $" {errorBody.Trim()}";
         throw new InvalidOperationException(
-            $"Claude request failed with status {(int)response.StatusCode}.");
+            $"Claude request failed with status {(int)response.StatusCode}.{errorDetail}");
     }
 }

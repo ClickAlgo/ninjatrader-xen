@@ -55,6 +55,9 @@ const buildPlanStorageKey = "nx_active_build_plan_v1";
 const mobileWorkspaceNoticeKey = "nx_mobile_workspace_notice_dismissed";
 const strategyConversionRiskHiddenKey = "nx_strategy_conversion_risk_hidden";
 const defaultModel = "gpt-5.3-codex";
+const legacyModelReplacements = new Map([
+    ["claude-opus-5", "claude-opus-5-5"]
+]);
 const preflightRepairPromptPrefix =
     "Repair the latest complete NinjaScript source so it passes";
 const generatedRepairPromptPrefix =
@@ -5092,9 +5095,10 @@ function applyProjectToWorkspace(project) {
     promptInput.placeholder = taskPlaceholders[activeTask];
     updateTaskSpecificUi();
 
+    const projectModel = replaceLegacyModel(project.model);
     modelSelect.value =
-        [...modelSelect.options].some(option => option.value === project.model)
-            ? project.model
+        [...modelSelect.options].some(option => option.value === projectModel)
+            ? projectModel
             : defaultModel;
     acceptedModelSelection = modelSelect.value;
     rememberSelectedModel();
@@ -5280,15 +5284,22 @@ function applyCreditAvailability() {
 
 function restoreSelectedModel() {
     const savedModel = localStorage.getItem("nx_selected_model");
-    if (savedModel &&
-        [...modelSelect.options].some(option => option.value === savedModel)) {
-        modelSelect.value = savedModel;
+    const restoredModel = replaceLegacyModel(savedModel);
+    if (restoredModel &&
+        [...modelSelect.options].some(option => option.value === restoredModel)) {
+        modelSelect.value = restoredModel;
+        if (restoredModel !== savedModel)
+            localStorage.setItem("nx_selected_model", restoredModel);
         return;
     }
 
     modelSelect.value = defaultModel;
     if (savedModel)
         localStorage.removeItem("nx_selected_model");
+}
+
+function replaceLegacyModel(model) {
+    return legacyModelReplacements.get(model) || model;
 }
 
 function rememberSelectedModel() {
