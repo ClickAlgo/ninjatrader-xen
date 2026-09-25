@@ -32,6 +32,8 @@ public static class ChatEndpoints
             "gpt-5.3-codex",
             "gpt-5.6-sol",
             "gpt-5.6-luna",
+            "gpt-6-sol",
+            "gpt-6-luna",
             "claude-sonnet-4-6",
             "claude-opus-5-5",
             "kimi-k2.7-code",

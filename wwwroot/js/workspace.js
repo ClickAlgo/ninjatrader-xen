@@ -54,7 +54,8 @@ const activeProjectStorageKey = "nx_active_saved_project_id";
 const buildPlanStorageKey = "nx_active_build_plan_v1";
 const mobileWorkspaceNoticeKey = "nx_mobile_workspace_notice_dismissed";
 const strategyConversionRiskHiddenKey = "nx_strategy_conversion_risk_hidden";
-const defaultModel = "gpt-5.3-codex";
+const modelGenerationStorageKey = "nx_model_generation";
+const defaultModel = "gpt-6-sol";
 const legacyModelReplacements = new Map([
     ["claude-opus-5", "claude-opus-5-5"]
 ]);
@@ -64,6 +65,7 @@ const generatedRepairPromptPrefix =
     "Repair the latest complete NinjaScript source";
 const lowCostModels = new Set([
     "gpt-5.6-luna",
+    "gpt-6-luna",
     "deepseek-v4-pro",
     "kimi-k2.7-code"
 ]);
@@ -82,6 +84,8 @@ const cancelButton = document.getElementById("cancelButton");
 const status = document.getElementById("chatStatus");
 const modelSelect = document.getElementById("modelSelect");
 const modelCostBadge = document.getElementById("modelCostBadge");
+const settingsModal = document.getElementById("settingsModal");
+const settingsForm = document.getElementById("settingsForm");
 const projectsModal = document.getElementById("projectsModal");
 const projectsList = document.getElementById("projectsList");
 const promptBuilderModal = document.getElementById("promptBuilderModal");
@@ -153,10 +157,19 @@ let codeWorkspaceCode = "";
 let resolveStrategyConversionRisk = null;
 
 updateThemeToggle();
+applyPreferredModelGeneration();
 restoreSelectedModel();
 updateModelCostBadge();
 acceptedModelSelection = modelSelect.value;
 modelSelect.addEventListener("change", handleModelChange);
+document.getElementById("settingsButton").addEventListener("click", openSettings);
+document.getElementById("closeSettingsButton").addEventListener("click", closeSettings);
+document.getElementById("cancelSettingsButton").addEventListener("click", closeSettings);
+settingsModal.addEventListener("click", event => {
+    if (event.target === settingsModal)
+        closeSettings();
+});
+settingsForm.addEventListener("submit", applySettings);
 let promptHeightManuallyResized = false;
 promptInput.addEventListener("input", updateClearInputButton);
 promptInput.addEventListener("pointerdown", event => {
@@ -2201,6 +2214,12 @@ function startNewProject(resetTask = true) {
     hasProjectSnapshots = false;
     updateHistoryButton();
     history = [];
+    resetProjectOnlyModels();
+    applyPreferredModelGeneration();
+    acceptedModelSelection = modelSelect.value;
+    rememberSelectedModel();
+    updateModelCostBadge();
+    updateImageUploadUi();
     existingCodeState = { sources: [], decisions: [], workingCode: null };
     renderExistingCodeAttachments();
     promptInput.value = "";
@@ -5096,6 +5115,13 @@ function applyProjectToWorkspace(project) {
     updateTaskSpecificUi();
 
     const projectModel = replaceLegacyModel(project.model);
+    resetProjectOnlyModels();
+    makeProjectModelAvailable(projectModel);
+    const projectGeneration = modelGenerationForModel(projectModel);
+    if (projectGeneration)
+        setModelGeneration(projectGeneration, false, false);
+    else
+        applyPreferredModelGeneration();
     modelSelect.value =
         [...modelSelect.options].some(option => option.value === projectModel)
             ? projectModel
@@ -5284,22 +5310,115 @@ function applyCreditAvailability() {
 
 function restoreSelectedModel() {
     const savedModel = localStorage.getItem("nx_selected_model");
-    const restoredModel = replaceLegacyModel(savedModel);
+    let restoredModel = replaceLegacyModel(savedModel);
+    restoredModel = modelForGeneration(
+        restoredModel,
+        preferredModelGeneration());
     if (restoredModel &&
-        [...modelSelect.options].some(option => option.value === restoredModel)) {
+        [...modelSelect.options].some(option =>
+            option.value === restoredModel && !option.disabled)) {
         modelSelect.value = restoredModel;
         if (restoredModel !== savedModel)
             localStorage.setItem("nx_selected_model", restoredModel);
         return;
     }
 
-    modelSelect.value = defaultModel;
+    modelSelect.value = modelForGeneration(
+        defaultModel,
+        preferredModelGeneration());
     if (savedModel)
         localStorage.removeItem("nx_selected_model");
 }
 
 function replaceLegacyModel(model) {
     return legacyModelReplacements.get(model) || model;
+}
+
+function modelGenerationForModel(model) {
+    const option = [...modelSelect.options]
+        .find(candidate => candidate.value === model);
+    return option?.dataset.modelGeneration || null;
+}
+
+function resetProjectOnlyModels() {
+    modelSelect.querySelectorAll("[data-project-only-model]").forEach(option => {
+        if (option.selected)
+            modelSelect.value = option.dataset.fallbackModel || defaultModel;
+        option.hidden = true;
+        option.disabled = true;
+    });
+}
+
+function makeProjectModelAvailable(model) {
+    const option = [...modelSelect.options].find(candidate =>
+        candidate.value === model && candidate.hasAttribute("data-project-only-model"));
+    if (!option)
+        return;
+    option.hidden = false;
+    option.disabled = false;
+}
+
+function modelForGeneration(model, generation) {
+    const selectedOption = [...modelSelect.options]
+        .find(candidate => candidate.value === model);
+    const family = selectedOption?.dataset.modelFamily;
+    if (!family)
+        return model;
+
+    const replacement = [...modelSelect.options].find(option =>
+        option.dataset.modelFamily === family &&
+        option.dataset.modelGeneration === generation);
+    return replacement?.value || model;
+}
+
+function preferredModelGeneration() {
+    return localStorage.getItem(modelGenerationStorageKey) === "established"
+        ? "established"
+        : "latest";
+}
+
+function applyPreferredModelGeneration() {
+    setModelGeneration(preferredModelGeneration(), false);
+}
+
+function setModelGeneration(generation, persist, mapSelection = true) {
+    const normalized = generation === "latest" ? "latest" : "established";
+    const selectedModel = modelSelect.value;
+
+    modelSelect.querySelectorAll("[data-model-generation]").forEach(option => {
+        option.hidden = option.dataset.modelGeneration !== normalized;
+        option.disabled = option.hidden;
+    });
+
+    if (mapSelection)
+        modelSelect.value = modelForGeneration(selectedModel, normalized);
+    if (persist)
+        localStorage.setItem(modelGenerationStorageKey, normalized);
+}
+
+function openSettings() {
+    const visibleGeneration = modelGenerationForModel(modelSelect.value) ||
+        preferredModelGeneration();
+    settingsForm.elements.modelGeneration.value = visibleGeneration;
+    document.getElementById("settingsProjectNote").hidden = !currentProjectId;
+    settingsModal.hidden = false;
+    document.body.classList.add("modal-open");
+}
+
+function closeSettings() {
+    settingsModal.hidden = true;
+    document.body.classList.remove("modal-open");
+}
+
+function applySettings(event) {
+    event.preventDefault();
+    const generation = new FormData(settingsForm).get("modelGeneration");
+    setModelGeneration(generation, true);
+    acceptedModelSelection = modelSelect.value;
+    rememberSelectedModel();
+    updateModelCostBadge();
+    updateImageUploadUi();
+    closeSettings();
 }
 
 function rememberSelectedModel() {

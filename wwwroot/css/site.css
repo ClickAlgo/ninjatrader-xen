@@ -1857,6 +1857,10 @@ tbody tr:last-child td {
     background: var(--surface);
 }
 
+.model-field option[hidden] {
+    display: none;
+}
+
 html:not([data-theme="light"]) .model-field select {
     border-color: #635f5f;
 }
@@ -3402,6 +3406,97 @@ html[data-theme="light"] .analyzer-export-guide:focus-visible {
     box-shadow: 0 26px 90px rgba(0, 0, 0, .6);
 }
 
+.settings-dialog {
+    width: min(520px, 100%);
+    overflow: hidden;
+    border: 1px solid #454545;
+    border-radius: 12px;
+    background: #191919;
+    box-shadow: 0 26px 90px rgba(0, 0, 0, .6);
+}
+
+.settings-form {
+    padding: 20px 22px;
+}
+
+.settings-group {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.settings-group legend {
+    margin-bottom: 4px;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.settings-group > p,
+.settings-project-note {
+    margin: 0 0 4px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.settings-choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 13px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #202020;
+    cursor: pointer;
+}
+
+.settings-choice input {
+    margin-top: 3px;
+}
+
+.settings-choice span {
+    display: grid;
+    gap: 3px;
+}
+
+.settings-choice strong {
+    color: var(--text);
+    font-size: 13px;
+}
+
+.settings-recommended {
+    margin-left: 5px;
+    color: var(--primary-bright);
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+}
+
+.settings-choice small {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+html:not([data-theme="light"]) .settings-group > p,
+html:not([data-theme="light"]) .settings-project-note,
+html:not([data-theme="light"]) .settings-choice small {
+    color: #b8b8b8;
+}
+
+.settings-project-note {
+    margin-top: 14px;
+}
+
+.settings-form > .feedback-actions {
+    margin-top: 24px;
+}
+
 .projects-dialog-header {
     display: flex;
     align-items: center;
@@ -4154,7 +4249,7 @@ html[data-theme="light"] .analyzer-export-guide:focus-visible {
     place-items: center;
     width: 18px;
     height: 18px;
-    border: 1px solid #666;
+    border: 1px solid var(--primary-bright);
     border-radius: 50%;
     color: var(--primary-bright);
     font-size: 10px;
@@ -4168,7 +4263,7 @@ html[data-theme="light"] .analyzer-export-guide:focus-visible {
     width: 14px;
     height: 17px;
     margin: 0 2px;
-    border: 1px solid #777;
+    border: 1px solid var(--primary-bright);
     border-radius: 2px;
 }
 
@@ -4190,33 +4285,24 @@ html[data-theme="light"] .analyzer-export-guide:focus-visible {
     top: 9px;
 }
 
-.workspace-video-icon {
-    position: relative;
-    display: block;
-    flex: 0 0 auto;
-    width: 18px;
-    height: 14px;
-    border: 1px solid #777;
-    border-radius: 4px;
-}
-
-.workspace-video-icon::after {
-    content: "";
-    position: absolute;
-    top: 3px;
-    left: 7px;
-    border-top: 3px solid transparent;
-    border-bottom: 3px solid transparent;
-    border-left: 5px solid var(--primary-bright);
-}
-
 .workspace-theme-icon {
     display: grid;
     flex: 0 0 auto;
     place-items: center;
     width: 18px;
     height: 18px;
-    color: var(--muted);
+    color: var(--primary-bright);
+    font-size: 17px;
+    line-height: 1;
+}
+
+.workspace-settings-icon {
+    display: grid;
+    flex: 0 0 18px;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    color: var(--primary-bright);
     font-size: 17px;
     line-height: 1;
 }
@@ -4287,7 +4373,7 @@ html[data-theme="light"] .workspace-support-link:hover {
 }
 
 html[data-theme="light"] .workspace-support-icon {
-    border-color: #aeb6c0;
+    border-color: var(--primary-bright);
 }
 
 html[data-theme="light"] .chat-panel,
@@ -4593,7 +4679,8 @@ html[data-theme="light"] .projects-modal {
 
 html[data-theme="light"] .projects-dialog,
 html[data-theme="light"] .prompt-builder-dialog,
-html[data-theme="light"] .feedback-dialog {
+html[data-theme="light"] .feedback-dialog,
+html[data-theme="light"] .settings-dialog {
     border-color: #cbd1d8;
     background: #ffffff;
     box-shadow: 0 24px 70px rgba(28, 36, 46, .22);
@@ -4601,6 +4688,7 @@ html[data-theme="light"] .feedback-dialog {
 
 html[data-theme="light"] .dialog-close,
 html[data-theme="light"] .project-row,
+html[data-theme="light"] .settings-choice,
 html[data-theme="light"] .prompt-review-summary,
 html[data-theme="light"] .prompt-builder-field,
 html[data-theme="light"] .build-plan-instruction,

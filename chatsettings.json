@@ -15,6 +15,16 @@
         "CachedInputPer1M": 0.02,
         "OutputPer1M": 1.20
       },
+      "gpt-6-sol": {
+        "InputPer1M": 2.00,
+        "CachedInputPer1M": 0.20,
+        "OutputPer1M": 10.00
+      },
+      "gpt-6-luna": {
+        "InputPer1M": 0.10,
+        "CachedInputPer1M": 0.01,
+        "OutputPer1M": 0.50
+      },
       "claude-sonnet-4-6": {
         "InputPer1M": 3.00,
         "OutputPer1M": 15.00

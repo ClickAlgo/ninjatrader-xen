@@ -17,7 +17,7 @@
                 document.documentElement.dataset.theme = "light";
         })();
     </script>
-    <link rel="stylesheet" href="/css/site.css?v=1.0.38">
+    <link rel="stylesheet" href="/css/site.css?v=1.0.44">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -87,19 +87,17 @@
                     <span class="workspace-guide-icon" aria-hidden="true"></span>
                     <span>User guide</span>
                 </a>
-                <a class="workspace-support-link"
-                    href="https://www.youtube.com/playlist?list=PLJxGn6T5y7iE"
-                    target="_blank" rel="noopener noreferrer">
-                    <span class="workspace-video-icon" aria-hidden="true"></span>
-                    <span>Video guides</span>
-                </a>
                 <button id="themeToggleButton" class="workspace-support-link" type="button"
                     aria-pressed="false">
                     <span id="themeToggleIcon" class="workspace-theme-icon" aria-hidden="true">☼</span>
                     <span id="themeToggleLabel">Light theme</span>
                 </button>
+                <button id="settingsButton" class="workspace-support-link" type="button">
+                    <span class="workspace-settings-icon" aria-hidden="true">⚙</span>
+                    <span>Model Settings</span>
+                </button>
             </div>
-            <div class="workspace-build-version">Build v1.2.0-beta</div>
+            <div class="workspace-build-version">Build v1.3.0-beta</div>
         </aside>
 
         <section class="chat-panel">
@@ -115,11 +113,18 @@
                         <span id="modelCostBadge" class="model-cost-badge" hidden>LOW COST</span>
                     </span>
                     <select id="modelSelect">
-                        <option value="gpt-5.6-sol">GPT Sol 5.6</option>
-                        <option value="gpt-5.3-codex" selected>GPT Codex 5.3</option>
-                        <option value="gpt-5.6-luna">GPT 5.6 Luna</option>
+                        <option value="gpt-5.6-sol" data-model-generation="established"
+                            data-model-family="openai-sol">GPT Sol 5.6</option>
+                        <option value="gpt-6-sol" data-model-generation="latest"
+                            data-model-family="openai-sol" hidden selected>GPT Sol 6</option>
+                        <option value="gpt-5.3-codex">GPT Codex 5.3</option>
+                        <option value="gpt-5.6-luna" data-model-generation="established"
+                            data-model-family="openai-luna">GPT 5.6 Luna</option>
+                        <option value="gpt-6-luna" data-model-generation="latest"
+                            data-model-family="openai-luna" hidden>GPT Luna 6</option>
                         <option value="claude-opus-5-5">Claude Opus 5.5</option>
-                        <option value="claude-sonnet-4-6">Claude Sonnet 4.6</option>
+                        <option value="claude-sonnet-4-6" data-project-only-model
+                            data-fallback-model="claude-opus-5-5" hidden disabled>Claude Sonnet 4.6</option>
                         <!--<option value="deepseek-v4-pro">DeepSeek Pro V4</option>-->
                     </select>
                 </label>
@@ -249,6 +254,47 @@
                     <button id="cancelExistingCodeButton" class="button" type="button">Cancel</button>
                     <button id="saveExistingCodeButton" class="button primary"
                         type="submit">Add source code</button>
+                </footer>
+            </form>
+        </section>
+    </div>
+
+    <div id="settingsModal" class="projects-modal" hidden>
+        <section class="settings-dialog" role="dialog" aria-modal="true"
+            aria-labelledby="settingsTitle">
+            <header class="projects-dialog-header">
+                <div>
+                    <p class="eyebrow">PREFERENCES</p>
+                    <h2 id="settingsTitle">Settings</h2>
+                </div>
+                <button id="closeSettingsButton" class="dialog-close" type="button"
+                    aria-label="Close">&times;</button>
+            </header>
+            <form id="settingsForm" class="settings-form">
+                <fieldset class="settings-group">
+                    <legend>AI model selector</legend>
+                    <p>Choose which AI model versions appear in the Model dropdown. You can switch back at any time.</p>
+                    <label class="settings-choice">
+                        <input type="radio" name="modelGeneration" value="latest" checked>
+                        <span>
+                            <strong>Latest models <em class="settings-recommended">Recommended</em></strong>
+                            <small>Use GPT Sol 6 and GPT Luna 6. These are the newest models and currently cost less.</small>
+                        </span>
+                    </label>
+                    <label class="settings-choice">
+                        <input type="radio" name="modelGeneration" value="established">
+                        <span>
+                            <strong>Previous models</strong>
+                            <small>Use GPT Sol 5.6 and GPT 5.6 Luna if they perform better for your workflow.</small>
+                        </span>
+                    </label>
+                </fieldset>
+                <p id="settingsProjectNote" class="settings-project-note" hidden>
+                    This project keeps its saved model until you apply a different generation.
+                </p>
+                <footer class="feedback-actions">
+                    <button id="cancelSettingsButton" class="button" type="button">Cancel</button>
+                    <button class="button primary" type="submit">Update model selector</button>
                 </footer>
             </form>
         </section>
@@ -470,6 +516,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=1.1.46"></script>
+    <script src="/js/workspace.js?v=1.1.49"></script>
 </body>
 </html>
