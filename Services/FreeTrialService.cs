@@ -55,6 +55,8 @@ public sealed class FreeTrialService(
                 UPDATE dbo.Subscribers
                 SET RegistrationConnectionType = @ConnectionType,
                     RegistrationCountryCode = @CountryCode,
+                    RegistrationNetworkRisk = @NetworkRisk,
+                    RegistrationNetworkCheckedUtc = SYSUTCDATETIME(),
                     UpdatedUtc = SYSUTCDATETIME()
                 WHERE SubscriberId = @SubscriberId
                   AND PlatformId = @PlatformId;
@@ -65,6 +67,12 @@ public sealed class FreeTrialService(
                 .Value = result.CountryCode is { Length: 2 }
                     ? result.CountryCode.ToUpperInvariant()
                     : DBNull.Value;
+            var networkRisk = command.Parameters.Add(
+                "@NetworkRisk",
+                SqlDbType.Decimal);
+            networkRisk.Precision = 6;
+            networkRisk.Scale = 2;
+            networkRisk.Value = result.Risk;
             command.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
             command.Parameters.Add("@PlatformId", SqlDbType.Int).Value =
                 PlatformIds.NinjaTrader;
@@ -83,7 +91,6 @@ public sealed class FreeTrialService(
         int subscriberId,
         string email,
         string? deviceFingerprint,
-        IPAddress? remoteIp,
         CancellationToken cancellationToken)
     {
         var options = configuration
@@ -92,40 +99,25 @@ public sealed class FreeTrialService(
 
         if (!options.Enabled ||
             options.AmountGbp <= 0 ||
-            options.DurationHours <= 0 ||
-            string.IsNullOrWhiteSpace(deviceFingerprint) ||
-            deviceFingerprint.Length is < 16 or > 256)
+            options.DurationHours <= 0)
         {
             return new FreeTrialResult(false, null);
         }
 
-        if (IpBlocklist.TryMatch(
-                remoteIp,
-                options.BlockedIpRanges,
-                out var matchedRule))
-        {
-            logger.LogWarning(
-                "Free-trial credit withheld because client IP {ClientIp} matched configured blocklist rule {BlockedIpRule}.",
-                remoteIp,
-                matchedRule);
-            return new FreeTrialResult(false, null);
-        }
-
-        var networkCheck = await CheckNetworkAsync(
-            remoteIp?.ToString(),
-            options,
-            cancellationToken);
-        if (networkCheck.Blocked)
-            return new FreeTrialResult(false, null);
-
-        var deviceHash = Convert.ToHexString(
-            SHA256.HashData(Encoding.UTF8.GetBytes(deviceFingerprint)));
+        var validDeviceFingerprint =
+            !string.IsNullOrWhiteSpace(deviceFingerprint) &&
+            deviceFingerprint.Length is >= 16 and <= 256;
+        var deviceHash = validDeviceFingerprint
+            ? Convert.ToHexString(
+                SHA256.HashData(Encoding.UTF8.GetBytes(deviceFingerprint!)))
+            : "";
 
         try
         {
             var result = await GrantInTransaction(
                 subscriberId,
                 deviceHash,
+                validDeviceFingerprint,
                 options,
                 cancellationToken);
 
@@ -162,6 +154,7 @@ public sealed class FreeTrialService(
     private async Task<FreeTrialResult> GrantInTransaction(
         int subscriberId,
         string deviceHash,
+        bool validDeviceFingerprint,
         FreeTrialOptions options,
         CancellationToken cancellationToken)
     {
@@ -178,10 +171,21 @@ public sealed class FreeTrialService(
         try
         {
             string? registrationIp;
+            string? registrationConnectionType;
+            string? registrationCountryCode;
+            decimal? registrationNetworkRisk;
+            DateTime? registrationNetworkCheckedUtc;
+            DateTime? trialEvaluatedUtc;
             bool trialGranted;
 
             await using (var subscriberCommand = new SqlCommand("""
-                SELECT TrialGranted, RegistrationIp
+                SELECT TrialGranted,
+                       TrialEvaluatedUtc,
+                       RegistrationIp,
+                       RegistrationConnectionType,
+                       RegistrationCountryCode,
+                       RegistrationNetworkRisk,
+                       RegistrationNetworkCheckedUtc
                 FROM dbo.Subscribers WITH (UPDLOCK, HOLDLOCK)
                 WHERE SubscriberId = @SubscriberId
                   AND PlatformId = @PlatformId
@@ -206,15 +210,52 @@ public sealed class FreeTrialService(
 
                 trialGranted = reader.GetBoolean(
                     reader.GetOrdinal("TrialGranted"));
+                trialEvaluatedUtc = reader.IsDBNull(
+                    reader.GetOrdinal("TrialEvaluatedUtc"))
+                    ? null
+                    : reader.GetDateTime(reader.GetOrdinal("TrialEvaluatedUtc"));
                 registrationIp = reader.IsDBNull(
                     reader.GetOrdinal("RegistrationIp"))
                     ? null
                     : reader.GetString(reader.GetOrdinal("RegistrationIp"));
+                registrationConnectionType = reader.IsDBNull(
+                    reader.GetOrdinal("RegistrationConnectionType"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("RegistrationConnectionType"));
+                registrationCountryCode = reader.IsDBNull(
+                    reader.GetOrdinal("RegistrationCountryCode"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("RegistrationCountryCode"));
+                registrationNetworkRisk = reader.IsDBNull(
+                    reader.GetOrdinal("RegistrationNetworkRisk"))
+                    ? null
+                    : reader.GetDecimal(reader.GetOrdinal("RegistrationNetworkRisk"));
+                registrationNetworkCheckedUtc = reader.IsDBNull(
+                    reader.GetOrdinal("RegistrationNetworkCheckedUtc"))
+                    ? null
+                    : reader.GetDateTime(reader.GetOrdinal("RegistrationNetworkCheckedUtc"));
             }
 
             var ipPrefix = CreateIpPrefix(registrationIp);
 
-            if (trialGranted ||
+            if (trialGranted || trialEvaluatedUtc.HasValue)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return new FreeTrialResult(false, null);
+            }
+
+            var denialReason = GetRegistrationNetworkDenialReason(
+                registrationIp,
+                registrationConnectionType,
+                registrationCountryCode,
+                registrationNetworkRisk,
+                registrationNetworkCheckedUtc,
+                options,
+                configuration.GetSection("ProxyCheck").Get<ProxyCheckOptions>() ?? new());
+
+            if (!validDeviceFingerprint)
+                denialReason = "InvalidDeviceFingerprint";
+            else if (denialReason is null &&
                 await HasExistingTrial(
                     connection,
                     transaction,
@@ -222,8 +263,21 @@ public sealed class FreeTrialService(
                     deviceHash,
                     ipPrefix,
                     cancellationToken))
+                denialReason = "ExistingTrial";
+
+            if (denialReason is not null)
             {
-                await transaction.RollbackAsync(cancellationToken);
+                logger.LogInformation(
+                    "Free-trial eligibility permanently denied for subscriber {SubscriberId}: {DenialReason}.",
+                    subscriberId,
+                    denialReason);
+                await MarkTrialEvaluatedAsync(
+                    connection,
+                    transaction,
+                    subscriberId,
+                    denialReason,
+                    cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
                 return new FreeTrialResult(false, null);
             }
 
@@ -266,7 +320,16 @@ public sealed class FreeTrialService(
                         await duplicateCommand.ExecuteScalarAsync(
                             cancellationToken)) > 0)
                 {
-                    await transaction.RollbackAsync(cancellationToken);
+                    logger.LogInformation(
+                        "Free-trial eligibility permanently denied for subscriber {SubscriberId}: DuplicateRegistration.",
+                        subscriberId);
+                    await MarkTrialEvaluatedAsync(
+                        connection,
+                        transaction,
+                        subscriberId,
+                        "DuplicateRegistration",
+                        cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
                     return new FreeTrialResult(false, null);
                 }
             }
@@ -353,6 +416,8 @@ public sealed class FreeTrialService(
             await using (var markCommand = new SqlCommand("""
                 UPDATE dbo.Subscribers
                 SET TrialGranted = 1,
+                    TrialEvaluatedUtc = SYSUTCDATETIME(),
+                    TrialDenialReason = NULL,
                     DeviceFingerprintHash =
                         COALESCE(DeviceFingerprintHash, @DeviceHash),
                     UpdatedUtc = SYSUTCDATETIME()
@@ -381,6 +446,63 @@ public sealed class FreeTrialService(
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
+    }
+
+    internal static string? GetRegistrationNetworkDenialReason(
+        string? registrationIp,
+        string? connectionType,
+        string? countryCode,
+        decimal? risk,
+        DateTime? checkedUtc,
+        FreeTrialOptions trialOptions,
+        ProxyCheckOptions proxyOptions)
+    {
+        if (!checkedUtc.HasValue ||
+            string.IsNullOrWhiteSpace(connectionType) ||
+            !risk.HasValue ||
+            !IPAddress.TryParse(registrationIp, out var address))
+            return "RegistrationNetworkUnavailable";
+
+        if (connectionType.Contains("VPN", StringComparison.OrdinalIgnoreCase) ||
+            connectionType.Contains("TOR", StringComparison.OrdinalIgnoreCase) ||
+            connectionType.Contains("HOSTING", StringComparison.OrdinalIgnoreCase) ||
+            connectionType.Contains("PROXY", StringComparison.OrdinalIgnoreCase))
+            return "RegistrationNetworkBlocked";
+
+        if (risk.Value >= proxyOptions.RiskThreshold)
+            return "RegistrationNetworkRisk";
+
+        if (trialOptions.BlockedCountryCodes.Any(code =>
+            string.Equals(code, countryCode, StringComparison.OrdinalIgnoreCase)))
+            return "RegistrationCountryBlocked";
+
+        if (IpBlocklist.TryMatch(address, trialOptions.BlockedIpRanges, out _))
+            return "RegistrationIpBlocked";
+
+        return null;
+    }
+
+    private static async Task MarkTrialEvaluatedAsync(
+        SqlConnection connection,
+        SqlTransaction transaction,
+        int subscriberId,
+        string denialReason,
+        CancellationToken cancellationToken)
+    {
+        await using var command = new SqlCommand("""
+            UPDATE dbo.Subscribers
+            SET TrialEvaluatedUtc = SYSUTCDATETIME(),
+                TrialDenialReason = @DenialReason,
+                UpdatedUtc = SYSUTCDATETIME()
+            WHERE SubscriberId = @SubscriberId
+              AND PlatformId = @PlatformId;
+            """, connection, transaction);
+        command.Parameters.Add("@DenialReason", SqlDbType.NVarChar, 64)
+            .Value = denialReason;
+        command.Parameters.Add("@SubscriberId", SqlDbType.Int).Value = subscriberId;
+        command.Parameters.Add("@PlatformId", SqlDbType.Int).Value =
+            PlatformIds.NinjaTrader;
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static async Task<bool> HasExistingTrial(

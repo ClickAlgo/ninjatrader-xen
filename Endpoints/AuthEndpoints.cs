@@ -285,7 +285,6 @@ public static class AuthEndpoints
             subscriberId,
             storedEmail,
             request.DeviceFingerprint,
-            context.Connection.RemoteIpAddress,
             context.RequestAborted);
 
         return Results.Ok(new
