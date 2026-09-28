@@ -70,6 +70,17 @@ public sealed class PromptBuilderRetrievalContextTests
     }
 
     [Fact]
+    public void PromptBuilder_LightThemeKeepsReviewSummaryLegible()
+    {
+        var styles = File.ReadAllText(Path.Combine(
+            GetProjectRoot(), "wwwroot", "css", "site.css"));
+
+        Assert.Contains("html[data-theme=\"light\"] .prompt-review-summary {", styles);
+        Assert.Contains("color: var(--text);", styles);
+        Assert.Contains("background: #f5f7f9;", styles);
+    }
+
+    [Fact]
     public void BuildPlan_RowsKeepTheirContentHeightInsideScrollableDialog()
     {
         var root = GetProjectRoot();
@@ -325,13 +336,32 @@ public sealed class PromptBuilderRetrievalContextTests
     {
         var script = ReadWorkspaceScript();
 
-        Assert.Contains("Let Xen suggest baseline answers", script);
+        Assert.Contains("Let Xen Answer for Me", script);
         Assert.Contains("promptBuilderBody.prepend(row)", script);
         Assert.DoesNotContain("promptBuilderActions.insertBefore", script);
         Assert.Contains("/api/prompt-builder/suggestions", script);
-        Assert.Contains(".filter(field => !field.value.trim())", script);
+        Assert.Contains(".filter(field => field && !field.value.trim())", script);
         Assert.Contains("if (field.value.trim())", script);
-        Assert.Contains("review and edit before creating the plan", script);
+        Assert.Contains("Answers added. Review and edit them before creating the plan.", script);
+        Assert.Contains("button.setAttribute(\"aria-busy\", \"true\")", script);
+        Assert.Contains("questionFields.forEach(field => field.classList.add(\"loading\"))", script);
+    }
+
+    [Fact]
+    public void Workspace_PromptBuilderUsesAccessibleLoadingPanels()
+    {
+        var script = ReadWorkspaceScript();
+        var styles = File.ReadAllText(Path.Combine(
+            GetProjectRoot(), "wwwroot", "css", "site.css"));
+
+        Assert.Contains("prompt-builder-loading-panel", script);
+        Assert.Contains("prompt-builder-loading-indicator", script);
+        Assert.Contains("loading.setAttribute(\"role\", \"status\")", script);
+        Assert.Contains("loading.setAttribute(\"aria-live\", \"polite\")", script);
+        Assert.Contains("Xen is reviewing your request", script);
+        Assert.Contains(".prompt-builder-suggestion.loading::before", styles);
+        Assert.Contains(".prompt-builder-field.loading::after", styles);
+        Assert.Contains("@media (prefers-reduced-motion: reduce)", styles);
     }
 
     [Fact]

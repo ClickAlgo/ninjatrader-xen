@@ -3176,11 +3176,14 @@ function addBaselineSuggestionAction(prompt) {
     row.className = "prompt-builder-suggestion-link-row";
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "prompt-builder-suggestion-link";
-    button.textContent = "Let Xen suggest baseline answers";
+    button.className = "button prompt-builder-suggestion";
+    button.textContent = "Let Xen Answer for Me";
     button.addEventListener("click", async () => {
-        const fields = [...promptBuilderBody.querySelectorAll("[data-question]")]
-            .filter(field => !field.value.trim());
+        const questionFields = [...promptBuilderBody.querySelectorAll(
+            ".prompt-builder-field")];
+        const fields = questionFields
+            .map(field => field.querySelector("[data-question]"))
+            .filter(field => field && !field.value.trim());
         if (!fields.length) {
             promptBuilderStatus.textContent =
                 "All clarification questions already have answers.";
@@ -3188,7 +3191,13 @@ function addBaselineSuggestionAction(prompt) {
         }
 
         setPromptBuilderBusy(true);
-        setPromptBuilderLoading("Xen is suggesting editable baseline answers...");
+        button.classList.add("loading");
+        button.setAttribute("aria-busy", "true");
+        button.textContent = "Xen is preparing answers…";
+        questionFields.forEach(field => field.classList.add("loading"));
+        promptBuilderStatus.textContent =
+            "Xen is preparing editable answers for each question…";
+        promptBuilderStatus.className = "prompt-builder-status loading";
         try {
             const result = await promptBuilderFetch(
                 "/api/prompt-builder/suggestions", {
@@ -3217,14 +3226,18 @@ function addBaselineSuggestionAction(prompt) {
             });
             updatePromptBuilderComposeState();
             promptBuilderStatus.textContent =
-                "Editable baseline suggestions added to blank answers.";
-            promptBuilderStatus.classList.remove("error");
+                "Answers added. Review and edit them before creating the plan.";
+            promptBuilderStatus.className = "prompt-builder-status success";
         } catch (error) {
             promptBuilderStatus.textContent =
                 error.message || "Xen could not suggest baseline answers.";
-            promptBuilderStatus.classList.add("error");
+            promptBuilderStatus.className = "prompt-builder-status error";
         } finally {
             setPromptBuilderBusy(false);
+            button.classList.remove("loading");
+            button.removeAttribute("aria-busy");
+            button.textContent = "Let Xen Answer for Me";
+            questionFields.forEach(field => field.classList.remove("loading"));
         }
     });
     row.appendChild(button);
@@ -4306,8 +4319,23 @@ function showPromptBuilderWait(message) {
     openPromptBuilder();
     promptBuilderReason.textContent = "";
     promptBuilderBody.classList.add("waiting");
-    promptBuilderBody.replaceChildren(
-        createWorkingIndicator(message, "prompt-builder-loading"));
+    const loading = document.createElement("div");
+    loading.className = "prompt-builder-loading-panel";
+    loading.setAttribute("role", "status");
+    loading.setAttribute("aria-live", "polite");
+    const indicator = document.createElement("span");
+    indicator.className = "prompt-builder-loading-indicator";
+    indicator.setAttribute("aria-hidden", "true");
+    const copy = document.createElement("span");
+    copy.className = "prompt-builder-loading-copy";
+    const title = document.createElement("strong");
+    title.textContent = message;
+    const detail = document.createElement("small");
+    detail.textContent =
+        "Xen is reviewing your request. This usually takes a few seconds.";
+    copy.append(title, detail);
+    loading.append(indicator, copy);
+    promptBuilderBody.replaceChildren(loading);
     promptBuilderStatus.textContent = "";
     promptBuilderStatus.classList.remove("error");
     promptBuilderActions.replaceChildren();

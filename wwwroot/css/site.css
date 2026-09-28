@@ -2000,7 +2000,6 @@ html[data-theme="light"] .trial-welcome.trial-unavailable p {
     border: 1px solid var(--border);
     border-radius: 16px;
     background: var(--surface);
-    white-space: pre-wrap;
     overflow-wrap: anywhere;
     line-height: 1.65;
 }
@@ -3794,8 +3793,10 @@ html:not([data-theme="light"]) .settings-choice small {
 }
 
 .prompt-builder-field {
+    position: relative;
     display: grid;
     gap: 7px;
+    overflow: hidden;
     padding: 14px;
 }
 
@@ -3851,28 +3852,49 @@ html:not([data-theme="light"]) .settings-choice small {
     margin: -2px 0 2px;
 }
 
-.prompt-builder-suggestion-link {
-    appearance: none;
-    border: 0;
-    padding: 0;
-    background: transparent;
+.prompt-builder-suggestion {
+    border-color: rgba(143, 200, 255, .7);
     color: #8fc8ff;
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-    text-decoration: none;
+    background: rgba(143, 200, 255, .08);
 }
 
-.prompt-builder-suggestion-link:hover,
-.prompt-builder-suggestion-link:focus-visible {
+.prompt-builder-suggestion:hover:not(:disabled),
+.prompt-builder-suggestion:focus-visible {
+    border-color: #8fc8ff;
     color: #b8dcff;
-    text-decoration: underline;
+    background: rgba(143, 200, 255, .14);
 }
 
-.prompt-builder-suggestion-link:disabled {
-    color: #666;
-    cursor: default;
-    text-decoration: none;
+.prompt-builder-suggestion:disabled {
+    cursor: wait;
+    opacity: 1;
+}
+
+.prompt-builder-suggestion.loading::before {
+    width: 14px;
+    height: 14px;
+    margin-right: 8px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    content: "";
+    animation: prompt-builder-spin .7s linear infinite;
+}
+
+.prompt-builder-field.loading::after {
+    position: absolute;
+    inset: 0;
+    content: "";
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 25%,
+        rgba(143, 200, 255, .08) 42%, rgba(143, 200, 255, .14) 50%,
+        transparent 68%);
+    transform: translateX(-100%);
+    animation: prompt-builder-shimmer 1.35s ease-in-out infinite;
+}
+
+.prompt-builder-field.loading textarea {
+    opacity: .62;
 }
 
 .prompt-builder-status {
@@ -3888,18 +3910,54 @@ html:not([data-theme="light"]) .settings-choice small {
     padding: 0;
 }
 
-.prompt-builder-loading {
-    min-height: 24px;
+.prompt-builder-loading-panel {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    width: 100%;
+    min-height: 124px;
+    padding: 28px;
+    border: 1px solid #3a3a3a;
+    border-radius: 10px;
+    color: #aaa;
+    background: #202020;
 }
 
-.prompt-builder-loading .working-dot {
-    width: 7px;
-    height: 7px;
+.prompt-builder-loading-indicator {
+    position: relative;
+    flex: 0 0 auto;
+    width: 42px;
+    height: 42px;
+    border: 3px solid rgba(143, 200, 255, .2);
+    border-top-color: #8fc8ff;
+    border-radius: 50%;
+    animation: prompt-builder-spin .8s linear infinite;
 }
 
-.prompt-builder-loading strong {
-    font-weight: 500;
-    color: #c7c7c7;
+.prompt-builder-loading-indicator::after {
+    position: absolute;
+    inset: 8px;
+    border-radius: 50%;
+    content: "";
+    background: #8fc8ff;
+    opacity: .18;
+    animation: prompt-builder-pulse 1.2s ease-in-out infinite;
+}
+
+.prompt-builder-loading-copy {
+    display: grid;
+    gap: 5px;
+}
+
+.prompt-builder-loading-copy strong {
+    color: #f2f2f2;
+    font-size: 14px;
+}
+
+.prompt-builder-loading-copy small {
+    color: #aaa;
+    font-size: 11px;
+    line-height: 1.5;
 }
 
 .composer-review-loading {
@@ -3918,6 +3976,30 @@ html:not([data-theme="light"]) .settings-choice small {
 
 .prompt-builder-status.error {
     color: #ff7a68;
+}
+
+.prompt-builder-status.loading { color: #8fc8ff; }
+.prompt-builder-status.success { color: #79c99e; }
+
+@keyframes prompt-builder-spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes prompt-builder-pulse {
+    50% { opacity: .5; transform: scale(.72); }
+}
+
+@keyframes prompt-builder-shimmer {
+    to { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .prompt-builder-loading-indicator,
+    .prompt-builder-loading-indicator::after,
+    .prompt-builder-suggestion.loading::before,
+    .prompt-builder-field.loading::after {
+        animation: none;
+    }
 }
 
 .prompt-builder-actions {
@@ -4314,14 +4396,14 @@ html:not([data-theme="light"]) .settings-choice small {
 /* Workspace light theme. Code surfaces intentionally remain dark. */
 html[data-theme="light"] {
     color-scheme: light;
-    --background: #f5f6f8;
+    --background: #eef1f4;
     --surface: #ffffff;
-    --surface-soft: #f1f3f5;
-    --surface-raised: #e9edf1;
-    --border: #d9dde3;
-    --border-strong: #c4cad2;
-    --text: #20242a;
-    --muted: #66717e;
+    --surface-soft: #f3f5f7;
+    --surface-raised: #e8edf1;
+    --border: #cbd2d9;
+    --border-strong: #aeb8c2;
+    --text: #18212a;
+    --muted: #52606d;
 }
 
 html[data-theme="light"] body.workspace-body {
@@ -4331,10 +4413,12 @@ html[data-theme="light"] body.workspace-body {
 
 html[data-theme="light"] .workspace-header {
     background: #ffffff;
+    box-shadow: 0 1px 0 rgba(24, 33, 42, .04);
 }
 
 html[data-theme="light"] .task-panel {
-    background: #f2f4f6;
+    border-right-color: #c7cfd7;
+    background: #f3f5f7;
 }
 
 html[data-theme="light"] .task-button {
@@ -4342,18 +4426,19 @@ html[data-theme="light"] .task-button {
 }
 
 html[data-theme="light"] .task-button:hover {
-    border-color: #dfe3e8;
+    border-color: #cbd2d9;
     border-left-color: var(--primary);
     background: #ffffff;
 }
 
 html[data-theme="light"] .task-button.active {
-    border-color: #dfe3e8;
+    border-color: #c5cdd5;
     border-left-color: var(--primary);
     color: var(--text);
     background:
-        linear-gradient(90deg, rgba(240, 68, 22, .12), rgba(240, 68, 22, .025) 70%),
+        linear-gradient(90deg, rgba(240, 68, 22, .15), rgba(240, 68, 22, .035) 72%),
         #ffffff;
+    box-shadow: inset 4px 0 var(--primary), 0 2px 7px rgba(30, 40, 50, .055);
 }
 
 html[data-theme="light"] .task-button.active strong {
@@ -4378,7 +4463,15 @@ html[data-theme="light"] .workspace-support-icon {
 
 html[data-theme="light"] .chat-panel,
 html[data-theme="light"] .messages {
-    background: #f7f8fa;
+    background: #eef1f4;
+}
+
+html[data-theme="light"] .messages {
+    background-image:
+        radial-gradient(circle at 50% 12%, rgba(240, 68, 22, .035), transparent 30rem),
+        linear-gradient(rgba(75, 91, 107, .028) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(75, 91, 107, .028) 1px, transparent 1px);
+    background-size: auto, 36px 36px, 36px 36px;
 }
 
 html[data-theme="light"] .messages {
@@ -4395,13 +4488,71 @@ html[data-theme="light"] .messages::-webkit-scrollbar-thumb {
 }
 
 html[data-theme="light"] .chat-toolbar {
+    border-bottom-color: #c7cfd7;
     background: #ffffff;
+    box-shadow: 0 1px 0 rgba(24, 33, 42, .035);
 }
 
 html[data-theme="light"] .model-field select,
 html[data-theme="light"] .balance-pill {
     color: var(--text);
     background: #ffffff;
+}
+
+html[data-theme="light"] .model-field-label {
+    color: #3f4d5a;
+}
+
+html[data-theme="light"] .model-field select {
+    border-color: #aeb8c2;
+    box-shadow: 0 1px 2px rgba(24, 33, 42, .045);
+}
+
+html[data-theme="light"] .model-field select:hover {
+    border-color: #8794a0;
+}
+
+html[data-theme="light"] .model-field select:focus-visible {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(240, 68, 22, .12);
+}
+
+html[data-theme="light"] .workspace-header-actions .button:not(.topup-button),
+html[data-theme="light"] .workspace-action,
+html[data-theme="light"] .balance-pill {
+    border-color: #aeb8c2;
+    color: #33404c;
+    background: #ffffff;
+}
+
+html[data-theme="light"] .workspace-header-actions .button:not(.topup-button):hover,
+html[data-theme="light"] .workspace-action:hover:not(:disabled) {
+    border-color: #7f8c98;
+    color: #18212a;
+    background: #f3f5f7;
+}
+
+html[data-theme="light"] .workspace-action:disabled {
+    border-color: #cbd2d9;
+    color: #77838e;
+    background: #f1f3f5;
+    opacity: .72;
+}
+
+html[data-theme="light"] .messages > .message:first-child {
+    padding: 24px 26px;
+    border: 1px solid rgba(183, 193, 203, .82);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .72);
+    box-shadow: 0 14px 36px rgba(35, 48, 61, .065);
+}
+
+html[data-theme="light"] .messages > .message:first-child .message-label {
+    color: #a33218;
+}
+
+html[data-theme="light"] .messages > .message:first-child .message-content {
+    color: #27333e;
 }
 
 html[data-theme="light"] .model-cost-badge {
@@ -4433,7 +4584,7 @@ html[data-theme="light"] .model-feedback-button {
     border-color: #c4cbd3;
     color: #4c5661;
     background: #ffffff;
-    filter: grayscale(1) contrast(1.65);
+    filter: none;
     opacity: 1;
 }
 
@@ -4517,9 +4668,9 @@ html[data-theme="light"] .response-code-actions .verify-requirements-button {
 }
 
 html[data-theme="light"] .composer {
-    border-color: #d3d8df;
+    border-color: #aeb8c2;
     background: #ffffff;
-    box-shadow: 0 8px 28px rgba(28, 36, 46, .1);
+    box-shadow: 0 9px 26px rgba(28, 36, 46, .095);
 }
 
 html[data-theme="light"] .send-button {
@@ -4555,7 +4706,7 @@ html[data-theme="light"] .clear-task-button:hover {
 }
 
 html[data-theme="light"] .composer textarea {
-    border-color: #cbd1d9;
+    border-color: #b4bec8;
     color: #20242a;
     background: #f9fafb;
 }
@@ -4689,11 +4840,22 @@ html[data-theme="light"] .settings-dialog {
 html[data-theme="light"] .dialog-close,
 html[data-theme="light"] .project-row,
 html[data-theme="light"] .settings-choice,
+html[data-theme="light"] .prompt-review-summary {
+    color: var(--text);
+    background: #f5f7f9;
+}
+
+html[data-theme="light"] .prompt-builder-dialog {
+    border-color: #aebfce;
+    box-shadow: 0 24px 70px rgba(20, 45, 70, .2);
+}
+
 html[data-theme="light"] .prompt-review-summary,
 html[data-theme="light"] .prompt-builder-field,
 html[data-theme="light"] .build-plan-instruction,
 html[data-theme="light"] .build-plan-assumptions,
 html[data-theme="light"] .build-plan-step {
+    border-color: #bdcad6;
     color: var(--text);
     background: #f5f7f9;
 }
@@ -4703,23 +4865,21 @@ html[data-theme="light"] .project-actions button {
     background: #ffffff;
 }
 
-html[data-theme="light"] .prompt-builder-reason,
-html[data-theme="light"] .prompt-builder-loading strong {
+html[data-theme="light"] .prompt-builder-reason {
     color: #4f5965;
 }
 
-html[data-theme="light"] .prompt-builder-suggestion-link {
-    color: #1768b0;
-    font-weight: 600;
-    text-decoration: underline;
-    text-decoration-color: rgba(23, 104, 176, .42);
-    text-underline-offset: 3px;
+html[data-theme="light"] .prompt-builder-suggestion {
+    border-color: #1769bc;
+    color: #125a9f;
+    background: #eaf3fb;
 }
 
-html[data-theme="light"] .prompt-builder-suggestion-link:hover,
-html[data-theme="light"] .prompt-builder-suggestion-link:focus-visible {
-    color: #0d4f89;
-    text-decoration-color: currentColor;
+html[data-theme="light"] .prompt-builder-suggestion:hover:not(:disabled),
+html[data-theme="light"] .prompt-builder-suggestion:focus-visible {
+    border-color: #125a9f;
+    color: #0f4778;
+    background: #dcecf9;
 }
 
 html[data-theme="light"] .prompt-review-summary p,
@@ -4734,9 +4894,42 @@ html[data-theme="light"] .prompt-builder-field > span {
 
 html[data-theme="light"] .prompt-builder-field textarea,
 html[data-theme="light"] .prompt-builder-review {
-    border-color: #c7cdd5;
+    border-color: #b5c4d1;
     color: #20242a;
     background: #ffffff;
+}
+
+html[data-theme="light"] .prompt-builder-loading-panel {
+    border-color: #b7c9d8;
+    color: #52606d;
+    background: #f5f9fc;
+}
+
+html[data-theme="light"] .prompt-builder-loading-indicator {
+    border-color: rgba(23, 105, 188, .2);
+    border-top-color: #1769bc;
+}
+
+html[data-theme="light"] .prompt-builder-loading-indicator::after {
+    background: #1769bc;
+}
+
+html[data-theme="light"] .prompt-builder-loading-copy strong {
+    color: #183b5b;
+}
+
+html[data-theme="light"] .prompt-builder-loading-copy small {
+    color: #52606d;
+}
+
+html[data-theme="light"] .prompt-builder-status.loading {
+    color: #125a9f;
+    background: #edf5fc;
+}
+
+html[data-theme="light"] .prompt-builder-status.success {
+    color: #086649;
+    background: #eaf7f2;
 }
 
 html[data-theme="light"] .prompt-builder-field.invalid,
@@ -4755,7 +4948,7 @@ html[data-theme="light"] .build-plan-step pre {
 }
 
 html[data-theme="light"] .prompt-builder-actions {
-    border-top-color: #d9dde3;
+    border-top-color: #bdcad6;
     background: #ffffff;
 }
 
@@ -5861,6 +6054,10 @@ html[data-theme="light"] .revision-delete-history {
     content: "\1F4CE";
     color: #aaa;
     font-size: 12px;
+}
+
+html[data-theme="light"] .existing-code-attachment {
+    color: #d9dee4;
 }
 
 .existing-code-review-button {
