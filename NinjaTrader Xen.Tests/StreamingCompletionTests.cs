@@ -8,6 +8,29 @@ namespace NinjaTrader_Xen.Tests;
 
 public sealed class StreamingCompletionTests
 {
+    [Theory]
+    [InlineData("gpt-6-sol")]
+    [InlineData("gpt-6.1-sol")]
+    [InlineData("gpt-5.6-luna")]
+    [InlineData("gpt-6-luna")]
+    public async Task OpenAi_SelectedModelUsesResponsesPayloadAndReportedUsage(string model)
+    {
+        var factory = new StubFactory("data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":12,\"output_tokens\":34}}}\n");
+        var client = new OpenAiStreamingClient(factory, new ConfigurationBuilder().Build());
+        var events = new List<AiStreamEvent>();
+        await foreach (var item in client.StreamAsync(model, "system", [], "repair", null, 10000, default))
+            events.Add(item);
+        using var payload = JsonDocument.Parse(Assert.IsType<string>(factory.LastRequestBody));
+        Assert.Equal(model, payload.RootElement.GetProperty("model").GetString());
+        Assert.True(payload.RootElement.GetProperty("stream").GetBoolean());
+        Assert.Equal(10000, payload.RootElement.GetProperty("max_output_tokens").GetInt32());
+        Assert.False(payload.RootElement.TryGetProperty("temperature", out _));
+        Assert.False(payload.RootElement.TryGetProperty("reasoning", out _)); // provider default medium
+        Assert.True(client.SupportsImages(model));
+        Assert.False(client.Supports("gpt-5.3-codex"));
+        AssertTerminal(Assert.Single(events), null!, false, 12, 34);
+    }
+
     [Fact]
     public async Task Claude_Opus55UsesAdaptiveThinkingAtLowEffort()
     {

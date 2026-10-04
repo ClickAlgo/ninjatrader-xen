@@ -2,9 +2,10 @@
   "Pricing": {
     "RetailMargin": 0.80,
     "Models": {
-      "gpt-5.3-codex": {
-        "InputPer1M": 1.75,
-        "OutputPer1M": 14.00
+      "gpt-6.1-sol": {
+        "InputPer1M": 2.00,
+        "CachedInputPer1M": 0.10,
+        "OutputPer1M": 10.00
       },
       "gpt-5.6-sol": {
         "InputPer1M": 5.00,

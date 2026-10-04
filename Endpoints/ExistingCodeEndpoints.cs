@@ -50,7 +50,9 @@ public static class ExistingCodeEndpoints
                 Code = source.Code.Trim()
             }).ToArray(),
             existing?.Decisions ?? request.Decisions ?? [],
-            existing?.WorkingCode ?? request.WorkingCode);
+            existing?.Sources.FirstOrDefault(source => source.Role == "current-source")?.Code ==
+                request.Sources.FirstOrDefault(source => source.Role == "current-source")?.Code
+                ? existing?.WorkingCode ?? request.WorkingCode : null);
         await store.SaveAsync(subscriberId, projectId, request.Task, state,
             cancellationToken);
         return Results.Ok(state);

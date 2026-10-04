@@ -17,7 +17,7 @@
                 document.documentElement.dataset.theme = "light";
         })();
     </script>
-    <link rel="stylesheet" href="/css/site.css?v=1.0.49">
+    <link rel="stylesheet" href="/css/site.css?v=1.0.81">
 </head>
 <body class="workspace-body">
     <header class="workspace-header">
@@ -97,7 +97,7 @@
                     <span>Model Settings</span>
                 </button>
             </div>
-            <div class="workspace-build-version">Build v1.3.0-beta</div>
+            <div class="workspace-build-version">Build v1.5.0-beta</div>
         </aside>
 
         <section class="chat-panel">
@@ -113,16 +113,17 @@
                         <span id="modelCostBadge" class="model-cost-badge" hidden>LOW COST</span>
                     </span>
                     <select id="modelSelect">
-                        <option value="gpt-5.6-sol" data-model-generation="established"
-                            data-model-family="openai-sol">GPT Sol 5.6</option>
-                        <option value="gpt-6-sol" data-model-generation="latest"
-                            data-model-family="openai-sol" hidden selected>GPT Sol 6</option>
-                        <option value="gpt-5.3-codex">GPT Codex 5.3</option>
-                        <option value="gpt-5.6-luna" data-model-generation="established"
-                            data-model-family="openai-luna">GPT 5.6 Luna</option>
-                        <option value="gpt-6-luna" data-model-generation="latest"
-                            data-model-family="openai-luna" hidden>GPT Luna 6</option>
+                        <option value="gpt-6-sol" data-model-generation="established"
+                            data-model-family="openai-sol" hidden disabled>GPT Sol 6</option>
+                        <option value="gpt-6.1-sol" data-model-generation="latest"
+                            data-model-family="openai-sol" selected>GPT Sol 6.1</option>
                         <option value="claude-opus-5-5">Claude Opus 5.5</option>
+                        <option value="gpt-5.6-luna" data-model-generation="established"
+                            data-model-family="openai-luna" hidden disabled>GPT Luna 5.6</option>
+                        <option value="gpt-6-luna" data-model-generation="latest"
+                            data-model-family="openai-luna">GPT Luna 6</option>
+                        <option value="gpt-5.6-sol" data-model-family="openai-sol" data-project-only-model
+                            data-fallback-model="gpt-6-sol" hidden disabled>GPT Sol 5.6</option>
                         <option value="claude-sonnet-4-6" data-project-only-model
                             data-fallback-model="claude-opus-5-5" hidden disabled>Claude Sonnet 4.6</option>
                         <!--<option value="deepseek-v4-pro">DeepSeek Pro V4</option>-->
@@ -171,6 +172,7 @@
                                     <circle cx="8.5" cy="9" r="1.5"></circle>
                                     <path d="m5 17 4.5-4.5 3.5 3 2.5-2.5 3.5 4"></path>
                                 </svg>
+                                <span>Add image</span>
                             </button>
                             <span id="imageFileStatus" role="status"></span>
                             <div id="imagePreview" class="image-preview" hidden>
@@ -188,6 +190,13 @@
                     placeholder="Describe your NinjaTrader strategy…"></textarea>
                 <div class="composer-footer">
                     <div class="composer-context-actions">
+                        <span id="buildProgress" class="working-indicator composer-review-loading"
+                            role="status" hidden>
+                            <span class="working-dot" aria-hidden="true"></span>
+                            <span class="working-dot" aria-hidden="true"></span>
+                            <span class="working-dot" aria-hidden="true"></span>
+                            <strong>Checking NinjaScript errors...</strong>
+                        </span>
                         <span id="chatStatus" class="chat-status" role="status"></span>
                         <button id="newProjectButton"
                             class="button clear-task-button"
@@ -264,7 +273,6 @@
             aria-labelledby="settingsTitle">
             <header class="projects-dialog-header">
                 <div>
-                    <p class="eyebrow">PREFERENCES</p>
                     <h2 id="settingsTitle">Settings</h2>
                 </div>
                 <button id="closeSettingsButton" class="dialog-close" type="button"
@@ -272,20 +280,20 @@
             </header>
             <form id="settingsForm" class="settings-form">
                 <fieldset class="settings-group">
-                    <legend>AI model selector</legend>
-                    <p>Choose which AI model versions appear in the Model dropdown. You can switch back at any time.</p>
+                    <legend class="settings-accessible-label">AI model selector</legend>
+                    <p>Choose which model versions appear in the Model dropdown.</p>
                     <label class="settings-choice">
                         <input type="radio" name="modelGeneration" value="latest" checked>
                         <span>
-                            <strong>Latest models <em class="settings-recommended">Recommended</em></strong>
-                            <small>Use GPT Sol 6 and GPT Luna 6. These are the newest models and currently cost less.</small>
+                            <strong>Latest models</strong>
+                            <small>Upgrade to GPT Sol 6.1 and GPT Luna 6.</small>
                         </span>
                     </label>
                     <label class="settings-choice">
                         <input type="radio" name="modelGeneration" value="established">
                         <span>
                             <strong>Previous models</strong>
-                            <small>Use GPT Sol 5.6 and GPT 5.6 Luna if they perform better for your workflow.</small>
+                            <small>Use GPT Sol 6 and GPT Luna 5.6.</small>
                         </span>
                     </label>
                 </fieldset>
@@ -516,6 +524,6 @@
         </section>
     </div>
 
-    <script src="/js/workspace.js?v=1.1.50"></script>
+    <script src="/js/workspace.js?v=1.1.56"></script>
 </body>
 </html>

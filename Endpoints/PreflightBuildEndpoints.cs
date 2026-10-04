@@ -195,8 +195,12 @@ public static class PreflightBuildEndpoints
                 errors = result.Errors,
                 durationMilliseconds = result.DurationMilliseconds,
                 message = result.Success
-                    ? "Xen successfully compiled the source against the installed NinjaTrader assemblies. No build errors were found. The add-on is ready to download and install in NinjaTrader."
-                    : "Add-on build failed. Review or repair the compiler errors below."
+                    ? "Xen compiled against its installed NinjaTrader assemblies and checked selected lifecycle rules. Compile and test in NinjaTrader to verify local dependencies and runtime behaviour."
+                    : result.Errors.Count > 0 && result.Errors.All(error =>
+                        error.Line.HasValue && (error.Code.StartsWith("CS", StringComparison.Ordinal) ||
+                                                error.Code.StartsWith("NTX", StringComparison.Ordinal)))
+                        ? "Source checks failed. Review the diagnostics and fix the reported errors."
+                        : "The compiler infrastructure could not complete the check. Retry the check; automatic source repair is unavailable."
             });
         }
         catch (OperationCanceledException)

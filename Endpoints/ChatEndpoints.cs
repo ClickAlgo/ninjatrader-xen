@@ -29,7 +29,7 @@ public static class ChatEndpoints
     private static readonly HashSet<string> AllowedModels =
         new(StringComparer.OrdinalIgnoreCase)
         {
-            "gpt-5.3-codex",
+            "gpt-6.1-sol",
             "gpt-5.6-sol",
             "gpt-5.6-luna",
             "gpt-6-sol",
@@ -100,6 +100,9 @@ public static class ChatEndpoints
             await Complete(context);
             return;
         }
+
+        if (string.Equals(request.Model, "gpt-5.3-codex", StringComparison.OrdinalIgnoreCase))
+            request = request with { Model = "gpt-6-sol" };
 
         if (!AllowedModels.Contains(request.Model))
         {
@@ -222,7 +225,7 @@ public static class ChatEndpoints
         if (!string.IsNullOrWhiteSpace(existingCodeState?.WorkingCode))
             currentCode = existingCodeState.WorkingCode;
         else if (existingCodeState?.Sources.Count > 0)
-            currentCode = existingCodeState.Sources[0].Code;
+            currentCode = existingCodeState.Sources.FirstOrDefault(source => source.Role == "current-source")?.Code ?? currentCode;
         if (ExistingCodeContext.IsExistingCodeTask(request.Task) &&
             existingCodeState is null && !string.IsNullOrWhiteSpace(currentCode))
         {

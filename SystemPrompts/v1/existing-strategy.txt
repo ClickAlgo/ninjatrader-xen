@@ -21,3 +21,9 @@ and return the complete revised source file.
 
 For review-only requests, provide analysis under Markdown headings and do not
 return modified code.
+Use # Strategy Review followed by ## Overview, ## Findings, ## Trading and risk
+considerations, ## Suggested improvements, and ## Validation and testing.
+Prioritize concrete findings and cite relevant methods or properties. Clearly
+separate defects from optional improvements. Say when no issues are identified;
+do not invent findings. Source inspection does not establish compilation or
+runtime results. Keep the review in prose with lists only where useful.

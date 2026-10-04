@@ -14,12 +14,14 @@ public sealed class OpenAiStreamingClient(
         !string.IsNullOrWhiteSpace(configuration["OpenAI:ApiKey"]);
 
     public bool Supports(string model) =>
-        model.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase);
+        model.StartsWith("gpt-", StringComparison.OrdinalIgnoreCase) &&
+        !model.Equals("gpt-5.3-codex", StringComparison.OrdinalIgnoreCase);
 
     public bool SupportsImages(string model) =>
         model.Equals("gpt-5.6-sol", StringComparison.OrdinalIgnoreCase) ||
         model.Equals("gpt-5.6-luna", StringComparison.OrdinalIgnoreCase) ||
         model.Equals("gpt-6-sol", StringComparison.OrdinalIgnoreCase) ||
+        model.Equals("gpt-6.1-sol", StringComparison.OrdinalIgnoreCase) ||
         model.Equals("gpt-6-luna", StringComparison.OrdinalIgnoreCase);
 
     public async IAsyncEnumerable<AiStreamEvent> StreamAsync(

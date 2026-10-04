@@ -57,6 +57,7 @@ const strategyConversionRiskHiddenKey = "nx_strategy_conversion_risk_hidden";
 const modelGenerationStorageKey = "nx_model_generation";
 const defaultModel = "gpt-6-sol";
 const legacyModelReplacements = new Map([
+    ["gpt-5.3-codex", "gpt-6-sol"],
     ["claude-opus-5", "claude-opus-5-5"]
 ]);
 const preflightRepairPromptPrefix =
@@ -70,7 +71,6 @@ const lowCostModels = new Set([
     "kimi-k2.7-code"
 ]);
 const imageUnsupportedModels = new Set([
-    "gpt-5.3-codex",
     "deepseek-v4-pro",
     "kimi-k2.7-code"
 ]);
@@ -82,6 +82,7 @@ const sendButton = document.getElementById("sendButton");
 const clearInputButton = document.getElementById("clearInputButton");
 const cancelButton = document.getElementById("cancelButton");
 const status = document.getElementById("chatStatus");
+const buildProgress = document.getElementById("buildProgress");
 const modelSelect = document.getElementById("modelSelect");
 const modelCostBadge = document.getElementById("modelCostBadge");
 const settingsModal = document.getElementById("settingsModal");
@@ -629,6 +630,10 @@ form.addEventListener("submit", async event => {
         const completeResponseCode = looksLikeCompleteNinjaScript(responseCode)
             ? responseCode
             : "";
+        if (completeResponseCode) {
+            clearPreflightDiagnostics();
+            if (isSourceAttachmentTask()) existingCodeState.workingCode = completeResponseCode;
+        }
         if (completeResponseCode && !currentProjectPersisted) {
             if (activeTask === "convert-strategy" || activeTask === "convert-indicator") {
                 const source = existingCodeState.sources.find(
@@ -648,7 +653,11 @@ form.addEventListener("submit", async event => {
             assistantMessage.classList.add("backtest-report-message");
             renderBacktestReport(content, assistantText);
         } else {
-            renderStructuredResponse(content, assistantText);
+            renderStructuredResponse(content, assistantText, sourceReviewType(prompt));
+        }
+        if (completeResponseCode) {
+            renderExistingCodeAttachments();
+            refreshPreflightControls();
         }
         const responseSwitchTarget = getTaskSwitchTargetFromResponse(assistantText);
         if (responseSwitchTarget)
@@ -1059,7 +1068,12 @@ function scrollMessagesToBottom() {
     });
 }
 
-function renderStructuredResponse(container, source) {
+function sourceReviewType(prompt) {
+    const match = (prompt || "").match(/^Review the attached NinjaTrader (strategy|indicator) source\./i);
+    return match ? match[1].toLowerCase() : null;
+}
+
+function renderStructuredResponse(container, source, reviewType = null) {
     container.textContent = "";
     const incomplete = source.startsWith("> Xen: Response incomplete") ||
         responseHasIncompleteCode(source);
@@ -1101,6 +1115,27 @@ function renderStructuredResponse(container, source) {
         appendProse(container, remainder);
     }
     decorateRequirementsMatch(container, source);
+    if (!incomplete && !generatedCode.length) {
+        const reportType = source.match(/^# (Strategy|Indicator) Review\b/im)?.[1]?.toLowerCase() || reviewType;
+        if (reportType) {
+            container.classList.add("source-review-report");
+            const title = `${reportType === "strategy" ? "Strategy" : "Indicator"} Review`;
+            if (!/^# (Strategy|Indicator) Review\b/im.test(source)) {
+                const heading = document.createElement("h2");
+                heading.textContent = title;
+                container.prepend(heading);
+            }
+            const actions = document.createElement("div");
+            actions.className = "requirements-validation-actions";
+            const print = document.createElement("button");
+            print.type = "button";
+            print.className = "button";
+            print.textContent = "Print / Save PDF";
+            print.addEventListener("click", () => printRequirementsReport(container, title));
+            actions.appendChild(print);
+            container.appendChild(actions);
+        }
+    }
     if (incomplete && activeTask !== "analyse-backtest")
         appendIncompleteRecoveryAction(container, source);
     if (generatedCode.length) {
@@ -1122,9 +1157,11 @@ function compactPreflightBuildHistory(turns) {
     const latestBuildIndex = turns.findLastIndex(isPreflightBuildReport);
     if (latestBuildIndex < 0)
         return turns;
+    const newerSource = turns.slice(latestBuildIndex + 1).some(turn =>
+        turn.role === "assistant" && looksLikeCompleteNinjaScript(extractLatestCodeBlock(turn.content)));
 
     return turns.filter((turn, index) =>
-        !isPreflightBuildReport(turn) || index === latestBuildIndex);
+        !isPreflightBuildReport(turn) || (!newerSource && index === latestBuildIndex));
 }
 
 function isBacktestReportSource(source) {
@@ -1327,13 +1364,12 @@ function renderPreflightBuildReport(container, source) {
     const reminder = document.createElement("p");
     reminder.className = "preflight-result-reminder";
     reminder.textContent = passed
-        ? "The add-on is ready to download and install in NinjaTrader."
-        : "The source was not executed. Repair these errors, then run Build Add-On again.";
+        ? "The add-on is ready to download and install in NinjaTrader. Compile and test there to verify local dependencies and runtime behaviour."
+        : diagnostics.length && diagnostics.every(isRepairablePreflightDiagnostic)
+            ? "The source was not executed. Fix the reported errors, then check again."
+            : "The compiler infrastructure could not complete the check. Retry the check; these diagnostics do not establish source-code errors.";
     container.appendChild(reminder);
 
-    if (!passed && diagnostics.length) {
-        appendPreflightRepairActions(container, diagnostics);
-    }
     normalizePreflightRepairActions();
 }
 
@@ -1435,8 +1471,8 @@ function appendPreflightRepairActions(container, errors) {
 
     const repair = document.createElement("button");
     repair.type = "button";
-    repair.className = "button primary";
-    repair.textContent = "Repair build errors";
+    repair.className = "code-action preflight-fix-errors";
+    repair.textContent = "Fix errors";
     repair.addEventListener("click", () => {
         if (generating || repair.disabled)
             return;
@@ -1446,24 +1482,44 @@ function appendPreflightRepairActions(container, errors) {
     });
     actions.appendChild(repair);
 
-    if (countConsecutivePreflightRepairs() >= 2 &&
-        modelSelect.value !== "gpt-5.3-codex") {
-        const retryWithCodex = document.createElement("button");
-        retryWithCodex.type = "button";
-        retryWithCodex.className = "button preflight-codex-retry";
-        retryWithCodex.textContent = "Retry repair with Codex 5.3";
-        retryWithCodex.addEventListener("click", () => {
-            if (generating || retryWithCodex.disabled)
-                return;
-
-            repair.disabled = true;
-            retryWithCodex.disabled = true;
-            startPreflightRepair(errors, "gpt-5.3-codex");
-        });
-        actions.appendChild(retryWithCodex);
-    }
-
     container.appendChild(actions);
+}
+
+function isRepairablePreflightDiagnostic(error) {
+    return /^(?:CS\d+|NTX\d+)$/.test(error.code || "") && Boolean(error.line);
+}
+
+function currentCheckingSource() {
+    if (isExistingCodeTask()) {
+        return existingCodeState.workingCode ||
+            existingCodeState.sources.find(source => source.role === "current-source")?.code ||
+            getLatestGeneratedCode();
+    }
+    return getLatestGeneratedCode();
+}
+
+function clearPreflightDiagnostics() {
+    history = history.filter(turn => !isPreflightBuildReport(turn));
+    messages.querySelectorAll(".preflight-build-message, .preflight-build-actions")
+        .forEach(element => element.remove());
+}
+
+function refreshPreflightControls() {
+    const source = currentCheckingSource();
+    const buttons = [...messages.querySelectorAll(".preflight-build-button")];
+    const current = buttons.findLast(button => button.sourceCode?.trim() === source.trim());
+    for (const button of buttons) button.hidden = button !== current || isExistingCodeTask();
+    messages.querySelectorAll(".preflight-build-actions").forEach(element => element.remove());
+    existingCodeAttachments.querySelectorAll(".preflight-build-actions").forEach(element => element.remove());
+    const report = history.findLast(isPreflightBuildReport);
+    const errors = report ? parsePreflightDiagnostics(report.content) : [];
+    if (!errors.length || !errors.every(isRepairablePreflightDiagnostic)) return;
+    const button = isExistingCodeTask()
+        ? existingCodeAttachments.querySelector(".preflight-build-button") : current;
+    if (!button) return;
+    const holder = document.createElement("span");
+    appendPreflightRepairActions(holder, errors);
+    button.after(holder.firstChild);
 }
 
 function normalizePreflightRepairActions() {
@@ -1527,18 +1583,59 @@ function formatDiagnosticLocations(locations) {
     return `${formatted.length > 1 ? "Lines" : "Line"} ${visible.join(", ")}`;
 }
 
+function requirementsMatchPercentage(source) {
+    const match = source.match(
+        /##\s+Overall Match[^\n]*\n+\s*(?:\*\*)?(?:Approximately\s+)?(\d{1,3}(?:\.\d+)?)\s*%/i);
+    if (!match)
+        return null;
+    const percentage = Number(match[1]);
+    return percentage >= 0 && percentage <= 100 ? percentage : null;
+}
+
+function printRequirementsReport(container, title = "Requirements Verification") {
+    const reportWindow = window.open("", "_blank");
+    if (!reportWindow) {
+        status.textContent = "Allow pop-ups to print or save the report as PDF";
+        return;
+    }
+    reportWindow.opener = null;
+    const report = container.cloneNode(true);
+    report.querySelectorAll("button, .requirements-validation-actions")
+        .forEach(element => element.remove());
+    reportWindow.document.write(`<!doctype html><html lang="en"><head>
+        <meta charset="utf-8"><title>${escapeHtml(title)}</title>
+        <style>
+        @page { size: A4; margin: 16mm; }
+        body { color: #20242a; font: 11pt/1.55 Arial, sans-serif; }
+        h2, h3 { break-after: avoid-page; }
+        p, li { orphans: 3; widows: 3; }
+        table { border-collapse: collapse; width: 100%; }
+        td, th { border: 1px solid #bdcad6; padding: 6px; text-align: left; }
+        pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+        .requirements-match-badge { margin-left: 10px; font-size: 10pt; }
+        </style></head><body>${report.innerHTML}</body></html>`);
+    reportWindow.document.close();
+    reportWindow.focus();
+    window.setTimeout(() => reportWindow.print(), 250);
+}
+
 function decorateRequirementsMatch(container, source) {
     if (!/^# Requirements Verification\b/im.test(source))
         return;
 
-    const match = source.match(
-        /##\s+Overall Match[\s\S]*?(?:Approximately\s+)?(\d{1,3})\s*%/i);
-    if (!match)
-        return;
+    const actions = document.createElement("div");
+    actions.className = "requirements-validation-actions";
+    const print = document.createElement("button");
+    print.type = "button";
+    print.className = "button";
+    print.textContent = "Print / Save PDF";
+    print.addEventListener("click", () => printRequirementsReport(container));
+    actions.appendChild(print);
+    container.appendChild(actions);
 
-    const percentage = Math.max(
-        0,
-        Math.min(100, Number.parseInt(match[1], 10)));
+    const percentage = requirementsMatchPercentage(source);
+    if (percentage === null)
+        return;
     const heading = [...container.querySelectorAll("h3")]
         .find(element =>
             element.textContent.trim().toLowerCase() === "overall match");
@@ -1827,7 +1924,9 @@ function appendResponseCodeActions(container, code) {
     const buildButton = document.createElement("button");
     buildButton.type = "button";
     buildButton.className = "code-action preflight-build-button";
-    buildButton.textContent = "Build Add-On";
+    buildButton.textContent = "Check NinjaScript Errors";
+    buildButton.sourceCode = code;
+    buildButton.title = "Compile against Xen's installed NinjaTrader assemblies and check selected lifecycle rules. Compile and test in NinjaTrader to verify local dependencies and behaviour.";
 
     const addonNotice = document.createElement("div");
     addonNotice.className = "addon-build-notice";
@@ -1913,6 +2012,7 @@ async function runPreflightBuild(code, button, options = {}) {
 
     try {
         preflightBuilding = true;
+        buildProgress.hidden = false;
         if (button) {
             button.classList.remove("needs-build-check");
             button.disabled = true;
@@ -1952,7 +2052,9 @@ async function runPreflightBuild(code, button, options = {}) {
                 result.message ||
                 "The NinjaTrader add-on build could not be started.");
 
+        if (currentCheckingSource().trim() !== code.trim()) return null;
         renderPreflightBuildResult(result);
+        buildProgress.hidden = true;
         if (automatic)
             setBuildPlanStepStatus(result.success ? "compiled" : "build-failed");
         status.textContent = result.success
@@ -1973,11 +2075,12 @@ async function runPreflightBuild(code, button, options = {}) {
         return null;
     } finally {
         preflightBuilding = false;
+        buildProgress.hidden = true;
         if (button) {
             button.disabled = false;
             button.classList.remove("is-checking");
             button.removeAttribute("aria-busy");
-            button.textContent = "Build Add-On";
+            button.textContent = "Check NinjaScript Errors";
         }
     }
 }
@@ -2007,23 +2110,16 @@ function renderPreflightBuildResult(result) {
     const reportContent = document.createElement("div");
     renderStructuredResponse(reportContent, report);
     content.appendChild(reportContent);
+
     normalizePreflightRepairActions();
+    refreshPreflightControls();
 
     scrollMessagesToBottom();
 }
 
-function startPreflightRepair(errors, requestedModel = null) {
+function startPreflightRepair(errors) {
     if (generating)
         return;
-
-    if (requestedModel &&
-        [...modelSelect.options].some(option => option.value === requestedModel)) {
-        modelSelect.value = requestedModel;
-        acceptedModelSelection = requestedModel;
-        rememberSelectedModel();
-        updateModelCostBadge();
-        updateImageUploadUi();
-    }
 
     promptInput.value =
         `${preflightRepairPromptPrefix} the NinjaTrader add-on build. ` +
@@ -2031,10 +2127,14 @@ function startPreflightRepair(errors, requestedModel = null) {
         "and explicit requirements, and return one complete compile-ready C# " +
         "file.\n\n" +
         `Compiler errors:\n${formatPreflightErrors(errors)}`;
+    // The chat endpoint loads the authoritative project/source state separately;
+    // do not duplicate a large file into the 60,000-character prompt contract.
+    if (promptInput.value.length > 60_000) {
+        status.textContent = "These diagnostics are too large for one repair request. Paste a focused set of NinjaTrader errors in this task.";
+        return;
+    }
     updateClearInputButton();
-    status.textContent = requestedModel
-        ? "Starting compiler-error repair with Codex 5.3..."
-        : "Starting compiler-error repair...";
+    status.textContent = "Starting compiler-error repair...";
     form.requestSubmit();
 }
 
@@ -2631,6 +2731,8 @@ async function saveConversionSourceAttachment(fileName, code) {
     }
     existingCodeState = payload;
     renderExistingCodeAttachments();
+    clearPreflightDiagnostics();
+    refreshPreflightControls();
     sourceFileStatus.classList.remove("conversion-size-notice");
     sourceFileStatus.textContent = "";
     promptInput.focus();
@@ -2690,6 +2792,7 @@ async function saveExistingCodeAttachment(event) {
     }
     existingCodeState = payload;
     promptInput.value = stripCompleteSourceFromPrompt(promptInput.value);
+    clearPreflightDiagnostics();
     updateClearInputButton();
     existingCodeText.value = "";
     renderExistingCodeAttachments();
@@ -2733,6 +2836,14 @@ function renderExistingCodeAttachments() {
         existingCodeAttachments.appendChild(item);
     }
     if (!hasCurrentExistingSource() || !isExistingCodeTask()) return;
+    const check = document.createElement("button");
+    check.type = "button";
+    check.className = "code-action preflight-build-button";
+    check.textContent = "Check NinjaScript Errors";
+    check.disabled = generating || preflightBuilding;
+    check.title = "Compile current source against Xen's installed NinjaTrader assemblies and check selected lifecycle rules. Compile and test in NinjaTrader for local dependencies and behaviour.";
+    check.addEventListener("click", () => runPreflightBuild(currentCheckingSource(), check));
+    existingCodeAttachments.appendChild(check);
     const review = document.createElement("button");
     review.type = "button";
     review.className = "button existing-code-review-button";
@@ -2741,6 +2852,7 @@ function renderExistingCodeAttachments() {
     review.disabled = generating;
     review.addEventListener("click", submitExistingCodeReview);
     existingCodeAttachments.appendChild(review);
+    refreshPreflightControls();
 }
 
 async function removeExistingCodeAttachment(sourceId) {
@@ -3082,7 +3194,14 @@ function showPromptReview(reason, required = false) {
         "Plan this build first?";
     promptBuilderReason.textContent = reason ||
         "A few details could materially improve the generated NinjaScript.";
-    promptBuilderBody.replaceChildren(createReviewSummary());
+    const help = document.createElement("a");
+    help.className = "prompt-builder-help";
+    help.href = "https://help.clickalgo.com/ninjatrader-xen/prompt-builder/";
+    help.target = "_blank";
+    help.rel = "noopener noreferrer";
+    help.textContent = "How to use Prompt Builder";
+    help.setAttribute("aria-label", "How to use Prompt Builder (opens in a new tab)");
+    promptBuilderBody.replaceChildren(createReviewSummary(), help);
     promptBuilderStatus.textContent = "";
     const actions = [
         ["Plan with Prompt Builder", "clarify", "button primary"],
@@ -3779,6 +3898,12 @@ function renderRequirementsValidationResult(report, requirements, auditModel) {
     renderStructuredResponse(reportContent, storedReport);
     content.appendChild(reportContent);
 
+    const percentage = requirementsMatchPercentage(storedReport);
+    if (percentage === null || percentage >= 100) {
+        scrollMessagesToBottom();
+        return;
+    }
+
     const actions = document.createElement("div");
     actions.className = "requirements-validation-actions";
     const repair = document.createElement("button");
@@ -4342,6 +4467,7 @@ function showPromptBuilderWait(message) {
 }
 
 function setComposerReviewState(reviewing, message) {
+    status.classList.toggle("reviewing-request", reviewing);
     sendButton.disabled = reviewing;
     modelSelect.disabled = reviewing;
     promptInput.disabled = reviewing;
@@ -5147,20 +5273,20 @@ function applyProjectToWorkspace(project) {
     makeProjectModelAvailable(projectModel);
     const projectGeneration = modelGenerationForModel(projectModel);
     if (projectGeneration)
-        setModelGeneration(projectGeneration, false, false);
+        setModelGeneration(projectGeneration, true, false);
     else
         applyPreferredModelGeneration();
     modelSelect.value =
         [...modelSelect.options].some(option => option.value === projectModel)
             ? projectModel
-            : defaultModel;
+            : modelForGeneration(defaultModel, preferredModelGeneration());
     acceptedModelSelection = modelSelect.value;
     rememberSelectedModel();
     updateModelCostBadge();
     updateImageUploadUi();
 
     messages.innerHTML = "";
-    for (const turn of history) {
+    for (const [turnIndex, turn] of history.entries()) {
         const message = addMessage(turn.role, "");
         const content = message.querySelector(".message-content");
         if (turn.role === "assistant" &&
@@ -5169,7 +5295,9 @@ function applyProjectToWorkspace(project) {
             message.classList.add("backtest-report-message");
             renderBacktestReport(content, turn.content);
         } else if (turn.role === "assistant") {
-            renderStructuredResponse(content, turn.content);
+            const precedingRequest = history[turnIndex - 1];
+            renderStructuredResponse(content, turn.content,
+                precedingRequest?.role === "user" ? sourceReviewType(precedingRequest.content) : null);
         } else {
             renderUserMessage(content, turn.content);
         }
@@ -5179,6 +5307,7 @@ function applyProjectToWorkspace(project) {
         addMessage("assistant", taskIntro(activeTask));
     updateProjectTitle();
     renderActiveBuildPlan();
+    refreshPreflightControls();
 }
 
 async function renameProject(project) {
@@ -5339,9 +5468,10 @@ function applyCreditAvailability() {
 function restoreSelectedModel() {
     const savedModel = localStorage.getItem("nx_selected_model");
     let restoredModel = replaceLegacyModel(savedModel);
-    restoredModel = modelForGeneration(
-        restoredModel,
-        preferredModelGeneration());
+    makeProjectModelAvailable(restoredModel);
+    const savedGeneration = modelGenerationForModel(restoredModel);
+    if (savedGeneration)
+        setModelGeneration(savedGeneration, true, false);
     if (restoredModel &&
         [...modelSelect.options].some(option =>
             option.value === restoredModel && !option.disabled)) {
@@ -5420,6 +5550,14 @@ function setModelGeneration(generation, persist, mapSelection = true) {
 
     if (mapSelection)
         modelSelect.value = modelForGeneration(selectedModel, normalized);
+    if (mapSelection) {
+        modelSelect.querySelectorAll("[data-project-only-model]").forEach(option => {
+            if (option.dataset.modelFamily && option.value !== modelSelect.value) {
+                option.hidden = true;
+                option.disabled = true;
+            }
+        });
+    }
     if (persist)
         localStorage.setItem(modelGenerationStorageKey, normalized);
 }

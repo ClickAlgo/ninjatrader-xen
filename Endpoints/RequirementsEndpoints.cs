@@ -23,7 +23,7 @@ public static class RequirementsEndpoints
     private static readonly HashSet<string> AllowedModels =
         new(StringComparer.OrdinalIgnoreCase)
         {
-            "gpt-5.3-codex",
+            "gpt-6.1-sol",
             "gpt-5.6-sol",
             "gpt-5.6-luna",
             "gpt-6-sol",
@@ -76,6 +76,9 @@ public static class RequirementsEndpoints
         }
         if (!AllowedTasks.Contains(request.Task))
             return Results.BadRequest(new { message = "Select a valid NinjaTrader task." });
+        if (string.Equals(request.Model, "gpt-5.3-codex", StringComparison.OrdinalIgnoreCase))
+            request = request with { Model = "gpt-6-sol" };
+
         if (!AllowedModels.Contains(request.Model))
             return Results.BadRequest(new { message = "Select a supported AI model." });
         if (!service.IsConfigured(request.Model))

@@ -16,6 +16,108 @@ const code = 'namespace NinjaTrader.NinjaScript.Indicators { public class Exampl
 const assistantText = '```csharp\n' + code + '\n```';
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
+function modelSettings(saved = {}) {
+    const html = fs.readFileSync(path.join(__dirname, '../wwwroot/workspace.html'), 'utf8')
+        .split('<select id="modelSelect">')[1].split('</select>')[0].replace(/<!--[\s\S]*?-->/g, '');
+    const options = [...html.matchAll(/<option value="([^"]+)"([^>]*)>/g)].map(([, value, attrs]) => ({
+        value, hidden: /\bhidden\b/.test(attrs), disabled: /\bdisabled\b/.test(attrs),
+        dataset: {
+            modelGeneration: attrs.match(/data-model-generation="([^"]+)"/)?.[1],
+            modelFamily: attrs.match(/data-model-family="([^"]+)"/)?.[1],
+            fallbackModel: attrs.match(/data-fallback-model="([^"]+)"/)?.[1]
+        },
+        hasAttribute(name) { return attrs.includes(name); }
+    }));
+    const storage = new Map(Object.entries(saved));
+    const c = { clearPreflightDiagnostics() {}, refreshPreflightControls() {}, renderExistingCodeAttachments() {}, isSourceAttachmentTask: () => false, currentCheckingSource: () => code,
+        defaultModel: 'gpt-6-sol', modelGenerationStorageKey: 'nx_model_generation',
+        legacyModelReplacements: new Map([['gpt-5.3-codex', 'gpt-6-sol'], ['claude-opus-5', 'claude-opus-5-5']]),
+        localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
+        modelSelect: { value: 'gpt-6-sol', options, querySelectorAll(selector) {
+            return options.filter(o => o.hasAttribute(selector.slice(1, -1)));
+        } }
+    };
+    vm.runInNewContext(section('function restoreSelectedModel()', 'function openSettings()'), c);
+    c.applyPreferredModelGeneration();
+    c.restoreSelectedModel();
+    return { c, storage, visible: () => options.filter(o => !o.hidden && !o.disabled).map(o => o.value) };
+}
+
+test('generation defaults, visibility, family switching and reload stay synchronized', () => {
+    for (const preference of [undefined, 'bad', 'established']) {
+        const w = modelSettings(preference ? { nx_model_generation: preference } : {});
+        assert.deepEqual(w.visible(), preference === 'established'
+            ? ['gpt-6-sol', 'claude-opus-5-5', 'gpt-5.6-luna']
+            : ['gpt-6.1-sol', 'claude-opus-5-5', 'gpt-6-luna']);
+        w.c.modelSelect.value = 'gpt-5.6-luna';
+        w.c.setModelGeneration('latest', true);
+        assert.equal(w.c.modelSelect.value, 'gpt-6-luna');
+        assert.deepEqual(w.visible(), ['gpt-6.1-sol', 'claude-opus-5-5', 'gpt-6-luna']);
+        w.storage.set('nx_selected_model', w.c.modelSelect.value);
+        assert.equal(modelSettings(Object.fromEntries(w.storage)).c.modelSelect.value, 'gpt-6-luna');
+        w.c.setModelGeneration('established', true);
+        assert.equal(w.c.modelSelect.value, 'gpt-5.6-luna');
+        w.c.modelSelect.value = 'gpt-6-sol';
+        w.c.setModelGeneration('latest', true);
+        assert.equal(w.c.modelSelect.value, 'gpt-6.1-sol');
+        w.c.modelSelect.value = 'claude-opus-5-5';
+        w.c.setModelGeneration('established', true);
+        assert.equal(w.c.modelSelect.value, 'claude-opus-5-5');
+    }
+});
+
+test('valid saved versions survive reload and retired Codex resolves specifically to Sol 6', () => {
+    for (const model of ['gpt-6-sol', 'gpt-6.1-sol', 'gpt-5.6-luna', 'gpt-6-luna', 'claude-opus-5-5', 'gpt-5.6-sol', 'claude-sonnet-4-6']) {
+        const w = modelSettings({ nx_selected_model: model, nx_model_generation: 'latest' });
+        assert.equal(w.c.modelSelect.value, model);
+        assert.ok(w.visible().includes(model));
+    }
+    const w = modelSettings({ nx_selected_model: 'gpt-5.3-codex', nx_model_generation: 'latest' });
+    assert.equal(w.c.modelSelect.value, 'gpt-6-sol');
+    assert.equal(w.storage.get('nx_selected_model'), 'gpt-6-sol');
+    assert.equal(w.storage.get('nx_model_generation'), 'established');
+});
+
+test('compiler repair never changes selected model, including when an obsolete override is passed', () => {
+    for (const model of ['gpt-6-sol', 'gpt-6.1-sol', 'gpt-5.6-luna', 'gpt-6-luna', 'claude-opus-5-5']) {
+        let submitted = false;
+        const c = { clearPreflightDiagnostics() {}, refreshPreflightControls() {}, renderExistingCodeAttachments() {}, isSourceAttachmentTask: () => false, currentCheckingSource: () => 'uploaded source', generating: false, modelSelect: { value: model }, promptInput: {}, status: {},
+            preflightRepairPromptPrefix: 'Repair', formatPreflightErrors: () => 'CS1000', updateClearInputButton() {},
+            form: { requestSubmit() { submitted = true; } } };
+        vm.runInNewContext(section('function startPreflightRepair(', 'function countConsecutivePreflightRepairs('), c);
+        c.startPreflightRepair([], 'gpt-5.3-codex');
+        assert.equal(c.modelSelect.value, model);
+        assert.ok(submitted);
+    }
+});
+
+test('reopening projects synchronizes generation without rewriting the saved project model', () => {
+    for (const model of ['gpt-6-sol', 'gpt-6.1-sol', 'gpt-5.6-luna', 'gpt-6-luna', 'claude-opus-5-5', 'gpt-5.3-codex']) {
+        const w = modelSettings({ nx_model_generation: 'latest' });
+        w.c.project = { model };
+        w.c.rememberSelectedModel = () => w.storage.set('nx_selected_model', w.c.modelSelect.value);
+        w.c.updateModelCostBadge = w.c.updateImageUploadUi = () => {};
+        vm.runInNewContext(section('    const projectModel = replaceLegacyModel(project.model);', '    messages.innerHTML = "";'), w.c);
+        const expected = model === 'gpt-5.3-codex' ? 'gpt-6-sol' : model;
+        assert.equal(w.c.modelSelect.value, expected);
+        assert.ok(w.visible().includes(expected));
+        assert.equal(w.c.project.model, model);
+        assert.equal(modelSettings(Object.fromEntries(w.storage)).c.modelSelect.value, expected);
+    }
+});
+
+for (const model of ['gpt-6-sol', 'gpt-6.1-sol', 'gpt-5.6-luna', 'gpt-6-luna', 'claude-opus-5-5']) {
+    test('repair chat and newly saved project use selected model: ' + model, async () => {
+        const w = workspace({ repair: true, model });
+        await w.submit();
+        for (const url of ['/api/chat/stream', '/api/projects']) {
+            const request = w.requests.find(r => r.url === url);
+            assert.ok(request);
+            assert.equal(request.body.model, model);
+        }
+    });
+}
+
 for (const options of [
     { incomplete: true },
     { incomplete: true, repair: true },
@@ -221,7 +323,7 @@ function workspace(options = {}) {
     const messageList = [];
     let timerId = 0;
     let submit;
-    const c = {
+    const c = { clearPreflightDiagnostics() {}, refreshPreflightControls() {}, renderExistingCodeAttachments() {}, isSourceAttachmentTask: () => false, currentCheckingSource: () => code,
         AbortController, TextDecoder, console,
         generating: false, preparingRequest: false, preflightBuilding: false,
         currentController: null, currentBalanceGbp: options.balance ?? 1,
@@ -307,16 +409,18 @@ function workspace(options = {}) {
             return { ok: !options.saveHttpError };
         }
     };
-    for (const name of ['sendButton', 'cancelButton', 'modelSelect', 'promptInput', 'status'])
+    for (const name of ['sendButton', 'cancelButton', 'modelSelect', 'promptInput', 'status', 'buildProgress'])
         c[name] = element();
     c.promptInput.value = options.emptyPrompt ? '' : 'Build an indicator';
-    c.modelSelect.value = 'gpt-5.3-codex';
+    c.buildProgress.hidden = true;
+    c.modelSelect.value = options.model || 'gpt-6-sol';
     for (const name of ['markBuildPlanPromptSent', 'clearPendingImage', 'clearAnalyzerExports',
         'updateClearInputButton', 'updateImageUploadUi', 'scrollMessagesToBottom',
         'addModelFeedbackControls', 'renderExistingCodeAttachments', 'updateHistoryButton',
         'restoreBuildPlanPromptLoaded']) c[name] = () => {};
     vm.createContext(c);
     vm.runInContext([
+        section('function sourceReviewType(', 'function renderStructuredResponse('),
         section('function responseHasIncompleteCode(', 'function extractLatestCodeBlock('),
         section('function hasBalancedCodeBraces(', 'function isGeneratedRepairPrompt('),
         section('async function withRequestTimeout(', 'async function openCodeWorkspace('),
@@ -339,6 +443,7 @@ function workspace(options = {}) {
 function assertReleased(w, disabled = false) {
     assert.equal(w.c.generating, false);
     assert.equal(w.c.preflightBuilding, false);
+    assert.equal(w.c.buildProgress.hidden, true);
     assert.equal(w.c.promptInput.disabled, disabled);
     assert.equal(w.c.sendButton.classList.contains('loading'), false);
     assert.equal(w.c.currentController, null);
@@ -390,6 +495,7 @@ for (const kind of ['buildPending', 'bodyPending']) {
         const w = workspace({ [kind]: true });
         const task = w.submit();
         await flush();
+        assert.equal(w.c.buildProgress.hidden, false);
         w.expire(210_000);
         await task;
         assertReleased(w);
@@ -458,7 +564,7 @@ test('explicit cancellation during chat retains the existing rollback behavior',
 for (const heading of ['NinjaTrader Preflight Build', 'NinjaTrader Build Check', 'NinjaTrader Add-On Built']) {
     test(`${heading}: saved success remains eligible for download and renders current wording`, () => {
         const report = `# ${heading}\n\n## Build passed\n\nOld report wording`;
-        const c = {
+        const c = { clearPreflightDiagnostics() {}, refreshPreflightControls() {}, renderExistingCodeAttachments() {}, isSourceAttachmentTask: () => false, currentCheckingSource: () => code,
             history: [{ role: 'assistant', content: assistantText }, { role: 'assistant', content: report }],
             preflightRepairPromptPrefix: 'Repair the latest complete NinjaScript source so it passes',
             normalizePreflightRepairActions() {},
@@ -490,7 +596,7 @@ for (const heading of ['NinjaTrader Preflight Build', 'NinjaTrader Build Check',
         assert.equal(container.children[1].textContent,
             'Xen successfully compiled the source against the installed NinjaTrader assemblies. No build errors were found.');
         assert.equal(container.children[2].textContent,
-            'The add-on is ready to download and install in NinjaTrader.');
+            'The add-on is ready to download and install in NinjaTrader. Compile and test there to verify local dependencies and runtime behaviour.');
         const failed = { role: 'assistant', content: '# NinjaTrader Add-On Build\n\n## Build failed' };
         c.history.push(failed);
         assert.equal(c.hasSuccessfulBuildForCode(code), false);
@@ -511,7 +617,7 @@ test('new successful report keeps the same compile-only wording for every suppor
             result.content.appendChild = () => {};
             return result;
         };
-        w.c.normalizePreflightRepairActions = () => {};
+        w.c.normalizePreflightRepairActions = () => {}; w.c.refreshPreflightControls = () => {};
         vm.runInContext([
             section('function isPreflightBuildReport(', 'function isBacktestReportSource('),
             section('function renderPreflightBuildResult(', 'function startPreflightRepair(')

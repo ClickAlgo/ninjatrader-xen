@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using Microsoft.Extensions.Configuration;
 
 namespace NinjaTrader_Xen.Tests;
 
@@ -17,12 +18,12 @@ public sealed class ModelSelectorTests
         Assert.Contains("id=\"settingsButton\"", html);
         Assert.Contains("value=\"latest\" checked", html);
         Assert.Contains("value=\"established\"", html);
-        Assert.Contains("data-model-family=\"openai-sol\" hidden selected>GPT Sol 6", html);
-        Assert.Contains("data-model-family=\"openai-luna\" hidden>GPT Luna 6", html);
-        Assert.Contains("<legend>AI model selector</legend>", html);
+        Assert.Contains("data-model-family=\"openai-sol\" selected>GPT Sol 6.1", html);
+        Assert.Contains("data-model-family=\"openai-luna\">GPT Luna 6", html);
+        Assert.Contains("<legend class=\"settings-accessible-label\">AI model selector</legend>", html);
         Assert.Contains("Latest models", html);
         Assert.Contains("Previous models", html);
-        Assert.Contains("Recommended", html);
+        Assert.Contains("Choose which model versions appear in the Model dropdown.", html);
         Assert.Contains("Update model selector", html);
         Assert.Contains("const modelGenerationStorageKey = \"nx_model_generation\";", script);
         Assert.Contains(
@@ -88,12 +89,13 @@ public sealed class ModelSelectorTests
         var root = GetProjectRoot();
         var html = File.ReadAllText(Path.Combine(root, "wwwroot", "workspace.html"));
 
-        var solIndex = html.IndexOf("value=\"gpt-5.6-sol\"", StringComparison.Ordinal);
+        var solIndex = html.IndexOf("value=\"gpt-6-sol\"", StringComparison.Ordinal);
         var lunaIndex = html.IndexOf("value=\"gpt-5.6-luna\"", StringComparison.Ordinal);
-        var codexIndex = html.IndexOf("value=\"gpt-5.3-codex\"", StringComparison.Ordinal);
+        var opusIndex = html.IndexOf("value=\"claude-opus-5-5\"", StringComparison.Ordinal);
 
-        Assert.True(solIndex >= 0 && solIndex < codexIndex);
-        Assert.True(codexIndex < lunaIndex);
+        Assert.True(solIndex >= 0 && solIndex < opusIndex);
+        Assert.True(opusIndex < lunaIndex);
+        Assert.DoesNotContain("value=\"gpt-5.3-codex\"", html);
     }
 
     [Fact]
@@ -108,7 +110,7 @@ public sealed class ModelSelectorTests
         var html = File.ReadAllText(Path.Combine(root, "wwwroot", "workspace.html"));
 
         Assert.Contains("const defaultModel = \"gpt-6-sol\";", script);
-        Assert.Contains("data-model-family=\"openai-sol\" hidden selected>GPT Sol 6", html);
+        Assert.Contains("data-model-family=\"openai-sol\" selected>GPT Sol 6.1", html);
         Assert.Contains("localStorage.getItem(\"nx_selected_model\")", script);
         Assert.Contains("modelGenerationForModel(projectModel)", script);
         Assert.Contains(
@@ -160,15 +162,39 @@ public sealed class ModelSelectorTests
 
         using var config = JsonDocument.Parse(settings);
         var models = config.RootElement.GetProperty("Pricing").GetProperty("Models");
+        Assert.Equal(2.00m, models.GetProperty("gpt-6.1-sol").GetProperty("InputPer1M").GetDecimal());
+        Assert.Equal(10.00m, models.GetProperty("gpt-6.1-sol").GetProperty("OutputPer1M").GetDecimal());
+        Assert.Equal(0.10m, models.GetProperty("gpt-6.1-sol").GetProperty("CachedInputPer1M").GetDecimal());
+        Assert.False(models.TryGetProperty("gpt-5.3-codex", out _));
         Assert.Equal(2.00m, models.GetProperty("gpt-6-sol").GetProperty("InputPer1M").GetDecimal());
         Assert.Equal(10.00m, models.GetProperty("gpt-6-sol").GetProperty("OutputPer1M").GetDecimal());
         Assert.Equal(0.10m, models.GetProperty("gpt-6-luna").GetProperty("InputPer1M").GetDecimal());
         Assert.Equal(0.50m, models.GetProperty("gpt-6-luna").GetProperty("OutputPer1M").GetDecimal());
 
-        foreach (var model in new[] { "gpt-6-sol", "gpt-6-luna" })
+        foreach (var model in new[] { "gpt-6-sol", "gpt-6.1-sol", "gpt-6-luna" })
         {
             Assert.Contains($"\"{model}\"", chatEndpoint);
             Assert.Contains($"\"{model}\"", requirementsEndpoint);
+        }
+    }
+
+    [Theory]
+    [InlineData("gpt-6-sol", 0.045)]
+    [InlineData("gpt-6.1-sol", 0.045)]
+    [InlineData("gpt-5.6-luna", 0.00525)]
+    [InlineData("gpt-6-luna", 0.00225)]
+    [InlineData("claude-opus-5-5", 0.09)]
+    public void Billing_UsesSelectedModelRates(string model, double expected)
+    {
+        var config = new Microsoft.Extensions.Configuration.ConfigurationBuilder()
+            .AddJsonFile(Path.Combine(GetProjectRoot(), "chatsettings.json")).Build();
+        foreach (var endpoint in new[] { typeof(NinjaTrader_Xen.Endpoints.ChatEndpoints), typeof(NinjaTrader_Xen.Endpoints.RequirementsEndpoints) })
+        {
+            var calculate = endpoint.GetMethod("CalculateRetailCostGbp",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            Assert.Equal((decimal)expected, (decimal)calculate.Invoke(null, [config, model, 1000, 1000])!);
+            var source = File.ReadAllText(Path.Combine(GetProjectRoot(), "Endpoints", endpoint.Name + ".cs"));
+            Assert.Contains("request = request with { Model = \"gpt-6-sol\" };", source);
         }
     }
 
