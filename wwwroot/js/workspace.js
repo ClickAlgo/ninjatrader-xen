@@ -630,6 +630,7 @@ form.addEventListener("submit", async event => {
         const completeResponseCode = looksLikeCompleteNinjaScript(responseCode)
             ? responseCode
             : "";
+        updateProjectSizeWarning();
         if (completeResponseCode) {
             clearPreflightDiagnostics();
             if (isSourceAttachmentTask()) existingCodeState.workingCode = completeResponseCode;
@@ -2808,6 +2809,7 @@ function stripCompleteSourceFromPrompt(value) {
 }
 
 function renderExistingCodeAttachments() {
+    updateProjectSizeWarning();
     existingCodeAttachments.replaceChildren();
     const visible = isSourceAttachmentTask() && existingCodeState.sources.length > 0;
     existingCodeAttachments.hidden = !visible;
@@ -4564,10 +4566,24 @@ function updateProjectTitle() {
 }
 
 function updateHistoryButton() {
+    updateProjectSizeWarning();
     codeViewButton.disabled = !hasProjectSnapshots;
     codeViewButton.title = hasProjectSnapshots
         ? "View saved source snapshots"
         : "History is available after Xen saves a source snapshot";
+}
+
+function updateProjectSizeWarning() {
+    const warning = document.getElementById("projectSizeWarning");
+    if (!warning) return;
+    const source = (isExistingCodeTask() ? existingCodeState.workingCode : getLatestGeneratedCode()) ||
+        existingCodeState.sources.find(item => item.role === "current-source")?.code ||
+        getLatestGeneratedCode();
+    const applies = activeTask !== "analyse-backtest";
+    warning.hidden = !applies || source.length < 24_000;
+    warning.textContent = source.length > 30_000
+        ? "Project size: this code exceeds Xen’s estimated limit for a complete rewrite. Simplify the project or seek developer assistance. Your last complete code remains available."
+        : "Project size: your code is approaching Xen’s estimated limit. Further features or major changes may need simpler requirements or developer assistance. Your last complete code remains available.";
 }
 
 // Bound the entire operation, including response-body reads. Abort the network
@@ -5308,6 +5324,7 @@ function applyProjectToWorkspace(project) {
     updateProjectTitle();
     renderActiveBuildPlan();
     refreshPreflightControls();
+    updateProjectSizeWarning();
 }
 
 async function renameProject(project) {

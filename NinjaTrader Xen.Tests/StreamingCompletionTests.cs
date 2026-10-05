@@ -18,12 +18,12 @@ public sealed class StreamingCompletionTests
         var factory = new StubFactory("data: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":12,\"output_tokens\":34}}}\n");
         var client = new OpenAiStreamingClient(factory, new ConfigurationBuilder().Build());
         var events = new List<AiStreamEvent>();
-        await foreach (var item in client.StreamAsync(model, "system", [], "repair", null, 10000, default))
+        await foreach (var item in client.StreamAsync(model, "system", [], "repair", null, 16000, default))
             events.Add(item);
         using var payload = JsonDocument.Parse(Assert.IsType<string>(factory.LastRequestBody));
         Assert.Equal(model, payload.RootElement.GetProperty("model").GetString());
         Assert.True(payload.RootElement.GetProperty("stream").GetBoolean());
-        Assert.Equal(10000, payload.RootElement.GetProperty("max_output_tokens").GetInt32());
+        Assert.Equal(16000, payload.RootElement.GetProperty("max_output_tokens").GetInt32());
         Assert.False(payload.RootElement.TryGetProperty("temperature", out _));
         Assert.False(payload.RootElement.TryGetProperty("reasoning", out _)); // provider default medium
         Assert.True(client.SupportsImages(model));
@@ -39,7 +39,7 @@ public sealed class StreamingCompletionTests
             factory, new ConfigurationBuilder().Build());
 
         await foreach (var _ in client.StreamAsync(
-            "claude-opus-5-5", "system", [], "prompt", null, 32000, default))
+            "claude-opus-5-5", "system", [], "prompt", null, 16000, default))
         {
         }
 
@@ -48,7 +48,7 @@ public sealed class StreamingCompletionTests
             payload.RootElement.GetProperty("thinking").GetProperty("type").GetString());
         Assert.Equal("low",
             payload.RootElement.GetProperty("output_config").GetProperty("effort").GetString());
-        Assert.Equal(32000, payload.RootElement.GetProperty("max_tokens").GetInt32());
+        Assert.Equal(16000, payload.RootElement.GetProperty("max_tokens").GetInt32());
     }
 
     [Fact]
@@ -59,7 +59,7 @@ public sealed class StreamingCompletionTests
             factory, new ConfigurationBuilder().Build());
 
         await foreach (var _ in client.StreamAsync(
-            "claude-sonnet-4-6", "system", [], "prompt", null, 32000, default))
+            "claude-sonnet-4-6", "system", [], "prompt", null, 16000, default))
         {
         }
 
@@ -136,7 +136,7 @@ public sealed class StreamingCompletionTests
             ? new OpenAiStreamingClient(factory, config)
             : new ClaudeStreamingClient(factory, config);
         var result = new List<AiStreamEvent>();
-        await foreach (var item in client.StreamAsync("test", "", [], "", null, 10000, default))
+        await foreach (var item in client.StreamAsync("test", "", [], "", null, 16000, default))
             result.Add(item);
         return result;
     }

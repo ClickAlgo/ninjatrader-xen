@@ -417,7 +417,7 @@ function workspace(options = {}) {
     for (const name of ['markBuildPlanPromptSent', 'clearPendingImage', 'clearAnalyzerExports',
         'updateClearInputButton', 'updateImageUploadUi', 'scrollMessagesToBottom',
         'addModelFeedbackControls', 'renderExistingCodeAttachments', 'updateHistoryButton',
-        'restoreBuildPlanPromptLoaded']) c[name] = () => {};
+        'restoreBuildPlanPromptLoaded', 'updateProjectSizeWarning']) c[name] = () => {};
     vm.createContext(c);
     vm.runInContext([
         section('function sourceReviewType(', 'function renderStructuredResponse('),

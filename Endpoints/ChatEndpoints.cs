@@ -12,7 +12,7 @@ namespace NinjaTrader_Xen.Endpoints;
 
 public static class ChatEndpoints
 {
-    internal const int MaximumResponseTokens = 10_000;
+    internal const int MaximumResponseTokens = 16_000;
 
     private static readonly HashSet<string> AllowedTasks =
         new(StringComparer.OrdinalIgnoreCase)
@@ -382,7 +382,8 @@ public static class ChatEndpoints
                 message =
                     "This source file is too large for a complete AI rewrite, even with additional credit. " +
                     "No AI credit was used. Ask Xen to analyse it without rewriting the full file, or " +
-                    "split it into smaller components or controlled changes.",
+                    "simplify the project or ask development@clickalgo.com for developer assistance. " +
+                    "Your last complete code remains available.",
                 helpUrl = "https://help.clickalgo.com/ninjatrader-xen/convert-strategies/#large-strategy-files",
                 balanceGbp
             });
@@ -410,8 +411,9 @@ public static class ChatEndpoints
                 type = "blocked",
                 message =
                     "This source file is too large for the available response allowance. " +
-                    "No AI credit was used. Reduce or split the file, or use a controlled " +
-                    "patch workflow for a smaller change instead of retrying the same request.",
+                    "Your credit balance cannot support the estimated complete response. " +
+                    "No AI credit was used. Add credit, simplify the project, or ask for developer assistance. " +
+                    "Your last complete code remains available.",
                 balanceGbp
             });
             await Complete(context);
@@ -460,7 +462,8 @@ public static class ChatEndpoints
             if (incomplete)
             {
                 var incompleteMessage = stopReason is "max_tokens" or "max_output_tokens" or "length"
-                    ? "The response reached its output limit. Ask Xen for a concise complete file."
+                    ? "The response reached its output limit. Your last complete code was kept. " +
+                      "Simplify the requested changes or seek developer assistance rather than repeating the same request."
                     : "The response stopped before finishing. Please retry your request.";
                 logger.LogWarning(
                     "Incomplete AI response for {ProjectId}: model {Model}, reason {StopReason}, allowance {MaximumOutputTokens}, output {OutputTokens}.",
@@ -732,7 +735,7 @@ public static class ChatEndpoints
         return Math.Round(wholesaleUsd * usdToGbp / (1 - retailMargin), 6);
     }
 
-    private static int CalculateAffordableOutputTokens(
+    internal static int CalculateAffordableOutputTokens(
         IConfiguration configuration,
         string model,
         string prompt,
@@ -781,11 +784,11 @@ public static class ChatEndpoints
         if (string.IsNullOrWhiteSpace(currentCode))
             return true;
 
-        // Existing-code responses must reproduce the complete file. Estimate at
-        // the same four-characters-per-token ratio used by billing, then reserve
-        // room for the requested changes and the required response framing.
-        var sourceTokens = (int)Math.Ceiling(currentCode.Length / 4m);
-        var requiredTokens = (int)Math.Ceiling(sourceTokens * 1.15m) + 500;
+        // Code can tokenize more densely than billing's general text estimate.
+        // Reserve 25% for edits and 1,000 tokens for framing/model reasoning.
+        // This remains a heuristic: large new features can still exceed it.
+        var sourceTokens = (int)Math.Ceiling(currentCode.Length / 2.5m);
+        var requiredTokens = (int)Math.Ceiling(sourceTokens * 1.25m) + 1_000;
         return requiredTokens <= maximumOutputTokens;
     }
 

@@ -1,4 +1,5 @@
 using NinjaTrader_Xen.Endpoints;
+using Microsoft.Extensions.Configuration;
 
 namespace NinjaTrader_Xen.Tests;
 
@@ -29,7 +30,10 @@ public sealed class LargeResponsePreflightTests
     }
 
     [Theory]
-    [InlineData(20_000, 10_000, true)]
+    [InlineData(20_000, 10_000, false)]
+    [InlineData(20_346, 16_000, true)]
+    [InlineData(30_000, 16_000, true)]
+    [InlineData(30_001, 16_000, false)]
     [InlineData(40_000, 10_000, false)]
     [InlineData(20_000, 5_000, false)]
     public void CompleteSourceFit_ReservesChangeAndFramingHeadroom(
@@ -40,6 +44,30 @@ public sealed class LargeResponsePreflightTests
         Assert.Equal(expected,
             ChatEndpoints.CanLikelyFitCompleteSource(
                 new string('x', sourceCharacters), allowance));
+    }
+
+    [Fact]
+    public void OutputCeiling_AllowsSixteenThousandTokens()
+    {
+        Assert.Equal(16_000, ChatEndpoints.MaximumResponseTokens);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 13_166)]
+    [InlineData(2, 16_000)]
+    public void OutputAllowance_RemainsCreditBased(decimal balance, int expected)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Pricing:Models:test:InputPer1M"] = "15",
+                ["Pricing:Models:test:OutputPer1M"] = "15",
+                ["Currency:UsdToGbp"] = "0.8",
+                ["Pricing:RetailMargin"] = "0.8"
+            }).Build();
+        Assert.Equal(expected, ChatEndpoints.CalculateAffordableOutputTokens(
+            configuration, "test", "short prompt", [], "system", balance, false));
     }
 
     [Fact]

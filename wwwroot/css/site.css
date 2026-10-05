@@ -6776,3 +6776,20 @@ html[data-theme="light"] .existing-code-upload-button:focus-visible {
 .prompt-builder-help:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 2px; }
 html[data-theme="light"] .prompt-builder-help { color: #125a9f; }
 html[data-theme="light"] .prompt-builder-help:hover { color: #0f4778; }
+
+.project-size-warning {
+    margin: 10px 0 0;
+    padding: 12px 14px;
+    border: 1px solid #806536;
+    border-radius: 8px;
+    background: #30291e;
+    color: #f3dfb8;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.project-size-warning[hidden] { display: none; }
+html[data-theme="light"] .project-size-warning {
+    border-color: #d9bb80;
+    background: #fff4df;
+    color: #68440d;
+}
