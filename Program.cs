@@ -9,6 +9,8 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Security.Claims;
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile(
@@ -84,6 +86,7 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddRateLimiter(Program.ConfigureRegistrationRateLimiter);
 builder.Services.AddScoped<AccountEmailSender>();
 builder.Services.AddScoped<FreeTrialService>();
 builder.Services.AddScoped<IRegistrationNetworkMetadataRecorder>(provider =>
@@ -92,6 +95,12 @@ builder.Services.AddSingleton<IRegistrationNetworkMetadataQueue,
     RegistrationNetworkMetadataQueue>();
 builder.Services.AddHostedService<RegistrationNetworkMetadataWorker>();
 builder.Services.AddScoped<DisposableEmailGuard>();
+builder.Services.AddScoped<TurnstileService>();
+builder.Services.AddHttpClient("turnstile", client =>
+{
+    client.BaseAddress = new Uri("https://challenges.cloudflare.com/turnstile/v0/");
+    client.Timeout = TimeSpan.FromSeconds(6);
+});
 builder.Services.AddHttpClient("mail-check", client =>
 {
     client.BaseAddress = new Uri("https://mailcheck.p.rapidapi.com/");
@@ -173,6 +182,7 @@ app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapGet("/api/status", () => Results.Ok(new
 {
@@ -196,4 +206,30 @@ app.MapPreflightBuildEndpoints();
 
 app.Run();
 
-public partial class Program;
+public partial class Program
+{
+    internal static void ConfigureRegistrationRateLimiter(RateLimiterOptions options)
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        options.AddPolicy("registration", context =>
+        {
+            var address = context.Connection.RemoteIpAddress;
+            // IPv4 and its mapped IPv6 form must share the same allowance.
+            if (address?.IsIPv4MappedToIPv6 == true)
+                address = address.MapToIPv4();
+            return RateLimitPartition.GetFixedWindowLimiter(
+                address?.ToString() ?? "unknown",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 3,
+                    Window = TimeSpan.FromMinutes(15),
+                    QueueLimit = 0
+                });
+        });
+        options.OnRejected = async (context, ct) =>
+            await context.HttpContext.Response.WriteAsJsonAsync(new
+            {
+                message = "Too many registration attempts. Please try again in 15 minutes."
+            }, ct);
+    }
+}

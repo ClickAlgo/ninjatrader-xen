@@ -1594,11 +1594,11 @@ h1 {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 28px;
+    gap: 20px;
 }
 
 .other-xen-products {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     padding-top: 3px;
     text-align: right;
 }
@@ -1614,18 +1614,36 @@ h1 {
 }
 
 .other-xen-product-links {
-    display: grid;
-    gap: 5px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
 }
 
 .other-xen-product-links a {
-    color: var(--muted);
-    font-size: .84rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 34px;
+    padding: 6px 8px;
+    white-space: nowrap;
+    border: 1px solid #426b94;
+    border-radius: 8px;
+    background: #1d344b;
+    color: #d0e8ff;
+    font-size: .78rem;
+    font-weight: 600;
     text-decoration: none;
 }
 
-.other-xen-product-links a:hover {
-    color: var(--text);
+.other-xen-product-links a:hover,
+.other-xen-product-links a:focus-visible {
+    color: #fff;
+    border-color: #79b7ed;
+    background: #294b6b;
+    outline: 2px solid #9dccfa;
+    outline-offset: 2px;
 }
 
 @media (max-width: 620px) {
@@ -1641,7 +1659,8 @@ h1 {
     .other-xen-product-links {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px 18px;
+        justify-content: flex-start;
+        gap: 6px;
     }
 }
 
@@ -6792,4 +6811,29 @@ html[data-theme="light"] .project-size-warning {
     border-color: #d9bb80;
     background: #fff4df;
     color: #68440d;
+}
+
+.auth-card #registerForm .cf-turnstile { margin-top:20px; }
+
+/* Registration remains visibly busy until the server responds. */
+#registerForm .form-message.registration-pending {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+#registerForm .registration-pending::before {
+    content: "";
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: registration-spin .8s linear infinite;
+}
+@keyframes registration-spin {
+    to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    #registerForm .registration-pending::before { animation: none; }
 }

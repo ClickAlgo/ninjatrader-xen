@@ -15,7 +15,7 @@ public static class AuthEndpoints
 {
     public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/auth/register", Register);
+        app.MapPost("/api/auth/register", Register).RequireRateLimiting("registration");
         app.MapGet("/api/auth/verify-email", VerifyEmail);
         app.MapPost("/api/auth/login", Login);
         app.MapGet("/api/auth/me", Me).RequireAuthorization();
@@ -29,6 +29,7 @@ public static class AuthEndpoints
         IWebHostEnvironment environment,
         AccountEmailSender emailSender,
         DisposableEmailGuard disposableEmailGuard,
+        TurnstileService turnstile,
         IRegistrationNetworkMetadataQueue registrationNetworkQueue,
         ILoggerFactory loggerFactory)
     {
@@ -36,6 +37,10 @@ public static class AuthEndpoints
         if (string.IsNullOrWhiteSpace(email) ||
             !Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
             return Results.BadRequest(new { message = "Invalid email address." });
+
+        if (!await turnstile.VerifyAsync(request.TurnstileToken,
+                context.Connection.RemoteIpAddress?.ToString(), context.RequestAborted))
+            return Results.BadRequest(new { message = "Please complete the security check and try again." });
 
         if (!await disposableEmailGuard.IsAllowedAsync(
                 email,
@@ -55,6 +60,7 @@ public static class AuthEndpoints
         await connection.OpenAsync();
         await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
 
+        var transactionCommitted = false;
         try
         {
             int? subscriberId = null;
@@ -141,6 +147,7 @@ public static class AuthEndpoints
             }
 
             await transaction.CommitAsync();
+            transactionCommitted = true;
 
             if (!registrationNetworkQueue.TryEnqueue(
                     new RegistrationNetworkMetadataWorkItem(
@@ -173,7 +180,20 @@ public static class AuthEndpoints
         }
         catch
         {
-            await transaction.RollbackAsync();
+            if (!transactionCommitted && transaction.Connection is not null)
+            {
+                try
+                {
+                    await transaction.RollbackAsync(CancellationToken.None);
+                }
+                catch (Exception rollbackException)
+                {
+                    // Keep the original registration exception for the global handler.
+                    loggerFactory.CreateLogger("Registration")
+                        .LogWarning("Registration rollback failed ({ErrorType}).",
+                            rollbackException.GetType().Name);
+                }
+            }
             throw;
         }
     }

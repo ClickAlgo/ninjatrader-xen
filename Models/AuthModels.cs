@@ -1,6 +1,6 @@
 namespace NinjaTrader_Xen.Models;
 
-public sealed record RegisterRequest(string Email, string Password);
+public sealed record RegisterRequest(string Email, string Password, string? TurnstileToken = null);
 
 public sealed record LoginRequest(
     string Email,

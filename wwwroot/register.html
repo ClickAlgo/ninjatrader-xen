@@ -11,7 +11,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <meta name="apple-mobile-web-app-title" content="XEN AI">
     <link rel="manifest" href="/site.webmanifest">
-    <link rel="stylesheet" href="/css/site.css">
+    <link rel="stylesheet" href="/css/site.css?v=turnstile-2">
 </head>
 <body>
     <header class="site-header">
@@ -42,7 +42,8 @@
                     <label for="confirmPassword">Confirm password</label>
                     <input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" required minlength="10" maxlength="128">
                 </div>
-                <div id="formMessage" class="form-message" role="status"></div>
+                <div class="cf-turnstile" data-sitekey="0x4AAAAAAFQ99Fxl3bR95Er2" data-action="register" data-size="flexible" data-theme="auto"></div>
+                <div id="formMessage" class="form-message" role="status" aria-live="polite" aria-atomic="true"></div>
                 <button class="button primary full-width" type="submit">Create account</button>
                 <p class="auth-legal-notice">
                     By creating an account, you agree to the
@@ -54,6 +55,7 @@
         </section>
     </main>
 
-    <script src="/js/register.js"></script>
+    <script src="/js/register.js?v=turnstile-2"></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </body>
 </html>
