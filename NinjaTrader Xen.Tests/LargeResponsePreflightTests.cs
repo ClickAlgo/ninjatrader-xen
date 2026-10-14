@@ -23,6 +23,29 @@ public sealed class LargeResponsePreflightTests
             ChatEndpoints.RequiresCompleteSourceResponse(intent, "class Strategy {}"));
     }
 
+    [Theory]
+    [InlineData("convert-strategy", 30000, true)]
+    [InlineData("convert-strategy", 30001, false)]
+    [InlineData("convert-indicator", 30001, false)]
+    [InlineData("existing-strategy", 30001, true)]
+    public void ConversionSourceSize_IsEnforcedWhenSaving(string task, int length, bool allowed)
+    {
+        var source = new NinjaTrader_Xen.Models.ExistingCodeSource(
+            "test", "Source.txt", "current-source", new string('x', length));
+        var error = ExistingCodeEndpoints.ValidateSources(task, [source]);
+        Assert.Equal(allowed, error is null);
+        if (!allowed)
+            Assert.Contains("Adding credit will not increase this limit", error);
+    }
+
+    [Fact]
+    public void MissingPricing_IsDistinctFromInsufficientCredit()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+        Assert.Equal(-1, ChatEndpoints.CalculateAffordableOutputTokens(
+            configuration, "missing", "prompt", [], "system", 110, false));
+    }
+
     [Fact]
     public void CompleteSourceGuard_DoesNotApplyWithoutCurrentCode()
     {
@@ -56,6 +79,7 @@ public sealed class LargeResponsePreflightTests
     [InlineData(0, 0)]
     [InlineData(1, 13_166)]
     [InlineData(2, 16_000)]
+    [InlineData(110, 16_000)]
     public void OutputAllowance_RemainsCreditBased(decimal balance, int expected)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(

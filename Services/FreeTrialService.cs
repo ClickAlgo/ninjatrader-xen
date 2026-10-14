@@ -25,7 +25,7 @@ public sealed class ProxyCheckOptions
     public decimal RiskThreshold { get; init; } = 50m;
 }
 
-public sealed record FreeTrialResult(bool Granted, DateTime? ExpiresUtc);
+public sealed record FreeTrialResult(bool Granted, DateTime? ExpiresUtc, bool AlreadyClaimed = false);
 
 public sealed class FreeTrialService(
     IConfiguration configuration,
@@ -116,6 +116,7 @@ public sealed class FreeTrialService(
         {
             var result = await GrantInTransaction(
                 subscriberId,
+                email,
                 deviceHash,
                 validDeviceFingerprint,
                 options,
@@ -153,6 +154,7 @@ public sealed class FreeTrialService(
 
     private async Task<FreeTrialResult> GrantInTransaction(
         int subscriberId,
+        string email,
         string deviceHash,
         bool validDeviceFingerprint,
         FreeTrialOptions options,
@@ -176,11 +178,13 @@ public sealed class FreeTrialService(
             decimal? registrationNetworkRisk;
             DateTime? registrationNetworkCheckedUtc;
             DateTime? trialEvaluatedUtc;
+            string? trialDenialReason;
             bool trialGranted;
 
             await using (var subscriberCommand = new SqlCommand("""
                 SELECT TrialGranted,
                        TrialEvaluatedUtc,
+                       TrialDenialReason,
                        RegistrationIp,
                        RegistrationConnectionType,
                        RegistrationCountryCode,
@@ -210,6 +214,9 @@ public sealed class FreeTrialService(
 
                 trialGranted = reader.GetBoolean(
                     reader.GetOrdinal("TrialGranted"));
+                trialDenialReason = reader.IsDBNull(reader.GetOrdinal("TrialDenialReason"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("TrialDenialReason"));
                 trialEvaluatedUtc = reader.IsDBNull(
                     reader.GetOrdinal("TrialEvaluatedUtc"))
                     ? null
@@ -241,7 +248,44 @@ public sealed class FreeTrialService(
             if (trialGranted || trialEvaluatedUtc.HasValue)
             {
                 await transaction.RollbackAsync(cancellationToken);
-                return new FreeTrialResult(false, null);
+                return new FreeTrialResult(false, null, trialDenialReason == "EmailTrialAlreadyClaimed");
+            }
+
+            // Trial history is shared for eligibility only; balances remain platform-specific.
+            await using (var emailTrialCommand = new SqlCommand("""
+                SELECT CASE WHEN EXISTS
+                (
+                    SELECT 1
+                    FROM dbo.Subscribers AS previous WITH (UPDLOCK, HOLDLOCK)
+                    WHERE previous.Email = @Email
+                      AND
+                      (
+                          previous.TrialGranted = 1
+                          OR EXISTS
+                          (
+                              SELECT 1
+                              FROM dbo.CreditPurchases AS credit WITH (UPDLOCK, HOLDLOCK)
+                              WHERE credit.SubscriberId = previous.SubscriberId
+                                AND credit.CreditType = 'Trial'
+                          )
+                          OR EXISTS
+                          (
+                              SELECT 1
+                              FROM dbo.FreeTrialGrants AS grantHistory WITH (UPDLOCK, HOLDLOCK)
+                              WHERE grantHistory.SubscriberId = previous.SubscriberId
+                          )
+                      )
+                ) THEN 1 ELSE 0 END;
+                """, connection, transaction))
+            {
+                emailTrialCommand.Parameters.Add("@Email", SqlDbType.NVarChar, 254).Value = email;
+                if (Convert.ToInt32(await emailTrialCommand.ExecuteScalarAsync(cancellationToken)) > 0)
+                {
+                    await MarkTrialEvaluatedAsync(connection, transaction, subscriberId,
+                        "EmailTrialAlreadyClaimed", cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
+                    return new FreeTrialResult(false, null, true);
+                }
             }
 
             var denialReason = GetRegistrationNetworkDenialReason(

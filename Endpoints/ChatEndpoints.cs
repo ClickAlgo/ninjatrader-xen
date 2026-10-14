@@ -381,11 +381,24 @@ public static class ChatEndpoints
                 type = "blocked",
                 message =
                     "This source file is too large for a complete AI rewrite, even with additional credit. " +
-                    "No AI credit was used. Ask Xen to analyse it without rewriting the full file, or " +
+                    "Adding credit will not increase this limit. No AI credit was used. Ask Xen to analyse it without rewriting the full file, or " +
                     "simplify the project or ask development@clickalgo.com for developer assistance. " +
                     "Your last complete code remains available.",
                 helpUrl = "https://help.clickalgo.com/ninjatrader-xen/convert-strategies/#large-strategy-files",
                 balanceGbp
+            });
+            await Complete(context);
+            return;
+        }
+
+        if (maximumOutputTokens < 0)
+        {
+            await WriteEvent(context, new
+            {
+                type = "error",
+                message = "Pricing for the selected AI model is unavailable or invalid. " +
+                    "Adding credit will not fix this issue. No AI credit was used. " +
+                    "Please select another model or contact support."
             });
             await Complete(context);
             return;
@@ -747,8 +760,8 @@ public static class ChatEndpoints
         var pricing = configuration
             .GetSection($"Pricing:Models:{model}")
             .Get<ModelPricing>();
-        if (pricing is null || pricing.OutputPer1M <= 0)
-            return 0;
+        if (pricing is null || pricing.OutputPer1M <= 0 || pricing.InputPer1M < 0)
+            return -1;
 
         var inputCharacters = prompt.Length +
             (history ?? []).TakeLast(12).Sum(turn => Math.Min(turn.Content?.Length ?? 0, 40_000)) +
@@ -761,7 +774,7 @@ public static class ChatEndpoints
         var usdToGbp = configuration.GetValue("Currency:UsdToGbp", 0.8m);
         var retailMargin = configuration.GetValue("Pricing:RetailMargin", 0.8m);
         if (usdToGbp <= 0 || retailMargin is <= 0 or >= 1)
-            return 0;
+            return -1;
 
         var availableWholesaleUsd = balanceGbp * (1 - retailMargin) / usdToGbp * 0.85m;
         var availableOutputUsd = Math.Max(0, availableWholesaleUsd - estimatedInputUsd);

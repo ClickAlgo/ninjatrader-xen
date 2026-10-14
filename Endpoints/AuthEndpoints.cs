@@ -311,7 +311,9 @@ public static class AuthEndpoints
         {
             token = JwtTokenService.Create(subscriberId, storedEmail, configuration),
             platformId = PlatformIds.NinjaTrader,
+            subscriberId,
             freeTrialGranted = trial.Granted,
+            freeTrialAlreadyClaimed = trial.AlreadyClaimed,
             freeTrialExpiresUtc = trial.ExpiresUtc
         });
     }

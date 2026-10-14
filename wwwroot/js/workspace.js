@@ -831,6 +831,10 @@ function showTrialWelcome() {
 
     try {
         const trial = JSON.parse(stored);
+        if (trial.alreadyClaimed === true) {
+            showNoTrialCreditNotice(trial.subscriberId, true);
+            return;
+        }
         const expires = new Date(trial.expiresUtc);
         if (Number.isNaN(expires.getTime()))
             return;
@@ -866,8 +870,8 @@ function showTrialWelcome() {
     }
 }
 
-function showNoTrialCreditNotice(subscriberId) {
-    const seenKey = `nx_no_trial_credit_notice_v2_${subscriberId}`;
+function showNoTrialCreditNotice(subscriberId, alreadyClaimed = false) {
+    const seenKey = `nx_no_trial_credit_notice_${alreadyClaimed ? "claimed" : "v2"}_${subscriberId}`;
     if (localStorage.getItem(seenKey) === "1")
         return;
 
@@ -879,11 +883,15 @@ function showNoTrialCreditNotice(subscriberId) {
     const heading = document.createElement("strong");
     heading.textContent = "Free trial credit wasn’t added";
     const detail = document.createElement("p");
-    detail.textContent =
+    detail.textContent = alreadyClaimed
+        ? "Your Xen free trial has already been claimed."
+        :
         "Trial credit may be unavailable when using a VPN, proxy or certain shared networks, " +
         "or if a trial has already been claimed.";
     const nextStep = document.createElement("p");
-    nextStep.textContent =
+    nextStep.textContent = alreadyClaimed
+        ? "You can purchase credit to continue."
+        :
         "Try turning off your VPN or proxy, then sign out and sign in again. " +
         "You can also purchase credit to continue.";
     const help = document.createElement("a");
@@ -901,6 +909,8 @@ function showNoTrialCreditNotice(subscriberId) {
     dismiss.addEventListener("click", () => banner.remove());
 
     localStorage.setItem(seenKey, "1");
+    if (alreadyClaimed)
+        localStorage.setItem(`nx_no_trial_credit_notice_v2_${subscriberId}`, "1");
     banner.append(copy, dismiss);
     messages.prepend(banner);
 }
@@ -2618,10 +2628,10 @@ function showOversizedSourceWarning(task = activeTask) {
     sourceFileStatus.replaceChildren();
 
     const title = document.createElement("strong");
-    title.textContent = `This ${sourceType} is too large for a reliable direct AI conversion.`;
+    title.textContent = `This ${sourceType} is too large for Xen to convert in one response.`;
     const context = document.createElement("p");
     context.textContent =
-        "Large codebases contain connected logic, shared state, dependencies and platform-specific behaviour.";
+        "Adding credit will not increase this limit. No AI credit was used. The maximum source length is 30,000 characters.";
     const risk = document.createElement("p");
     risk.textContent =
         `Current AI technology may omit logic, return incomplete NinjaScript, or change ${sourceType} behaviour when converting the entire project in one request.`;
@@ -2704,6 +2714,14 @@ function closeExistingCodeModal() {
 }
 
 async function saveConversionSourceAttachment(fileName, code) {
+    if (code.trim().length > 30000) {
+        existingCodeStatus.textContent =
+            "This source code is too large for Xen to convert in one response. " +
+            "Adding credit will not increase this limit. No AI credit was used. " +
+            "Simplify the source or contact development@clickalgo.com for assistance.";
+        showOversizedSourceWarning();
+        return false;
+    }
     if (!currentProjectId) {
         currentProjectId = crypto.randomUUID();
     }

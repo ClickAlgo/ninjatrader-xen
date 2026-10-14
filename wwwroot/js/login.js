@@ -48,6 +48,11 @@ form.addEventListener("submit", async event => {
                 JSON.stringify({
                     expiresUtc: result.freeTrialExpiresUtc
                 }));
+        } else if (result.freeTrialAlreadyClaimed === true) {
+            sessionStorage.setItem("nx_trial_welcome", JSON.stringify({
+                alreadyClaimed: true,
+                subscriberId: result.subscriberId
+            }));
         } else {
             sessionStorage.removeItem("nx_trial_welcome");
         }

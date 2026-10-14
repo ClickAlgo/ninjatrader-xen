@@ -66,7 +66,16 @@ public static class ExistingCodeEndpoints
             return "The selected source role is not supported.";
 
         if (task is "convert-strategy" or "convert-indicator")
-            return sources.Count > 1 ? "Conversion tasks allow one source file." : null;
+        {
+            if (sources.Count > 1)
+                return "Conversion tasks allow one source file.";
+            if (sources.Any(source => !ChatEndpoints.CanLikelyFitCompleteSource(
+                    source.Code.Trim(), ChatEndpoints.MaximumResponseTokens)))
+                return "This source code is too large for Xen to convert in one response. " +
+                    "Adding credit will not increase this limit. No AI credit was used. " +
+                    "Simplify the source or contact development@clickalgo.com for assistance.";
+            return null;
+        }
 
         if (sources.Count > 4)
             return "Add no more than four source files.";

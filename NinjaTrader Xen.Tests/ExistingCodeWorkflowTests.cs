@@ -75,6 +75,7 @@ public sealed class ExistingCodeWorkflowTests
     {
         var html = File.ReadAllText(Path.Combine(Root, "wwwroot", "workspace.html"));
         var script = File.ReadAllText(Path.Combine(Root, "wwwroot", "js", "workspace.js"));
+        script = script.Replace("\r\n", "\n");
         var styles = File.ReadAllText(Path.Combine(Root, "wwwroot", "css", "site.css"));
 
         Assert.Contains("function showOversizedSourceWarning(task = activeTask)", script);
@@ -84,7 +85,7 @@ public sealed class ExistingCodeWorkflowTests
         Assert.Contains("if (isSourceAttachmentTask())\n            closeExistingCodeModal();", script);
         Assert.Contains("task !== \"convert-strategy\" && task !== \"convert-indicator\"", script);
         Assert.Contains("This file is too large. The maximum size is 512 KB.", script);
-        Assert.Contains("too large for a reliable direct AI conversion", script);
+        Assert.Contains("too large for Xen to convert in one response", script);
         Assert.Contains("return incomplete NinjaScript", script);
         Assert.Contains("convert each component separately", script);
         Assert.Contains("mailto:development@clickalgo.com", script);
