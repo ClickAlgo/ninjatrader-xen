@@ -6748,6 +6748,87 @@ html[data-theme="light"] .existing-code-upload-button:focus-visible {
     }
 }
 
+/* Homepage readability only: preserve the existing design and layout. */
+.landing-body .feature-card p,
+.landing-body .faq-grid p,
+.landing-body .signature-steps p,
+.landing-body .signature-copy > p:not(.eyebrow),
+.landing-body .pricing-copy > p:not(.eyebrow),
+.landing-body .section-heading > p:not(.eyebrow),
+.landing-body .about-clickalgo-copy p,
+.landing-body .landing-video-intro p,
+.landing-body .landing-cta > p:not(.eyebrow) {
+    font-size: 1rem;
+    color: #b5b8be;
+}
+
+.landing-body .landing-hero .lead {
+    color: #b5b8be;
+}
+
+.landing-body .landing-highlights,
+.landing-body .landing-proof span,
+.landing-body .pricing-points,
+.landing-body .credit-card-preview > p,
+.landing-body .landing-product-screenshot figcaption {
+    font-size: .875rem;
+    color: #b5b8be;
+}
+
+.landing-body .landing-proof strong,
+.landing-body .signature-steps strong {
+    font-size: 1rem;
+}
+
+.landing-body .preview-message,
+.landing-body .planner-question strong,
+.landing-body .planner-question p,
+.landing-body .planner-stage strong,
+.landing-body .verification-list strong,
+.landing-body .credit-topups span {
+    font-size: .875rem;
+}
+
+.landing-body .preview-brand small,
+.landing-body .preview-credit,
+.landing-body .preview-label,
+.landing-body .preview-tasks > strong,
+.landing-body .preview-task,
+.landing-body .preview-message span,
+.landing-body .preview-code,
+.landing-body .signature-steps li > span,
+.landing-body .planner-preview-head > span,
+.landing-body .planner-question small,
+.landing-body .planner-stage > span,
+.landing-body .planner-stage small,
+.landing-body .planner-stage em,
+.landing-body .feature-kicker,
+.landing-body .verification-list small,
+.landing-body .credit-card-top,
+.landing-body .credit-card-bottom {
+    font-size: .75rem;
+}
+
+.landing-body .preview-task:not(.active),
+.landing-body .planner-preview-head > span,
+.landing-body .planner-stage small,
+.landing-body .planner-stage:not(.active) em,
+.landing-body .verification-list small,
+.landing-body .credit-card-top,
+.landing-body .credit-card-bottom {
+    color: #b5b8be;
+}
+
+.landing-body .landing-footer-copy p,
+.landing-body .landing-footer-bottom,
+.landing-body .landing-footer-brand span {
+    font-size: .875rem;
+}
+
+.landing-body .landing-footer-copy p {
+    color: #b5b8be;
+}
+
 .response-code-actions .incomplete-recovery-button {
     min-width: 210px;
     padding: 11px 18px;

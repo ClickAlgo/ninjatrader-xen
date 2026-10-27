@@ -881,25 +881,10 @@ function showNoTrialCreditNotice(subscriberId, alreadyClaimed = false) {
 
     const copy = document.createElement("div");
     const heading = document.createElement("strong");
-    heading.textContent = "Free trial credit wasn’t added";
+    heading.textContent = "Free trial credit isn’t available";
     const detail = document.createElement("p");
-    detail.textContent = alreadyClaimed
-        ? "Your Xen free trial has already been claimed."
-        :
-        "Trial credit may be unavailable when using a VPN, proxy or certain shared networks, " +
-        "or if a trial has already been claimed.";
-    const nextStep = document.createElement("p");
-    nextStep.textContent = alreadyClaimed
-        ? "You can purchase credit to continue."
-        :
-        "Try turning off your VPN or proxy, then sign out and sign in again. " +
-        "You can also purchase credit to continue.";
-    const help = document.createElement("a");
-    help.href = "https://help.clickalgo.com/ninjatrader-xen/credits-account/#trial-credit";
-    help.target = "_blank";
-    help.rel = "noopener noreferrer";
-    help.textContent = "Why didn’t I receive free trial credit?";
-    copy.append(heading, detail, nextStep, help);
+    detail.textContent = "You can purchase credit to continue using Xen.";
+    copy.append(heading, detail);
 
     const dismiss = document.createElement("button");
     dismiss.type = "button";
